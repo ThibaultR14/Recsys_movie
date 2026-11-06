@@ -14,7 +14,8 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - **Site 100 % statique.** Pas de serveur, pas de base de données, pas de comptes.
 - **Tout le calcul de reco se fait dans le navigateur** (Web Worker). Les données de l'utilisateur ne quittent jamais son navigateur : aucun appel réseau ne doit contenir ses films ou ses notes.
 - **Pipeline Python hors ligne** (`pipeline/`) : MovieLens 32M + TMDB (+ IMDb datasets pour les contrôles hors ligne seulement, voir « Données IMDb ») → modèle **ALS** → fichiers statiques dans `web/public/data/`.
-- Arborescence : `pipeline/{notebooks,tests,data/raw,data/processed,data/cache}`, `web/src/{adapters,matching,reco,components,pages,styles}`, `web/public/data/`, `.github/workflows/`, `docs/` (voir `docs/stack-technique.md` §7).
+- Arborescence : `pipeline/` (`config.py`, `download.py`, `build_catalog.py`, `enrich_tmdb.py`, `titles.py`, `manual_overrides.csv`, `{notebooks,tests,data/raw,data/processed,data/cache}`), `web/src/{adapters,matching,reco,components,pages,styles}`, `web/public/data/`, `.github/workflows/`, `docs/` (voir `docs/stack-technique.md` §7).
+- Corrections manuelles du catalogue : **uniquement** via `pipeline/manual_overrides.csv` (`exclude` / `merge_into`, avec une raison), jamais en dur dans le code.
 - **Front** (`web/`) : **React + Vite + TypeScript**, Tailwind CSS, PapaParse, fflate, Fuse.js, idb-keyval.
 - Hébergement : Cloudflare Pages (ou GitHub Pages). Métadonnées TMDB rafraîchies chaque mois par GitHub Actions.
 
@@ -50,7 +51,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 
 ## Ordre de construction
 
-1. Pipeline de données : téléchargement MovieLens + IMDb, catalogue, correspondances d'ids (MovieLens ↔ IMDb ↔ TMDB via `links.csv`).
+1. ✅ Pipeline de données : téléchargement MovieLens + IMDb, catalogue, correspondances d'ids (MovieLens ↔ IMDb ↔ TMDB via `links.csv`). Fait : 23 019 films (seuil 20 → 23 350, − 1 exclu à la main, − 315 séries/épisodes, − 15 fusions) ; TMDB : tmdb_id 99,96 %, titres/années 99,8 %, réalisateurs et affiches 99,7 % ; 51 films `recommendable = false`.
 2. Modèle ALS + évaluation hors ligne (Recall@20, NDCG@20, popularité moyenne, couverture), avec et sans curseur.
 3. Adaptateur Letterboxd + correspondance des titres (titre + année → id).
 4. Calcul dans le navigateur : fold-in ALS, scores, curseur.
@@ -68,7 +69,14 @@ uv sync                    # crée pipeline/.venv à partir de uv.lock (Python 3
 uv run ruff check .        # lint
 uv run ruff format .       # formatage (--check pour vérifier sans modifier)
 uv run pytest              # tests
+
+uv run python download.py                # données brutes → data/raw/ (--force, --skip-imdb)
+uv run python build_catalog.py           # catalogue → data/processed/ (--min-ratings N)
+uv run python enrich_tmdb.py --limit 50  # essai TMDB, catalogue non modifié
+uv run python enrich_tmdb.py             # enrichissement complet (repart du cache data/cache/tmdb/)
 ```
+
+Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB : relancer ensuite `enrich_tmdb.py`.
 
 Chemins et constantes partagés : `pipeline/config.py` (`RAW`, `PROCESSED`, `CACHE`, `WEB_DATA`, `MIN_RATINGS`) ; il charge le `.env` de la racine.
 

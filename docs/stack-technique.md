@@ -1,6 +1,6 @@
 # Stack technique et sources de données
 
-> Version 0.3 (6 novembre 2026), décisions intégrées. Complète `projet-reco-films.md`.
+> Version 0.4 (6 novembre 2026), décisions intégrées, étape 1 (pipeline de données) faite. Complète `projet-reco-films.md`.
 > Principe directeur : **tout ce qui peut être calculé à l'avance l'est, et le site reste 100 % statique.** Pas de serveur à payer, pas de données utilisateur stockées.
 
 ---
@@ -77,18 +77,58 @@
 | Qualité du code | **ruff** | Lint + formatage |
 
 ### Points d'attention
-- **Taille du catalogue embarqué (décidé)** : seuil bas de **≥ 20 notes** dans MovieLens, cible **~20 000 à 25 000 films**. On garde volontairement la longue traîne (ce sont les pépites). Seuil ajusté pour rester autour de **5 Mo** de données au total.
+- **Taille du catalogue embarqué (décidé)** : seuil bas de **≥ 20 notes** dans MovieLens, cible **~20 000 à 25 000 films**. On garde volontairement la longue traîne (ce sont les pépites). Seuil ajusté pour rester autour de **5 Mo** de données au total. **Réel : 23 019 films** (voir « Pipeline de données » ci-dessous).
 - **Pourquoi ALS et pas EASE en production** : EASE produit une matrice film × film, trop lourde pour le navigateur. ALS donne un vecteur de 64-128 nombres par film.
-- **Compression** : vecteurs en `float16` ou quantifiés en `int8` → 25 000 films × 64 dims × 1 octet ≈ **1,6 Mo**.
+- **Compression** : vecteurs en `float16` ou quantifiés en `int8` → 23 019 films × 64 dims × 1 octet ≈ **1,5 Mo** (≈ 1,4 Mo gzip, mesuré à l'exploration des seuils).
 - **Films récents (après 2023), décidé** : absents de MovieLens, donc non recommandables. **On accepte le trou au MVP** et on l'affiche honnêtement sur le site. En v2 : modèle basé sur le contenu (genres, mots-clés, réalisateur via TMDB).
 
-### Fichiers produits (dans `web/public/data/`)
-| Fichier | Contenu | Taille visée |
+### Pipeline de données (étape 1, faite)
+
+Scripts dans `pipeline/` (lancés depuis ce dossier avec `uv run python <script>`), sorties dans `pipeline/data/processed/` (non versionnées) :
+
+| Script | Rôle | Sorties |
 |---|---|---|
-| `catalog.json` | id interne, titre, titre original, année, id IMDb, id TMDB, chemin de l'affiche, réalisateur | 2-4 Mo (compressé gzip/brotli par l'hébergeur) |
-| `embeddings.bin` | vecteurs des films (binaire) | 2-4 Mo |
-| `popularity.bin` | nombre de votes par film (log), pour le curseur | < 200 Ko |
-| `title-index.json` | index des titres normalisés pour la correspondance | 1-2 Mo |
+| `download.py` | Télécharge MovieLens 32M + IMDb `title.basics` et `title.ratings` (seulement), avec un `manifest.json` (md5, dates) | `data/raw/`, `ratings.parquet` |
+| `build_catalog.py` | Catalogue : seuil, exclusions et fusions, filtre de type | `catalog.parquet`, `ratings_filtered.parquet`, `movie_id_merges.parquet` |
+| `enrich_tmdb.py` | Enrichissement TMDB + vérification des ids | `catalog.parquet` (colonnes TMDB ajoutées), `tmdb_mismatch.csv` |
+| `titles.py` | Normalisation des titres (partagée par B3/B4, base de l'index de correspondance) | — |
+| `manual_overrides.csv` (versionné) | Corrections manuelles du catalogue, une ligne documentée par décision | — |
+
+Étapes de `build_catalog.py`, dans l'ordre :
+1. **Seuil ≥ 20 notes** sur les comptes bruts MovieLens, avant toute fusion → 23 350 films.
+2. **Exclusions manuelles** (`manual_overrides.csv`, action `exclude`) → 1 (Mulholland Dr. 1999, pilote TV).
+3. **Fusion des doublons** → `movie_id_merges.parquet` (15 fusions) :
+   - automatiques (13) : deux movieIds avec le même tmdbId et des années à ±1 an. Fusion dans le movieId le plus noté ; une paire (utilisateur, film) en double garde la note la plus récente. Écart > 1 an : films différents, tmdb_id vidé et recherché via TMDB ;
+   - manuelles (2, action `merge_into`) : appliquées seulement si le titre MovieLens normalisé et l'année (±1) concordent, sinon refusées et signalées ;
+   - le canonique garde son movie_id et prend le meilleur imdb_id de la paire (et le tmdb_id qui va avec). Les anciens imdb_id (`imdb_id_from`, `imdb_id_to_original`) deviennent des alias. Colonne `origin` = `tmdb_duplicate` ou `manual`.
+4. **Filtre de type** (hors ligne, via `titleType` des datasets IMDb) : `tvSeries`, `tvEpisode`, `tvMiniSeries` exclus (315). Gardés : `movie`, `tvMovie`, `short`, `tvShort`, `video`, `tvSpecial`, type inconnu.
+5. Résultat : 23 350 − 1 − 315 − 15 = **23 019 films**, `ratings_filtered` ≈ 31,7 M de notes.
+
+`enrich_tmdb.py` : un appel `/movie/{id}?append_to_response=credits` par film (20 req/s, nouveaux essais sur 429/5xx), `/find` pour les films sans tmdb_id et en cas d'écart. Cache allégé dans `data/cache/tmdb/` (réutilisé si < 30 jours, supprimé après 6 mois). L'imdb_id renvoyé par TMDB est vérifié pour **100 %** des films :
+- corrections de tmdb_id (66) ;
+- `imdb_id_outdated` quand TMDB porte l'imdb_id à jour du même film : titre et année (±1) concordent (25) ;
+- le reste reste en `tmdb_mismatch`, avec une raison.
+
+Couverture : tmdb_id 99,96 %, titre 99,8 %, année 99,8 %, réalisateurs 99,7 %, affiches 99,7 %.
+
+Colonnes et règles à retenir :
+- **Provenance** : colonnes `ml_*` (MovieLens), `tmdb_*` et champs TMDB (`poster_path`, `original_language`, `origin_country`), colonnes `imdbds_*` (datasets IMDb, **jamais** écrites dans `web/public/data/`). `imdb_id` vient de `links.csv`.
+- **`year`** = `tmdb_release_year`, sinon `ml_year` : c'est l'année affichée (Letterboxd s'appuie sur TMDB).
+- **`imdb_id_aliases`** : anciens imdb_id des fusions + imdb_id TMDB quand il diffère du nôtre (hors mismatch), pour l'adaptateur IMDb.
+- **`recommendable`** (publiable) : `false` pour les films encore en `tmdb_mismatch` (51). Ils restent dans le catalogue et l'entraînement, mais ne sont jamais affichés en reco.
+- **`item_idx`** = 0..n-1 dans l'ordre du catalogue. **Il est figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais.** Une étape qui retire des films avant l'entraînement renumérote.
+
+### Fichiers produits (dans `web/public/data/`)
+Écrits par `export.py` (à venir). **Uniquement des champs MovieLens et TMDB**, rien qui vienne des datasets IMDb.
+
+| Fichier | Contenu | Taille (estimée à l'exploration, gzip, seuil 20) |
+|---|---|---|
+| `catalog.json` | `item_idx`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, titre et titre original TMDB, `year`, réalisateurs TMDB, `poster_path`, genres MovieLens, `recommendable` | ~1,35-1,5 Mo (gzip/brotli par l'hébergeur) |
+| `embeddings.bin` | vecteurs des films (binaire, ordre = `item_idx`) | ~1,4 Mo (int8, 64 dims) |
+| `popularity.bin` | `ml_rating_count` ou `tmdb_vote_count` (choix à l'étape 2), en log, pour le curseur | ~40 Ko |
+| `title-index.json` | index de correspondance : `tmdb_title`, `tmdb_original_title`, `ml_title` nettoyé + titre alternatif entre parenthèses, normalisés, avec les deux années (TMDB et ML) | à mesurer |
+
+Total estimé ≈ **2,8 Mo** gzip hors index des titres, sous la cible de ~5 Mo.
 
 ---
 
@@ -106,7 +146,7 @@
 | Lecture des CSV | **PapaParse** | Robuste, gère les virgules dans les titres, les encodages |
 | Lecture du ZIP Letterboxd | **fflate** | Petit et rapide, dézippe dans le navigateur |
 | Correspondance floue des titres | **Fuse.js** (ou un index maison normalisé) | Gérer « Le Fabuleux Destin d'Amélie Poulain » vs « Amélie » |
-| Calcul des scores | TypeScript pur sur des `Float32Array` | Produit scalaire sur 30 000 films = quelques millisecondes |
+| Calcul des scores | TypeScript pur sur des `Float32Array` | Produit scalaire sur ~23 000 films = quelques millisecondes |
 | Calcul lourd sans bloquer la page | **Web Worker** | L'interface reste fluide pendant le calcul |
 | Cache du modèle | **IndexedDB** (via `idb-keyval`) | Le modèle n'est téléchargé qu'une fois |
 | Modèle SASRec (plus tard) | **ONNX Runtime Web** | Fait tourner un modèle PyTorch exporté dans le navigateur |
@@ -116,7 +156,7 @@
 ### Comment on calcule une recommandation (ALS)
 1. On construit le vecteur de goût de l'utilisateur à partir de ses films notés (« fold-in » : une petite résolution de moindres carrés, faisable dans le navigateur).
 2. Score de chaque film = produit scalaire entre ce vecteur et le vecteur du film.
-3. On retire les films déjà vus.
+3. On retire les films déjà vus et les films `recommendable = false`.
 4. **Curseur** : `score_final = score − λ × log(popularité)`, λ suit la position du curseur.
 5. On affiche les 50 meilleurs.
 
@@ -158,16 +198,21 @@ Appeler TMDB depuis le site exposerait notre clé d'API. On **pré-calcule** don
 
 ```
 projet/
-├── pipeline/                 # Python, hors ligne
-│   ├── download.py           # télécharge MovieLens et IMDb datasets
-│   ├── build_catalog.py      # fusionne MovieLens + IMDb + TMDB
-│   ├── train.py              # entraîne EASE / ALS
-│   ├── evaluate.py           # Recall, NDCG, popularité, couverture
-│   ├── export.py             # écrit les fichiers dans web/public/data
-│   ├── notebooks/
-│   ├── tests/
-│   └── data/                 # raw/, processed/, cache/ : contenu ignoré par git
-├── web/                      # site statique
+├── pipeline/                 # Python 3.12, hors ligne (uv, Polars, ruff, pytest)
+│   ├── pyproject.toml, uv.lock
+│   ├── config.py             # chemins (RAW, PROCESSED, CACHE, WEB_DATA), MIN_RATINGS, charge .env
+│   ├── download.py           # MovieLens 32M + IMDb title.basics/title.ratings → data/raw/
+│   ├── build_catalog.py      # seuil, exclusions/fusions, filtre de type → catalog.parquet
+│   ├── enrich_tmdb.py        # métadonnées TMDB + vérification des ids → catalog.parquet
+│   ├── titles.py             # normalisation des titres (partagée)
+│   ├── manual_overrides.csv  # corrections manuelles du catalogue (versionné)
+│   ├── train.py              # (à venir) entraîne ALS / EASE
+│   ├── evaluate.py           # (à venir) Recall, NDCG, popularité, couverture
+│   ├── export.py             # (à venir) écrit les fichiers dans web/public/data
+│   ├── notebooks/            # 01_explore.py (seuils du catalogue)
+│   ├── tests/                # test_download, test_catalog, test_manual_overrides, test_enrich_tmdb…
+│   └── data/                 # raw/, processed/, cache/tmdb/ : contenu ignoré par git
+├── web/                      # site statique (Vite pas encore initialisé)
 │   ├── src/
 │   │   ├── adapters/         # letterboxd.ts, imdb.ts, (manual.ts)
 │   │   ├── matching/         # correspondance des titres
@@ -176,10 +221,24 @@ projet/
 │   │   ├── pages/            # Accueil, Analyse, Resultats, Fiche
 │   │   └── styles/           # tokens de la direction C (design-system.md)
 │   └── public/data/          # fichiers produits par le pipeline
-├── .github/workflows/        # mise à jour mensuelle TMDB
+├── .github/workflows/        # mise à jour mensuelle TMDB (à venir)
 ├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, maquette
 └── CLAUDE.md                 # instructions pour Claude Code
 ```
+
+### Commandes du pipeline (depuis `pipeline/`)
+
+```sh
+uv sync                                  # environnement (Python 3.12) depuis uv.lock
+uv run python download.py                # données brutes (--force, --skip-imdb)
+uv run python build_catalog.py           # catalogue (--min-ratings N), ~20 s
+uv run python enrich_tmdb.py --limit 50  # essai sur 50 films, catalogue non modifié
+uv run python enrich_tmdb.py             # tout le catalogue (~20 min sans cache, quelques minutes au plus avec)
+uv run ruff check . && uv run ruff format --check .
+uv run pytest
+```
+
+Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB : relancer ensuite `enrich_tmdb.py` (il repart du cache).
 
 ### Secrets
 - `TMDB_API_KEY` (clé v3) et `TMDB_READ_TOKEN` (jeton v4, optionnel) : stockés **uniquement** dans les secrets GitHub (Settings → Secrets and variables → Actions) et dans le fichier `.env` à la racine, **ignoré par git** (modèle vide : `.env.example`). Jamais dans le code du site, jamais dans un commit.
@@ -188,9 +247,9 @@ projet/
 
 ## 8. Ordre de construction conseillé
 
-1. **Pipeline de données** : télécharger MovieLens + IMDb, construire le catalogue et les correspondances d'ids.
+1. ✅ **Pipeline de données** : télécharger MovieLens + IMDb, construire le catalogue et les correspondances d'ids (fait : 23 019 films, enrichis par TMDB, voir §3).
 2. **Modèle** : ALS (et EASE pour comparer), évaluation hors ligne avec et sans curseur.
-3. **Adaptateur Letterboxd** + correspondance des titres, testé sur nos propres exports.
+3. **Adaptateur Letterboxd** + correspondance des titres, testé sur nos propres exports. L'index de correspondance utilise `tmdb_title`, `tmdb_original_title` et `ml_title` nettoyé (article replacé : « Usual Suspects, The » → « The Usual Suspects »), plus le titre alternatif entre parenthèses, tous normalisés (casse, accents, ponctuation, comme `pipeline/titles.py`), avec les deux années (TMDB et ML) acceptées à ±1 an. Mesuré en B4 : 28,6 % des titres TMDB diffèrent du titre ML brut normalisé, 6,7 % après nettoyage.
 4. **Calcul dans le navigateur** : fold-in, scores, curseur.
 5. **Interface** : dépôt du fichier, liste de recos, curseur.
 6. **Adaptateur IMDb**.
@@ -204,7 +263,10 @@ projet/
 | Sujet | Décision |
 |---|---|
 | Modèle en production | **ALS** (EASE seulement pour comparer hors ligne) |
-| Catalogue | **≥ 20 notes**, ~20 000 à 25 000 films, ~5 Mo de données |
+| Catalogue | **≥ 20 notes**, ~20 000 à 25 000 films (réel : 23 019), ~5 Mo de données |
+| Données IMDb | **Hors ligne uniquement** (jointures, vérif des imdbId, contrôles qualité), jamais embarquées ; colonnes préfixées `imdbds_` |
+| Corrections du catalogue | Fusions de doublons, filtre de type, `manual_overrides.csv` versionné ; films en mismatch TMDB gardés pour l'entraînement mais `recommendable = false` |
+| `item_idx` | Figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais |
 | Films récents | **Trou accepté au MVP**, modèle de contenu en v2 |
 | Framework | **React** + Vite + TypeScript |
 | IA pour les listes faites main | **Pas d'IA au MVP** (Fuse.js) ; API + Cloudflare Worker plus tard |

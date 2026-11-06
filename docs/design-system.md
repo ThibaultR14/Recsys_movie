@@ -84,6 +84,7 @@ Exemples validés (maquette C) :
 | Curseur | « plutôt connu ou plutôt pépite ? » — « les classiques » ↔ « les trucs que personne connaît » |
 | Bouton | « encore des films » |
 | Feedback | « dis-nous si on s'est planté, ça nous aide » |
+| Boutons de feedback (sur une reco) | « ça me tente » / « pas pour moi » |
 | Pied de page | « fait à la main par des gens qui regardent trop de films. projet indépendant, sans lien avec letterboxd ni imdb. » |
 | Films récents (à ajouter) | par ex. « on connaît moins bien les films sortis après 2023, désolé. » |
 

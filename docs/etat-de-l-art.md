@@ -72,5 +72,5 @@ Différenciateurs à viser :
 | Export Letterboxd / IMDb de l'utilisateur | Données de l'utilisateur |
 | MovieLens 32M | Non commercial ; citer ; pas de soutien implicite de l'université → **mail envoyé à GroupLens, réponse en attente** |
 | TMDB API | Non commercial gratuit, attribution, cache ≤ 6 mois → **clé obtenue** |
-| IMDb Non-Commercial Datasets | Usage personnel et non commercial |
+| IMDb Non-Commercial Datasets | Usage personnel et non commercial → **hors ligne uniquement** (jointures, vérification des imdbId, contrôles qualité), jamais embarqué dans le site |
 | Datasets Letterboxd scrapés (HF, Kaggle) | CC-BY-NC-SA / scrapé → **évaluation uniquement**, jamais dans le site |

@@ -86,7 +86,7 @@ Maquette de référence : `maquette-C-fanzine.html` (les directions A « Lumièr
 - Un curseur qui fait varier le poids de la popularité :
   - à gauche : classiques et films reconnus qui collent à tes goûts ;
   - à droite : films peu notés mais très proches de ton profil.
-- Principe : `score final = pertinence − λ × popularité`, où λ suit le curseur.
+- Principe : `score final = pertinence − λ × log(popularité)`, où λ suit le curseur.
 - Mise à jour instantanée des résultats quand on bouge le curseur.
 
 ### 🧠 À garder en tête (pas prioritaire, mais prévu dans la conception)
@@ -121,7 +121,7 @@ Maquette de référence : `maquette-C-fanzine.html` (les directions A « Lumièr
 - **Mode à deux** : fusionner deux historiques pour trouver un film qui plaira aux deux (soirée en couple, entre potes).
 - **Blocage** : masquer un film recommandé pour qu'il ne revienne plus.
 - **Ajout à la watchlist** : lien direct vers la fiche Letterboxd du film.
-- **Feedback** : 👍 / 👎 sur les recommandations pour mesurer la qualité.
+- **Feedback** : deux boutons texte « ça me tente » / « pas pour moi » sur les recommandations pour mesurer la qualité.
 - **Modèle séquentiel** (SASRec) qui tient compte de l'ordre du journal de visionnage.
 
 ---
@@ -132,6 +132,7 @@ Maquette de référence : `maquette-C-fanzine.html` (les directions A « Lumièr
 |---|---|
 | **MovieLens** | Usage non commercial uniquement sans accord de GroupLens. Citer le dataset. Ne pas laisser croire à un soutien de l'Université du Minnesota. |
 | **TMDB** | Gratuit en non commercial. Logo TMDB + mention « This product uses the TMDB API but is not endorsed or certified by TMDB » dans une page « À propos ». Pas de cache de plus de 6 mois. |
+| **IMDb datasets** | Non commercial. **Hors ligne uniquement** (jointures, vérification des imdbId, contrôles qualité) : rien de ce qui est embarqué dans le site n'en vient. |
 | **Letterboxd** | Ne pas utiliser le nom ou le logo comme marque. Scraping = contraire aux conditions. |
 | **Vie privée** | Traitement dans le navigateur, aucun stockage côté serveur → pas de problème RGPD. |
 | **Monétisation** | Aucune prévue. Un lien de dons éventuel est une zone grise vis-à-vis des licences : demander aux ayants droit avant. |
@@ -142,7 +143,7 @@ Maquette de référence : `maquette-C-fanzine.html` (les directions A « Lumièr
 
 ```
 [Entraînement, une seule fois, sur PC ou Colab]
-MovieLens 32M ──► modèle (EASE / ALS) ──► vecteurs des films (quelques Mo, JSON)
+MovieLens 32M ──► modèle (EASE / ALS) ──► vecteurs des films (quelques Mo, binaire embeddings.bin)
                                          + popularité de chaque film
                                          + correspondance MovieLens ↔ TMDB ↔ IMDb
 
@@ -172,7 +173,7 @@ Fichier utilisateur ──► adaptateur (Letterboxd / IMDb / autre)
 |---|---|
 | Nom du site | **« Pépite » comme nom de travail**, temporaire. Le nom définitif reste à trouver. |
 | Modèle | **ALS** en production. EASE uniquement comme point de comparaison hors ligne. |
-| Taille du catalogue | **~20 000 à 25 000 films**, seuil bas (**≥ 20 notes** dans MovieLens) pour garder la longue traîne, ajusté pour rester autour de **5 Mo** de données. |
+| Taille du catalogue | **~20 000 à 25 000 films** (réel : 23 019), seuil bas (**≥ 20 notes** dans MovieLens) pour garder la longue traîne, ajusté pour rester autour de **5 Mo** de données. |
 | Films récents (après 2023) | **On accepte le trou pour le MVP** et on le dit honnêtement sur le site. Modèle basé sur le contenu en v2. |
 | Licences | **On contacte GroupLens et TMDB directement** pour valider l'usage (voir section 10). |
 | Framework | **React** (avec Vite + TypeScript). |
