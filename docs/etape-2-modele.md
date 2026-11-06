@@ -224,6 +224,52 @@ Mettre à jour `docs/stack-technique.md` (§3, §4, §8, §9) et `CLAUDE.md` (é
 *À remplir par Claude Code à la fin de chaque sous-étape.*
 
 ### C1
+
+*6 novembre 2026.* Code : `pipeline/split.py`, `metrics.py`, `baselines.py`, `evaluate.py` ; tests `tests/test_split.py`, `test_metrics.py`, `test_evaluate.py` (105 tests au total, tous verts). Constantes dans `config.py` (`SEED`, `MIN_EVAL_USER_RATINGS`, `N_VAL_USERS`, `N_TEST_USERS`, `FOLDIN_NUM/DEN`, `TOP_K`, `LONG_TAIL_HEAD_SHARE`, `SPLIT_DIR`, `RESULTS_DIR`).
+
+**Découpage** (`data/processed/split/`, empreintes dans `manifest.json`)
+
+| | Utilisateurs | Notes |
+|---|---|---|
+| Tous | 200 948 | 31 662 542 |
+| Éligibles (≥ 10 notes) | 200 945 | |
+| Entraînement | 180 948 (dont les 3 non éligibles) | 28 507 516 |
+| Validation | 10 000 | fold-in 1 253 287 · held-out 318 303 |
+| Test | 10 000 | fold-in 1 262 799 · held-out 320 637 |
+
+- Aucun utilisateur dans deux rôles ; aucun utilisateur de validation/test dans `train.parquet` (vérifié par `check_split`, qui fait échouer le script sinon).
+- Fold-in : minimum 12 (validation) et 11 (test) films, médiane 58 ; held-out : minimum 4 (validation) et 3 (test). Critères ≥ 8 et ≥ 2 respectés largement (MovieLens ne garde que des utilisateurs avec ≥ 20 notes).
+- Aucun film held-out n'a un timestamp antérieur au dernier film du fold-in (vérifié).
+- Deux exécutions de `split.py` → les 6 fichiers ont des sha256 identiques.
+
+**Références sur la validation** (10 000 utilisateurs, k = 20, moyenne ± IC 95 %)
+
+| Métrique | `populaire` | `hasard` |
+|---|---|---|
+| `Recall@20` | 0,10052 ± 0,00314 | 0,00127 ± 0,00025 |
+| `NDCG@20` | 0,08544 ± 0,00263 | 0,00107 ± 0,00021 |
+| `recall_all@20` | 0,10204 ± 0,00282 | 0,00164 ± 0,00021 |
+| `pop_moyenne@20` (log(1 + n)) | 11,0202 ± 0,0026 | 5,0930 ± 0,0078 |
+| `pop_mediane@20` (notes) | 59 050 ± 130 | 128,6 ± 1,7 |
+| `longue_traine@20` | 0,000 ± 0,000 | 0,8031 ± 0,0017 |
+| `couverture@20` | 0,01075 (247 films) | 0,99983 |
+
+- `populaire` est ~80 fois au-dessus de `hasard` sur `NDCG@20` ; intervalles très loin de se chevaucher.
+- Contrôle : le `Recall@20` attendu analytiquement pour `hasard` (20·R / n_candidats / min(20, R), moyenné) vaut 0,00125, mesuré 0,00127.
+- **93 utilisateurs de validation (0,93 %) n'ont aucun film pertinent** dans leur held-out : exclus de Recall/NDCG (n = 9 907), inclus ailleurs. Aucun n'a un held-out vide après restriction aux recommandables (60 notes held-out portaient sur des films non recommandables et ont été retirées).
+- Held-out recommandable : médiane 15 films, dont 9 pertinents (64 % des films held-out en moyenne sont pertinents).
+- Résultats : `data/processed/results/popular_val.json`, `random_val.json`. Le test n'a pas été évalué.
+
+**Choix faits sans demander (C1)**
+- Le held-out est stocké complet dans `split/` ; la restriction aux films recommandables se fait dans `evaluate.py` (le découpage ne dépend pas des drapeaux du catalogue).
+- Taille du fold-in : `min(⌊4n/5⌋, n − 1)` en arithmétique entière (pas de flottant).
+- Tirage : `np.random.default_rng(SEED).permutation` des `userId` éligibles triés ; les 10 000 premiers → validation, les 10 000 suivants → test.
+- Médiane du fold-in : médiane classique (moyenne des deux valeurs centrales si nombre pair).
+- `pop_mediane@20` : médiane par utilisateur, puis moyenne ± IC sur les utilisateurs (comme toutes les métriques par utilisateur). `couverture@20` est une valeur globale, sans IC.
+- `longue_traine@20` : « tête » = les `round(0,2 × 22 968)` = 4 594 films recommandables les plus notés par les utilisateurs d'entraînement (égalités départagées par `item_idx`).
+- `hasard` : scores uniformes tirés d'un seul générateur (`SEED`), utilisateurs dans l'ordre des `userId`, par lots de 1 000 (résultat reproductible tant que la taille de lot ne change pas).
+- Interface commune des modèles : `scores(foldin_csr) → matrice (utilisateurs × films)` ; le masquage (fold-in, non recommandables) est fait par `evaluate.py`, pas par les modèles.
+
 ### C2
 ### C3
 ### C4
