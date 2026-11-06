@@ -37,8 +37,10 @@
 | Source | Ce qu'on prend | Où | Licence | Rôle |
 |---|---|---|---|---|
 | **MovieLens 32M** (GroupLens) | `ratings.csv` (32 M de notes, ~200 000 utilisateurs, ~87 000 films, 1995-2023), `movies.csv`, `links.csv` (MovieLens ↔ IMDb ↔ TMDB) | grouplens.org/datasets/movielens/32m | Non commercial, citer le dataset | **Source principale** du filtrage collaboratif |
-| **IMDb Non-Commercial Datasets** | `title.basics.tsv` (titres, titres originaux, année, durée, genres), `title.ratings.tsv` (note moyenne, nombre de votes) | datasets.imdbws.com | Usage personnel et non commercial | Correspondance des titres + **mesure de popularité** pour le curseur |
-| **TMDB API** | Affiches, réalisateur, pays, langue, résumé, plateformes de streaming par pays | developer.themoviedb.org | Gratuit en non commercial, attribution obligatoire, cache ≤ 6 mois | Enrichir l'affichage, filtre « dispo en France » plus tard |
+| **IMDb Non-Commercial Datasets** | `title.basics.tsv` (titres, titres originaux, année, durée, genres), `title.ratings.tsv` (note moyenne, nombre de votes) | datasets.imdbws.com | Usage personnel et non commercial | **Hors ligne uniquement** (jointures, vérification des imdbId, contrôles qualité), **jamais embarqué dans le site** |
+| **TMDB API** | Affiches, réalisateurs, titres (`title`, `original_title`), année de sortie, `vote_count`, pays, langue, résumé, plateformes de streaming par pays | developer.themoviedb.org | Gratuit en non commercial, attribution obligatoire, cache ≤ 6 mois | Enrichir l'affichage, filtre « dispo en France » plus tard |
+
+> **Popularité du curseur** : `ml_rating_count` ou `tmdb_vote_count`, choix à l'étape 2. Le champ `popularity` de TMDB n'est pas utilisé (indicateur de tendance, instable).
 
 ### 2.2 Pour évaluer (pas pour le site)
 
