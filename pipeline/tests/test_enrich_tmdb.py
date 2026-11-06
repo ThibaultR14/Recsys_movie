@@ -191,6 +191,21 @@ def test_enrich_other_imdb_id_without_find_result_is_a_mismatch(tmp_path):
     assert out["movie"]["imdb_id"] == "tt2"  # data kept, nothing excluded
 
 
+@pytest.mark.parametrize(
+    ("tmdb_title", "date", "mismatch"),
+    [
+        ("Batman: The Dark Knight Returns", "2013-01-18", False),  # same film, no imdb_id on TMDB
+        ("Batman: The Dark Knight Returns", "2016-01-18", True),
+        ("Something Else", "2013-01-18", True),
+    ],
+)
+def test_tmdb_without_imdb_id_uses_the_title_year_guard(tmp_path, tmdb_title, date, mismatch):
+    api = FakeApi(tmp_path, {10: _movie(10, None, tmdb_title, date)}, {})
+    out = et.enrich_one(api, _row(10, title="Batman: The Dark Knight Returns", year=2013))
+    assert out["tmdb_mismatch"] is mismatch and not out["imdb_id_outdated"]
+    assert out["tmdb_mismatch_reason"] == ("tmdb_no_imdb_id" if mismatch else None)
+
+
 def test_enrich_lookup_completion_is_not_a_correction(tmp_path):
     api = FakeApi(tmp_path, {7: _movie(7, "tt1")}, {"tt1": [7]})
     out = et.enrich_one(api, _row(None))
@@ -315,6 +330,7 @@ def test_merge_year_aliases_and_frozen_item_idx():
     assert out["ml_tmdb_id"].to_list() == [10, None]
     assert out["tmdb_directors"].to_list() == [["X"], []]
     assert set(et.ENRICHED_COLUMNS) <= set(out.columns)
+    assert out["recommendable"].to_list() == [True, False]  # mismatch -> never shown
 
 
 # --- Acceptance on the real enriched catalogue (skipped until B4 has run) -------------------------

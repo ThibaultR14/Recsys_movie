@@ -5,13 +5,18 @@ Outputs (in `data/processed/`, never shipped as is):
   the future ALS item vectors). Publishable columns come from MovieLens (`ml_*`, ids); internal QA
   columns from the IMDb datasets carry the `imdbds_` prefix and must never reach `web/public/data/`.
 - `ratings_filtered.parquet`: ratings of catalogue movies only, duplicate movieIds merged.
-- `movie_id_merges.parquet`: movieIds merged into a canonical movieId (same tmdbId).
+- `movie_id_merges.parquet`: movieIds merged into a canonical movieId (same tmdbId, or manual).
+
+Manual corrections live in `manual_overrides.csv` (versioned, one documented line per decision):
+`exclude` drops a movie; `merge_into` merges a duplicate into `target_movie_id`, only if both have
+the same normalized MovieLens title and years within 1 year (otherwise refused and reported).
 
 Steps, in order:
-1. threshold on raw MovieLens rating counts (before any merge);
+1. threshold on raw MovieLens rating counts (before any merge), then manual exclusions;
 2. tmdbId duplicates (see `resolve_tmdb_duplicates`): same film -> merged into the movieId with the
    most ratings (a user who rated both keeps their most recent rating); different films sharing a
-   wrong tmdbId -> not merged, tmdb_id cleared and flagged for lookup in B4;
+   wrong tmdbId -> not merged, tmdb_id cleared and flagged for lookup in B4; then manual merges
+   (same rule for the canonical's ids: best imdb_id of the pair, with its tmdb_id);
 3. offline quality filter: drop entries whose IMDb titleType is a series/episode.
 
 Usage (from `pipeline/`):
@@ -25,14 +30,17 @@ import sys
 
 import polars as pl
 
-from config import MIN_RATINGS, PROCESSED, RAW
+from config import MIN_RATINGS, PIPELINE_DIR, PROCESSED, RAW
 from download import scan_imdb
+from titles import title_keys
 
 ML_DIR = RAW / "ml-32m"
 RATINGS_PARQUET = PROCESSED / "ratings.parquet"
 CATALOG_PARQUET = PROCESSED / "catalog.parquet"
 RATINGS_FILTERED_PARQUET = PROCESSED / "ratings_filtered.parquet"
 MERGES_PARQUET = PROCESSED / "movie_id_merges.parquet"
+MANUAL_OVERRIDES_CSV = PIPELINE_DIR / "manual_overrides.csv"
+MANUAL_ACTIONS = ("exclude", "merge_into")
 
 EXCLUDED_TITLE_TYPES = ("tvSeries", "tvEpisode", "tvMiniSeries")
 MAX_DUPLICATE_YEAR_GAP = 1  # two movieIds sharing a tmdbId are the same film if years differ <= 1
@@ -70,6 +78,7 @@ MERGES_SCHEMA = {
     "imdb_id_to": pl.String,
     "imdb_id_to_original": pl.String,  # canonical's links.csv imdb_id before the override
     "rating_count_from": pl.Int32,
+    "origin": pl.String,  # "tmdb_duplicate" (automatic) or "manual" (manual_overrides.csv)
 }
 
 # "(1995)" at the very end; also tolerates year ranges such as "(2007-)" and a doubled closing
@@ -162,12 +171,95 @@ def resolve_tmdb_duplicates(movies: pl.DataFrame) -> tuple[pl.DataFrame, dict[in
                         "imdb_id_to": best["imdb_id"],
                         "imdb_id_to_original": canonical["imdb_id"],
                         "rating_count_from": r["raw_rating_count"],
+                        "origin": "tmdb_duplicate",
                     }
                 )
         if conflict:
             conflicts += [canonical["movie_id"]] + [r["movie_id"] for r in conflict]
     merges_df = pl.DataFrame(merges, schema=MERGES_SCHEMA).sort("movie_id_from")
     return merges_df, overrides, sorted(conflicts)
+
+
+def load_manual_overrides(path=MANUAL_OVERRIDES_CSV) -> pl.DataFrame:
+    df = pl.read_csv(
+        path,
+        schema={
+            "movie_id": pl.Int32,
+            "action": pl.String,
+            "target_movie_id": pl.Int32,
+            "reason": pl.String,
+        },
+    )
+    bad = df.filter(~pl.col("action").is_in(MANUAL_ACTIONS))
+    if bad.height:
+        raise ValueError(f"manual_overrides: unknown action(s) {bad['action'].to_list()}")
+    if df.filter(pl.col("action") == "merge_into")["target_movie_id"].null_count():
+        raise ValueError("manual_overrides: merge_into needs a target_movie_id")
+    if not df["movie_id"].is_unique().all():
+        raise ValueError("manual_overrides: one line per movie_id")
+    if df["reason"].null_count():
+        raise ValueError("manual_overrides: every line needs a reason")
+    return df
+
+
+def same_ml_film(a: dict, b: dict) -> bool:
+    """Guard for manual merges: same normalized MovieLens title, years known and within 1 year."""
+    if a["ml_year"] is None or b["ml_year"] is None:
+        return False
+    if abs(a["ml_year"] - b["ml_year"]) > MAX_DUPLICATE_YEAR_GAP:
+        return False
+    return bool(title_keys(a["ml_title"]) & title_keys(b["ml_title"]))
+
+
+def resolve_manual_merges(
+    movies: pl.DataFrame, overrides: pl.DataFrame, busy: frozenset[int] = frozenset()
+) -> tuple[pl.DataFrame, dict[int, str], dict[int, int], list[dict]]:
+    """Manual `merge_into` lines -> (merges, imdb_id overrides, tmdb_id overrides, refused).
+
+    `movies` needs movie_id, tmdb_id, imdb_id, ml_title, ml_year, raw_rating_count,
+    imdbds_title_type, imdbds_found. `busy`: movie_ids already in an automatic merge.
+    The canonical (target) keeps its movie_id and takes the best imdb_id of the pair (found in
+    title.basics with an allowed type; tie -> the target's) with that member's tmdb_id (else the
+    other one's). The target's own imdb_id is kept in imdb_id_to_original (future alias).
+    """
+    by_id = {r["movie_id"]: r for r in movies.to_dicts()}
+    merges, imdb_over, tmdb_over, refused = [], {}, {}, []
+    for o in overrides.filter(pl.col("action") == "merge_into").iter_rows(named=True):
+        src, dst = by_id.get(o["movie_id"]), by_id.get(o["target_movie_id"])
+        why = None
+        if src is None or dst is None:
+            why = "absent du catalogue (sous le seuil ou exclu)"
+        elif {src["movie_id"], dst["movie_id"]} & busy:
+            why = "déjà dans une fusion automatique"
+        elif not same_ml_film(src, dst):
+            why = "titre ou année différents"
+        if why:
+            refused.append({**o, "why": why})
+            continue
+
+        def score(r, dst=dst):
+            return (bool(r["imdbds_found"]) and not _excluded(r), r is dst)
+
+        best = max((src, dst), key=score)
+        other = src if best is dst else dst
+        tmdb_id = best["tmdb_id"] if best["tmdb_id"] is not None else other["tmdb_id"]
+        if best["imdb_id"] != dst["imdb_id"]:
+            imdb_over[dst["movie_id"]] = best["imdb_id"]
+        if tmdb_id != dst["tmdb_id"]:
+            tmdb_over[dst["movie_id"]] = tmdb_id
+        merges.append(
+            {
+                "movie_id_from": src["movie_id"],
+                "movie_id_to": dst["movie_id"],
+                "tmdb_id": tmdb_id,
+                "imdb_id_from": src["imdb_id"],
+                "imdb_id_to": best["imdb_id"],
+                "imdb_id_to_original": dst["imdb_id"],
+                "rating_count_from": src["raw_rating_count"],
+                "origin": "manual",
+            }
+        )
+    return pl.DataFrame(merges, schema=MERGES_SCHEMA), imdb_over, tmdb_over, refused
 
 
 def apply_merges(ratings: pl.DataFrame, merges: pl.DataFrame) -> tuple[pl.DataFrame, dict]:
@@ -271,33 +363,48 @@ def build(min_ratings: int) -> dict:
     movies = load_movielens()
     imdb = load_imdb()
 
-    # 1. Threshold on raw counts, before any merge.
+    # 1. Threshold on raw counts, before any merge; then manual exclusions.
     selected = join_imdb(movies.filter(pl.col("raw_rating_count") >= min_ratings), imdb)
     report["above_threshold"] = selected.height
     report["not_found_before"] = selected.filter(~pl.col("imdbds_found")).height
+    manual = load_manual_overrides()
+    excl_ids = manual.filter(pl.col("action") == "exclude")["movie_id"].implode()
+    report["manual_excluded"] = selected.filter(pl.col("movie_id").is_in(excl_ids))
+    selected = selected.filter(~pl.col("movie_id").is_in(excl_ids))
 
-    # 2. tmdbId duplicates.
+    # 2. tmdbId duplicates, then manual merges.
     merges, overrides, conflicts = resolve_tmdb_duplicates(selected)
     report["dup_tmdb_rows"] = selected.filter(
         pl.col("tmdb_id").is_not_null() & pl.col("tmdb_id").is_duplicated()
     ).height
+    report["auto_merges"] = merges.height
+    busy = frozenset(merges["movie_id_from"].to_list() + merges["movie_id_to"].to_list())
+    m_merges, m_imdb, m_tmdb, refused = resolve_manual_merges(selected, manual, busy)
+    report["manual_merges"], report["manual_refused"] = m_merges, refused
+    merges = pl.concat([merges, m_merges]).sort("movie_id_from")
+    overrides = {**overrides, **m_imdb}
     report["merges"], report["overrides"] = merges, overrides
     report["conflicts"] = selected.filter(pl.col("movie_id").is_in(conflicts))
     over = pl.DataFrame(
         {"movie_id": list(overrides), "imdb_override": list(overrides.values())},
         schema={"movie_id": pl.Int32, "imdb_override": pl.String},
     )
+    tmdb_over = pl.DataFrame(
+        {"movie_id": list(m_tmdb), "tmdb_override": list(m_tmdb.values())},
+        schema={"movie_id": pl.Int32, "tmdb_override": pl.Int64},
+    )
     merged = (
         selected.filter(~pl.col("movie_id").is_in(merges["movie_id_from"].implode()))
         .join(over, on="movie_id", how="left")
+        .join(tmdb_over, on="movie_id", how="left")
         .with_columns(
             pl.coalesce("imdb_override", "imdb_id").alias("imdb_id"),
             pl.when(pl.col("movie_id").is_in(conflicts))
             .then(None)
-            .otherwise(pl.col("tmdb_id"))
+            .otherwise(pl.coalesce("tmdb_override", "tmdb_id"))
             .alias("tmdb_id"),
         )
-        .drop("imdb_override")
+        .drop("imdb_override", "tmdb_override")
     )
     merged = join_imdb(merged, imdb)
 
@@ -361,9 +468,19 @@ def print_report(r: dict) -> None:
     print(f"\n== Catalogue (MIN_RATINGS = {r['min_ratings']}) ==")
     print(f"films >= {r['min_ratings']} notes (avant fusion) : {fmt(r['above_threshold'])}")
 
+    m_excl: pl.DataFrame = r["manual_excluded"]
+    print(f"\nexclusions manuelles (manual_overrides.csv) : {m_excl.height}")
+    if m_excl.height:
+        print(m_excl.select("movie_id", "imdb_id", "ml_title", "ml_year", "raw_rating_count"))
+
     print(f"\ndoublons de tmdb_id : {r['dup_tmdb_rows']} entrées")
-    print(f"  fusionnés : {n_merged} movieId -> canonique (le plus noté)")
+    print(
+        f"  fusionnés : {n_merged} movieId -> canonique ({r['auto_merges']} automatiques, "
+        f"{r['manual_merges'].height} manuelles)"
+    )
     print(merges)
+    for o in r["manual_refused"]:
+        print(f"  fusion manuelle REFUSÉE {o['movie_id']} -> {o['target_movie_id']} : {o['why']}")
     print(
         f"  imdb_id du canonique remplacé par celui du doublon (trouvé dans title.basics) : "
         f"{len(r['overrides'])}"
@@ -396,9 +513,11 @@ def print_report(r: dict) -> None:
     ex = r["excluded_examples"].select("imdb_id", "ml_title", "imdbds_title_type")
     print("  exemples : " + "; ".join(f"{a} {b} ({c})" for a, b, c in ex.iter_rows()))
 
+    n_manual = m_excl.height
+    expected = r["above_threshold"] - n_manual - n_excl - n_merged
     print(
-        f"\ncalcul : {fmt(r['above_threshold'])} - {fmt(n_excl)} (types) - {fmt(n_merged)} "
-        f"(fusions) = {fmt(r['above_threshold'] - n_excl - n_merged)} ; catalogue = {fmt(n)}"
+        f"\ncalcul : {fmt(r['above_threshold'])} - {n_manual} (manuel) - {fmt(n_excl)} (types) - "
+        f"{fmt(n_merged)} (fusions) = {fmt(expected)} ; catalogue = {fmt(n)}"
     )
     below = cat.filter(pl.col("ml_rating_count") < r["min_ratings"]).height
     print(f"films sous le seuil après fusion : {below}")

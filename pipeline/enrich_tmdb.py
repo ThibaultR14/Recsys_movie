@@ -29,7 +29,6 @@ import random
 import sys
 import threading
 import time
-import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -40,6 +39,7 @@ from tqdm import tqdm
 
 from build_catalog import CATALOG_COLUMNS, CATALOG_PARQUET, MERGES_PARQUET
 from config import CACHE, PROCESSED
+from titles import ml_title_variants, normalize_title, title_keys
 
 API_BASE = "https://api.themoviedb.org/3"
 TMDB_CACHE = CACHE / "tmdb"
@@ -84,6 +84,9 @@ ENRICHED_COLUMNS = (
     "tmdb_mismatch_reason",
     "imdb_id_outdated",
     "imdb_id_aliases",
+    # Publishable: false for movies still in tmdb_mismatch. They stay in the catalogue and in
+    # training (their ratings help), but are never shown as recommendations.
+    "recommendable",
 )
 
 
@@ -127,41 +130,6 @@ def slim_find(raw: dict) -> dict:
 
 def is_fresh(fetched_at: str, now: datetime, max_age: timedelta) -> bool:
     return now - datetime.fromisoformat(fetched_at) < max_age
-
-
-def normalize_title(title: str | None) -> str:
-    """Lowercase, strip accents and punctuation, collapse spaces."""
-    if not title:
-        return ""
-    t = unicodedata.normalize("NFKD", title.casefold())
-    t = "".join(c if c.isalnum() else " " for c in t if not unicodedata.combining(c))
-    return " ".join(t.split())
-
-
-ARTICLES = ("the", "a", "an", "les", "le", "la", "l'", "il", "el", "der", "die", "das")
-
-
-def ml_title_variants(title: str) -> str:
-    """MovieLens 'City of Lost Children, The (Cité ..., La)' -> 'The City of Lost Children'."""
-    t = title.strip()
-    if t.endswith(")") and " (" in t:
-        t = t[: t.index(" (")].strip()  # alternate/original title in parentheses
-    head, sep, art = t.rpartition(", ")
-    if sep and art.casefold() in ARTICLES:
-        t = f"{art} {head}" if not art.endswith("'") else f"{art}{head}"
-    return t
-
-
-def title_keys(ml: str) -> set[str]:
-    """Normalized forms of a MovieLens title: as is, with the article moved back to the front and
-    the parenthesized alternate title removed, and that alternate title on its own."""
-    keys = {normalize_title(ml), normalize_title(ml_title_variants(ml))}
-    t = ml.strip()
-    if t.endswith(")") and " (" in t:
-        alt = t[t.index(" (") + 2 : -1].strip()
-        alt = alt.removeprefix("a.k.a. ").removeprefix("a.k.a ")
-        keys |= {normalize_title(alt), normalize_title(ml_title_variants(alt))}
-    return keys - {""}
 
 
 def same_film(ml_title: str, ml_year: int | None, movie: dict | None) -> bool:
@@ -348,6 +316,9 @@ def enrich_one(api: Tmdb, row: dict) -> dict:
     if reason == "other_imdb_id" and same:
         # Same film, TMDB carries the current imdb_id (ours, from links.csv, is outdated).
         status, reason, outdated = "ok", None, True
+    elif reason == "tmdb_no_imdb_id" and same:
+        # Same film, TMDB simply has no imdb_id on record.
+        status, reason = "ok", None
     if row["tmdb_id"] is None and tmdb_id is not None and not same:
         # /find completion that does not look like our film (wrong imdb_id in links.csv?).
         tmdb_id, movie, status, reason = None, None, "mismatch", "lookup_suspect"
@@ -427,6 +398,7 @@ def merge(catalog: pl.DataFrame, results: list[dict], merges: pl.DataFrame) -> p
         .with_columns(
             pl.col("imdb_id_aliases").fill_null(pl.lit([], dtype=pl.List(pl.String))),
             pl.coalesce("tmdb_release_year", "ml_year").alias("year"),
+            (~pl.col("tmdb_mismatch")).alias("recommendable"),
         )
         .with_columns(
             # TMDB's (current) imdb_id is an alias when it differs from ours, unless the row is
@@ -480,6 +452,7 @@ def print_report(cat: pl.DataFrame, results: list[dict], api: Tmdb) -> None:
     corrected = cat.filter("tmdb_id_corrected")
     mismatch = cat.filter("tmdb_mismatch")
     outdated = int(cat["imdb_id_outdated"].sum())
+    print(f"recommendable = false : {int((~cat['recommendable']).sum())}")
     print(
         f"tmdb_id corrigés : {corrected.height} ; imdb_id_outdated : {outdated} ; "
         f"mismatch restants : {mismatch.height}"
