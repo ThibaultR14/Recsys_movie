@@ -68,6 +68,7 @@ MERGES_SCHEMA = {
     "tmdb_id": pl.Int64,
     "imdb_id_from": pl.String,
     "imdb_id_to": pl.String,
+    "imdb_id_to_original": pl.String,  # canonical's links.csv imdb_id before the override
     "rating_count_from": pl.Int32,
 }
 
@@ -159,6 +160,7 @@ def resolve_tmdb_duplicates(movies: pl.DataFrame) -> tuple[pl.DataFrame, dict[in
                         "tmdb_id": r["tmdb_id"],
                         "imdb_id_from": r["imdb_id"],
                         "imdb_id_to": best["imdb_id"],
+                        "imdb_id_to_original": canonical["imdb_id"],
                         "rating_count_from": r["raw_rating_count"],
                     }
                 )

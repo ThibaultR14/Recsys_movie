@@ -37,6 +37,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - Les datasets Letterboxd scrapés (Hugging Face, Kaggle) servent **uniquement à l'évaluation**, jamais embarqués dans le site.
 - **Données IMDb** : les datasets IMDb (datasets.imdbws.com) servent **uniquement hors ligne** (jointures, vérification des `imdbId`, contrôles qualité). **Rien de ce qui est embarqué dans le site** (réalisateurs, popularité, titres, index de correspondance) **ne vient d'IMDb** : uniquement TMDB ou MovieLens. Les colonnes issues des datasets IMDb portent le préfixe `imdbds_` et ne doivent **jamais** être écrites dans `web/public/data/`. L'`imdb_id` (`tt…`) vient de MovieLens `links.csv` et reste autorisé.
 - Données brutes (MovieLens, IMDb) dans `pipeline/data/raw/`, intermédiaires dans `pipeline/data/processed/`, cache des appels TMDB dans `pipeline/data/cache/` : **contenu ignoré par git** (seuls les `.gitkeep` sont versionnés).
+- **`item_idx` est figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais.** (Si une étape du pipeline retire des films avant l'entraînement, elle renumérote 0..n-1.)
 - **`web/public/data/` n'est pas versionné tant que GroupLens n'a pas répondu** sur la licence (données dérivées de MovieLens). Seul le `.gitkeep` y est suivi.
 
 ## Conventions

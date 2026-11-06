@@ -176,7 +176,8 @@ def catalog():
 
 @needs_catalog
 def test_catalog_columns_match_declared(catalog):
-    assert tuple(catalog.columns) == bc.CATALOG_COLUMNS
+    # enrich_tmdb.py (B4) appends its columns after the B3 ones
+    assert tuple(catalog.columns[: len(bc.CATALOG_COLUMNS)]) == bc.CATALOG_COLUMNS
 
 
 @needs_catalog
@@ -199,7 +200,8 @@ def test_ids_unique_and_complete(catalog):
     assert catalog["tmdb_id"].drop_nulls().is_unique().all()
     assert catalog["item_idx"].to_list() == list(range(catalog.height))
     assert catalog["imdbds_found"].mean() >= 0.98
-    assert (catalog["needs_tmdb_lookup"] == catalog["tmdb_id"].is_null()).all()
+    b3_tmdb = catalog["ml_tmdb_id" if "ml_tmdb_id" in catalog.columns else "tmdb_id"]
+    assert (catalog["needs_tmdb_lookup"] == b3_tmdb.is_null()).all()
 
 
 @needs_catalog
