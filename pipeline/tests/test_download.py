@@ -1,3 +1,4 @@
+import json
 import zipfile
 
 import polars as pl
@@ -32,6 +33,18 @@ def test_md5_of(tmp_path):
     f = tmp_path / "a.txt"
     f.write_bytes(b"abc")
     assert dl.md5_of(f) == "900150983cd24fb0d6963f7d28e17f72"
+
+
+def test_imdb_only_basics_and_ratings():
+    # Decision "Donnees IMDb": crew, names and akas are not used (TMDB provides them).
+    assert dl.IMDB_FILES == ("title.basics.tsv.gz", "title.ratings.tsv.gz")
+
+
+@pytest.mark.skipif(not dl.MANIFEST.exists(), reason="no manifest yet")
+def test_manifest_has_no_unused_imdb_files():
+    files = json.loads(dl.MANIFEST.read_text(encoding="utf-8"))["files"]
+    imdb = {k.removeprefix("imdb/") for k in files if k.startswith("imdb/")}
+    assert imdb <= set(dl.IMDB_FILES)
 
 
 # --- Acceptance checks on the real data (skipped when not downloaded) ---------------------------

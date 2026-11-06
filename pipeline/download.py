@@ -36,12 +36,10 @@ MOVIELENS_FILES = ("ratings.csv", "movies.csv", "links.csv", "tags.csv")
 
 IMDB_BASE_URL = "https://datasets.imdbws.com/"
 IMDB_DIR = RAW / "imdb"
+# Only basics + ratings: directors and titles shipped in the site come from TMDB (step B4).
 IMDB_FILES = (
     "title.basics.tsv.gz",
     "title.ratings.tsv.gz",
-    "title.crew.tsv.gz",
-    "name.basics.tsv.gz",
-    "title.akas.tsv.gz",
 )
 
 RATINGS_PARQUET = PROCESSED / "ratings.parquet"
