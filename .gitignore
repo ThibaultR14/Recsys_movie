@@ -1,0 +1,36 @@
+# --- Secrets ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+# TMDB key file (original JSON, to be deleted once moved to .env)
+secure_keys.json
+
+# --- Pipeline data (too large / licensed) ------------------------------------
+# Contents ignored, .gitkeep kept so the folders exist after a clone.
+pipeline/data/raw/*
+!pipeline/data/raw/.gitkeep
+pipeline/data/processed/*
+!pipeline/data/processed/.gitkeep
+pipeline/data/cache/*
+!pipeline/data/cache/.gitkeep
+
+# --- Derived site data -------------------------------------------------------
+# Not versioned until GroupLens answers about the MovieLens license.
+web/public/data/*
+!web/public/data/.gitkeep
+
+# --- Python ------------------------------------------------------------------
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Node --------------------------------------------------------------------
+node_modules/
+dist/
+
+# --- OS / editors ------------------------------------------------------------
+.DS_Store
+Thumbs.db
