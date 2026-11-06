@@ -94,7 +94,7 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 - Balayage de λ de **−0,5 à 2,0 par pas de 0,1** (les valeurs négatives favorisent les classiques : à voir si l'extrémité gauche du curseur doit aller jusque-là).
 - Deux sources de popularité testées : `ml_rating_count` (comptes d'entraînement) et `tmdb_vote_count` (manquant → plus petite valeur observée).
 - **Livrable clé** : la courbe `NDCG@20` (ou `Recall@20`) en fonction de `pop_mediane@20` quand λ varie, une courbe par source de popularité, avec les références `populaire` et `hasard` en points.
-- Le choix de la source et de la plage de λ se fait sur la validation, **par Thibault**, au vu des courbes (C4).
+- Le choix de la source et de la plage de λ se fait sur la validation, **par Thibault**, au vu des courbes (C4). Le choix de la configuration ALS finale aussi (deux candidates, voir C4).
 
 ### D6. Hyperparamètres d'ALS
 
@@ -186,14 +186,19 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 
 ### C4 — Curseur
 
-**Objectif** : montrer que le curseur fonctionne et choisir la source de popularité.
+**Objectif** : montrer que le curseur fonctionne, choisir la source de popularité **et le modèle ALS final**.
 
 **Fichiers** : `pipeline/slider.py` (re-classement D5), script de balayage, figures dans `docs/figures/` (PNG versionnés).
 
+**Deux configurations ALS candidates** (ajout du 7 novembre 2026, voir section 5 « C2 — complément ») :
+- **A — précision à λ = 0** : la configuration retenue en C2 (`factors 64, reg 0,05, alpha 1, β 1, 30 it.`).
+- **B — alpha élevé** : la meilleure en `NDCG@20` parmi `alpha ≥ 10` de la recherche, à 64 facteurs (`factors 64, reg 0,1, alpha 10, β 1, 30 it.`) : listes plus variées, potentiellement meilleure une fois le curseur appliqué.
+- Le balayage du curseur se fait **pour A et pour B** (× 2 sources de popularité). **Le choix final du modèle se fait au vu des courbes précision ↔ popularité, pas à λ = 0.**
+
 **Critères** :
-- Balayage λ ∈ [−0,5 ; 2,0] pas 0,1, sur la validation, pour les deux sources de popularité : tableau complet + figure `etape2-curseur-validation.png` (précision vs `pop_mediane@20`, références en points).
+- Balayage λ ∈ [−0,5 ; 2,0] pas 0,1, sur la validation, pour les deux configurations ALS et les deux sources de popularité : tableau complet + figure `etape2-curseur-validation.png` (précision vs `pop_mediane@20`, une courbe par configuration × source, références en points).
 - Pour 3 utilisateurs de test au profil différent : les 10 titres recommandés à λ = 0, λ intermédiaire et λ max (`tmdb_title`, année, nombre de notes). Contrôle qualitatif : les pépites ont-elles l'air cohérentes ?
-- **Arrêt** : Thibault choisit la source de popularité et la plage de λ. Ensuite seulement, évaluation sur le test pour la configuration choisie + figure `etape2-curseur-test.png`.
+- **Arrêt** : Thibault choisit la configuration ALS (A ou B), la source de popularité et la plage de λ. Ensuite seulement, évaluation sur le test pour la configuration choisie + figure `etape2-curseur-test.png`. Ce choix fixe le modèle réentraîné et exporté en C5.
 
 ### C5 — Modèle final, quantification, export
 
@@ -371,6 +376,49 @@ Test cohérent avec la validation (NDCG 0,15215 vs 0,15106). Fichiers : `results
 - Top 20 « identique » du contrôle de fold-in : même liste **dans le même ordre** (plus strict que même ensemble ; les deux valent 100 %).
 - 30 itérations retenues plutôt que 15 (voir ci-dessus).
 - Références `populaire` et `hasard` évaluées sur le test, pour avoir la comparaison complète.
+
+### C2 — complément (7 novembre 2026, validation uniquement)
+
+**1. Contrôle de `longue_traine@20` ≈ 0** (config retenue, validation, 10 000 × 20 = 200 000 recommandations)
+
+Rang de popularité = rang parmi les 22 968 films recommandables selon le nombre de notes d'entraînement (1 = le plus noté). La « tête » = rangs 1 à 4 594, soit les films à **≥ 820 notes** d'entraînement.
+
+| Mesure | Toutes les recos (200 000) | Films distincts (1 871) |
+|---|---|---|
+| Rang médian | 129 | |
+| Rang au 99e centile | 1 312 | 3 097 |
+| Rang maximal | 4 606 | 4 606 |
+| Nombre minimal de notes | 817 | |
+
+- **Une seule** recommandation sur 200 000 est hors de la tête (rang 4 606, *The Red Shoes*, 1948, 817 notes) : `longue_traine@20` = 1 / 200 000 = 0,000005, affiché 0,00001. La valeur n'est pas un bug : ALS à λ = 0 reste dans les ~4 600 films les plus notés.
+- Vérification à la main sur cet utilisateur (`userId` 171795, fold-in de 5 849 films) : sur ses 20 films, 1 a un rang > 4 594 → 1/20 = 0,05 ; la métrique donne 0,05 ✅. Sa liste est elle-même plutôt cinéphile (*Suspiria*, *Le Cuirassé Potemkine*, *La Jetée*, *Le Samouraï*, *Les Nuits de Cabiria*, *Printemps, été, automne, hiver… et printemps*), mais tous ces films ont plus de 1 000 notes.
+- Vecteurs de ce modèle sauvegardés pour C4 : `data/processed/models/als_f64_r0.05_a1_b1_i30_item_factors.npy` (non versionné).
+
+**2. Extension de `alpha` sous 1** (`factors 64, reg 0,05, 30 it.`, validation)
+
+Avec `C = alpha × r` et `r = 1 + β·p ∈ [1 ; 1 + β]`, **`alpha < 1` donne une confiance `C < 1` à certains films vus** : tous avec β = 0, et ceux de percentile `p < (1/alpha − 1)/β` avec β = 1 (p < 3 pour alpha = 0,25, donc tous ; p < 1 pour alpha = 0,5, donc tous sauf le mieux noté). Un film vu pèse alors *moins* dans le système qu'un film non vu (`C − 1 < 0`), tout en restant une cible `P = 1`. La matrice reste définie positive (`YᵀY + Σ_vus (C − 1) y yᵀ = Σ_non-vus y yᵀ + Σ_vus C y yᵀ`).
+
+| alpha | β | NDCG@20 | Recall@20 | pop_mediane@20 | couverture@20 | vs retenue |
+|---|---|---|---|---|---|---|
+| 0,25 | 0 | 0,13147 ± 0,00307 | 0,16095 ± 0,00382 | 27 173 | 0,0548 | −13,0 % |
+| 0,25 | 1 | 0,14301 ± 0,00323 | 0,17414 ± 0,00398 | 27 865 | 0,0603 | −5,3 % |
+| 0,5 | 0 | 0,13925 ± 0,00319 | 0,17157 ± 0,00399 | 28 106 | 0,0654 | −7,8 % |
+| 0,5 | 1 | 0,14922 ± 0,00333 | 0,18308 ± 0,00417 | 28 465 | 0,0700 | −1,2 % |
+| **1 (retenue)** | **1** | **0,15106 ± 0,00337** | 0,18749 ± 0,00429 | 28 564 | 0,0815 | — |
+
+Règle de décision (≥ 1 % relatif de gain) : **aucune config n'est adoptée, on garde `alpha = 1`.** Le bord de grille est vérifié : `alpha = 1` est un maximum (NDCG@20 baisse des deux côtés), et dans cette extension, à alpha égal, β = 1 bat β = 0. Pas de 2e évaluation test. Fichiers : `results/als_f64_r0.05_a{0.25,0.5}_b{0,1}_i30_val.json`.
+
+**3. Deuxième candidate pour C4 (alpha élevé)**
+
+Meilleure en NDCG@20 parmi `alpha ≥ 10` dans la recherche : `factors 128, reg 0,1, alpha 10, β 0` (0,13296 ± 0,00309), suivie de `factors 64, reg 0,1, alpha 10, β 1` (0,13293 ± 0,00312), écart de 0,00003. **Choix : la config à 64 facteurs**, par application de la règle D6 (128 seulement si gain ≥ 3 % relatif : ici +0,02 %), et pour comparer A et B à taille d'export égale. Réévaluée à 30 itérations comme A :
+
+| Config (validation, λ = 0) | NDCG@20 | Recall@20 | couverture@20 | pop_mediane@20 | longue_traine@20 |
+|---|---|---|---|---|---|
+| A : `64, reg 0,05, alpha 1, β 1, 30 it.` | 0,15106 ± 0,00337 | 0,18749 ± 0,00429 | 0,0815 | 28 564 ± 205 | 0,00001 |
+| **B : `64, reg 0,1, alpha 10, β 1, 30 it.`** | 0,13293 ± 0,00310 | 0,16931 ± 0,00409 | 0,1485 | 26 480 ± 276 | 0,00085 ± 0,00037 |
+| (pour mémoire) `128, reg 0,1, alpha 10, β 0, 15 it.` | 0,13296 ± 0,00309 | 0,17079 ± 0,00414 | 0,1493 | 23 557 ± 230 | 0,00082 |
+
+B perd 12 % de NDCG@20 à λ = 0 mais couvre 1,8 fois plus de films. Le balayage du curseur se fera pour A et B (spec C4 mise à jour). Fichier : `results/als_f64_r0.1_a10_b1_i30_val.json`.
 
 ### C3
 ### C4
