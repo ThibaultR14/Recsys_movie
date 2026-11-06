@@ -34,3 +34,6 @@ dist/
 # --- OS / editors ------------------------------------------------------------
 .DS_Store
 Thumbs.db
+
+# --- Claude session journal (local notes, not versioned) -------------------
+journal-claude/
