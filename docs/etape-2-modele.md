@@ -271,6 +271,107 @@ Mettre à jour `docs/stack-technique.md` (§3, §4, §8, §9) et `CLAUDE.md` (é
 - Interface commune des modèles : `scores(foldin_csr) → matrice (utilisateurs × films)` ; le masquage (fold-in, non recommandables) est fait par `evaluate.py`, pas par les modèles.
 
 ### C2
+
+*6 novembre 2026.* Code : `pipeline/models/als.py` (signal D2, entraînement, fold-in NumPy, adaptateur pour `evaluate.py`), `pipeline/train.py` (`check-foldin`, `time`, `search`, `run`), `tests/test_als.py`. Dépendance ajoutée : `implicit==0.7.3`.
+
+**Formule de confiance d'`implicit` 0.7.3** (lue dans `pipeline/.venv/Lib/site-packages/implicit/cpu/als.py`)
+
+- `fit` (l. 132-134) et `recalculate_user` (l. 227-228) : `if self.alpha != 1.0: Cui = self.alpha * Cui`. La matrice passée est donc multipliée par `alpha` : **`C_ui = alpha × r_ui = alpha × (1 + β·p_ui)`**, `P_ui = 1` sur les cases stockées ; les cases absentes valent `C = 1`, `P = 0`.
+- Système résolu pour chaque utilisateur (référence Python `user_linear_equation`, l. 494-513 ; le solveur compilé `_als._least_squares` utilisé par `recalculate_user` fait le même calcul par Cholesky) :
+  `(YᵀY + reg·I + Σ_i (C_ui − 1)·y_i y_iᵀ) · x_u = Σ_i C_ui·y_i`, sommes sur les films de l'utilisateur.
+- `YᵀY` = `item_factors.T @ item_factors` sans régularisation (propriété `YtY`, l. 426-430) ; la régularisation **n'est pas** multipliée par le nombre de films de l'utilisateur.
+- Conséquence à garder en tête : avec `alpha = 1` et `β = 0`, `C = 1` partout, les films vus n'ont pas plus de poids que les non-vus (seule la cible `P` les distingue).
+- L'entraînement utilise le gradient conjugué (`use_cg=True` par défaut, 3 pas) ; le fold-in (le nôtre comme `recalculate_user`) est une résolution exacte.
+
+**Fold-in NumPy vs `recalculate_user`** (`train.py check-foldin`, config `factors 64, reg 0.05, alpha 10, β 1, 15 it.`, 200 utilisateurs de validation tirés avec `SEED`) — ✅
+
+| Mesure | Valeur | Critère |
+|---|---|---|
+| Cosinus minimum | 0,99999999998 | > 0,999 |
+| Erreur L2 relative maximum | 7,0 × 10⁻⁶ | |
+| Top 20 identique (même ordre) | 100 % | ≥ 95 % |
+
+Résultat : `data/processed/results/als_foldin_check.json`. Tests unitaires : le fold-in égale la référence Python d'`implicit` à 10⁻⁹ près, et un cas à un film calculé à la main.
+
+**Durée** : factors 64, 15 itérations, 8 cœurs : 114,5 s d'entraînement + 9,5 s d'évaluation (10 000 utilisateurs). NDCG@20 de cette config en validation : 0,13273 ± 0,00312.
+
+**Recherche d'hyperparamètres** (`train.py search`) : 30 configurations tirées sans remise dans la grille D6 complète (180 combinaisons, `SEED`) : 14 à 64 facteurs, 11 à 128, 5 à 32. 15 itérations, validation, λ = 0. Un JSON par configuration dans `data/processed/results/als_search/` (reprise possible : les configurations déjà faites sont sautées). Durée réelle : 4 262 s d'entraînement cumulé (71 min), ~75 min au total ; les configs à 128 facteurs ont pris 145-211 s, à peine plus qu'à 64.
+
+Tableau complet, trié par `NDCG@20` (validation, moyenne ± IC 95 % ; `pop_mediane` en nombre de notes d'entraînement) :
+
+| # | factors | reg | alpha | β | NDCG@20 | Recall@20 | recall_all@20 | pop_mediane@20 | longue_traine@20 | couverture@20 | entraînement (s) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 64 | 0.05 | 1 | 1 | 0,15039 ± 0,00337 | 0,18654 ± 0,00428 | 0,18834 | 28533 | 0,0000 | 0,0812 | 158 |
+| 2 | 32 | 0.1 | 1 | 3 | 0,14948 ± 0,00344 | 0,18237 ± 0,00424 | 0,18139 | 33195 | 0,0000 | 0,0740 | 107 |
+| 3 | 32 | 0.1 | 1 | 1 | 0,14789 ± 0,00345 | 0,17973 ± 0,00422 | 0,18126 | 33532 | 0,0000 | 0,0673 | 86 |
+| 4 | 128 | 0.05 | 1 | 1 | 0,14476 ± 0,00322 | 0,17769 ± 0,00404 | 0,18242 | 22866 | 0,0000 | 0,0950 | 183 |
+| 5 | 32 | 0.05 | 1 | 0 | 0,14244 ± 0,00338 | 0,17437 ± 0,00420 | 0,17859 | 33374 | 0,0000 | 0,0630 | 62 |
+| 6 | 128 | 0.1 | 5 | 1 | 0,14209 ± 0,00319 | 0,18072 ± 0,00422 | 0,18203 | 23755 | 0,0006 | 0,1381 | 149 |
+| 7 | 64 | 0.05 | 5 | 1 | 0,14196 ± 0,00326 | 0,17879 ± 0,00423 | 0,17942 | 27786 | 0,0002 | 0,1199 | 140 |
+| 8 | 128 | 0.5 | 5 | 3 | 0,14181 ± 0,00317 | 0,18144 ± 0,00424 | 0,18001 | 24365 | 0,0012 | 0,1549 | 209 |
+| 9 | 128 | 0.01 | 5 | 1 | 0,14170 ± 0,00317 | 0,18022 ± 0,00421 | 0,18178 | 23563 | 0,0006 | 0,1378 | 211 |
+| 10 | 64 | 0.5 | 5 | 3 | 0,14070 ± 0,00322 | 0,17769 ± 0,00417 | 0,17613 | 27316 | 0,0006 | 0,1379 | 139 |
+| 11 | 64 | 0.01 | 5 | 0 | 0,13957 ± 0,00326 | 0,17595 ± 0,00423 | 0,17901 | 27800 | 0,0001 | 0,1092 | 99 |
+| 12 | 128 | 0.1 | 10 | 0 | 0,13296 ± 0,00309 | 0,17079 ± 0,00414 | 0,17422 | 23557 | 0,0008 | 0,1493 | 146 |
+| 13 | 64 | 0.1 | 10 | 1 | 0,13293 ± 0,00312 | 0,16880 ± 0,00407 | 0,16997 | 26553 | 0,0008 | 0,1472 | 144 |
+| 14 | 128 | 0.05 | 10 | 0 | 0,13275 ± 0,00308 | 0,17059 ± 0,00414 | 0,17406 | 23530 | 0,0008 | 0,1493 | 145 |
+| 15 | 64 | 0.01 | 10 | 1 | 0,13271 ± 0,00311 | 0,16916 ± 0,00408 | 0,16991 | 26479 | 0,0008 | 0,1466 | 131 |
+| 16 | 128 | 0.1 | 10 | 3 | 0,12974 ± 0,00300 | 0,16998 ± 0,00411 | 0,16866 | 23762 | 0,0027 | 0,1831 | 203 |
+| 17 | 32 | 0.05 | 10 | 0 | 0,12940 ± 0,00317 | 0,16183 ± 0,00405 | 0,16629 | 29959 | 0,0001 | 0,1103 | 76 |
+| 18 | 64 | 0.5 | 10 | 3 | 0,12898 ± 0,00304 | 0,16535 ± 0,00401 | 0,16497 | 25693 | 0,0018 | 0,1693 | 147 |
+| 19 | 64 | 0.05 | 20 | 0 | 0,12193 ± 0,00298 | 0,15738 ± 0,00398 | 0,16099 | 25328 | 0,0012 | 0,1625 | 103 |
+| 20 | 128 | 0.01 | 20 | 1 | 0,12104 ± 0,00290 | 0,16107 ± 0,00406 | 0,16153 | 23106 | 0,0032 | 0,1934 | 164 |
+| 21 | 64 | 0.1 | 20 | 1 | 0,12024 ± 0,00293 | 0,15631 ± 0,00393 | 0,15786 | 24602 | 0,0024 | 0,1806 | 168 |
+| 22 | 64 | 0.05 | 20 | 1 | 0,12004 ± 0,00292 | 0,15639 ± 0,00393 | 0,15800 | 24612 | 0,0023 | 0,1803 | 124 |
+| 23 | 128 | 0.1 | 20 | 3 | 0,11663 ± 0,00284 | 0,15699 ± 0,00398 | 0,15581 | 22622 | 0,0056 | 0,2178 | 166 |
+| 24 | 128 | 0.05 | 20 | 3 | 0,11609 ± 0,00283 | 0,15662 ± 0,00399 | 0,15555 | 22634 | 0,0054 | 0,2168 | 210 |
+| 25 | 64 | 0.01 | 20 | 3 | 0,11332 ± 0,00281 | 0,14986 ± 0,00385 | 0,14971 | 23285 | 0,0046 | 0,2055 | 141 |
+| 26 | 64 | 0.5 | 40 | 0 | 0,10960 ± 0,00281 | 0,14423 ± 0,00383 | 0,14780 | 23270 | 0,0038 | 0,1996 | 97 |
+| 27 | 64 | 0.5 | 40 | 1 | 0,10626 ± 0,00275 | 0,14130 ± 0,00379 | 0,14309 | 22230 | 0,0060 | 0,2201 | 152 |
+| 28 | 128 | 0.01 | 40 | 1 | 0,10617 ± 0,00269 | 0,14630 ± 0,00390 | 0,14650 | 21872 | 0,0064 | 0,2256 | 172 |
+| 29 | 32 | 0.01 | 40 | 1 | 0,10369 ± 0,00272 | 0,13650 ± 0,00371 | 0,13965 | 24077 | 0,0033 | 0,1931 | 86 |
+| 30 | 64 | 0.5 | 40 | 3 | 0,09965 ± 0,00265 | 0,13474 ± 0,00372 | 0,13529 | 20550 | 0,0106 | 0,2464 | 145 |
+
+**5 meilleures** : lignes 1 à 5 ci-dessus. Lecture :
+- `alpha` est le paramètre qui compte : NDCG@20 baisse régulièrement de `alpha` 1 (0,142-0,150) à 40 (0,100-0,110). Plus `alpha` est grand, plus les listes sont variées (couverture 0,08 → 0,25) et un peu moins populaires.
+- `factors` : la meilleure config à 128 (0,14476) est **en dessous** de la meilleure à 64 (0,15039) → la règle D6 (≥ 3 % de gain) exclut 128. 32 facteurs est dans l'IC de 64 (ligne 2 : 0,14948 ± 0,00344).
+- `β` et `reg` : effet faible, dans les IC.
+- À λ = 0, **toutes** les configurations recommandent presque uniquement des films de la tête (`longue_traine@20` ≤ 0,011, `pop_mediane@20` 20 000-33 000 notes). Le curseur (C4) aura tout le travail de « pépite » à faire.
+- ⚠️ La meilleure valeur, `alpha = 1`, est **au bord de la grille** (valeur la plus basse testée). `alpha < 1` (où les films vus pèsent moins que les non-vus, `C − 1 < 0` pour β = 0) n'a pas été testé.
+
+**Convergence** (meilleure config, validation) :
+
+| Itérations | NDCG@20 | Recall@20 | Entraînement |
+|---|---|---|---|
+| 15 | 0,15039 ± 0,00337 | 0,18654 ± 0,00428 | 158 s |
+| 30 | 0,15106 ± 0,00337 | 0,18749 ± 0,00429 | 241 s |
+
++0,4 % relatif, très en deçà de l'IC : convergé à 15. **Configuration retenue : factors 64, reg 0,05, alpha 1, β 1, 30 itérations** (30 plutôt que 15 : très légèrement meilleur en validation, ne coûte que du temps d'entraînement hors ligne).
+
+**Comparaison avec `populaire`** (validation) : ALS 0,15106 ± 0,00337 [0,1477 ; 0,1544] vs `populaire` 0,08544 ± 0,00263 [0,0828 ; 0,0881] sur NDCG@20 : +77 % relatif, intervalles non chevauchants ✅.
+
+**Évaluation unique sur le test** (config retenue, 10 000 utilisateurs, 73 sans film pertinent → n = 9 927 pour Recall/NDCG). Les références `populaire` et `hasard` ont aussi été évaluées sur le test (une fois, elles n'ont aucun réglage).
+
+| Métrique | ALS (retenu) | `populaire` | `hasard` |
+|---|---|---|---|
+| `NDCG@20` | **0,15215 ± 0,00334** | 0,08413 ± 0,00263 | 0,00098 ± 0,00019 |
+| `Recall@20` | 0,18946 ± 0,00427 | 0,09913 ± 0,00309 | 0,00110 ± 0,00020 |
+| `recall_all@20` | 0,19133 ± 0,00388 | 0,10160 ± 0,00284 | 0,00153 ± 0,00021 |
+| `pop_moyenne@20` | 10,2022 ± 0,0075 | 11,0188 ± 0,0026 | 5,0930 ± 0,0078 |
+| `pop_mediane@20` | 28 524 ± 205 | 58 983 ± 132 | 128,7 ± 1,8 |
+| `longue_traine@20` | 0,0000 | 0,0000 | 0,8031 ± 0,0018 |
+| `couverture@20` | 0,0811 (1 863 films) | 0,0104 | 0,9999 |
+
+Test cohérent avec la validation (NDCG 0,15215 vs 0,15106). Fichiers : `results/als_f64_r0.05_a1_b1_i30_test.json`, `popular_test.json`, `random_test.json` ; `train.py run --split test` refuse d'écraser un résultat de test existant.
+
+**Choix faits sans demander (C2)**
+- Échantillon de 30 configurations tiré dans la grille **complète** (factors compris), et non 64 seul puis 32/128 ; 15 itérations pour toutes.
+- Lors de la recherche, configurations exécutées regroupées par `β` (pour réutiliser la matrice du signal) ; l'ordre ne change aucun résultat (graine fixée par config).
+- `random_state = SEED` pour l'initialisation d'`implicit` ; `num_threads` par défaut (8 cœurs) ; solveur par gradient conjugué par défaut pour l'entraînement.
+- Top 20 « identique » du contrôle de fold-in : même liste **dans le même ordre** (plus strict que même ensemble ; les deux valent 100 %).
+- 30 itérations retenues plutôt que 15 (voir ci-dessus).
+- Références `populaire` et `hasard` évaluées sur le test, pour avoir la comparaison complète.
+
 ### C3
 ### C4
 ### C5

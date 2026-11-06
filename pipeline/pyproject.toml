@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Offline data pipeline: MovieLens + TMDB -> ALS model -> static files for the website."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "implicit>=0.7,<0.8",
     "numpy>=2.5.4",
     "polars>=2.1.0",
     "python-dotenv>=1.2.4",
