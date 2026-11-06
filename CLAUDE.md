@@ -60,4 +60,19 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 
 ## Commandes
 
-À compléter quand le dépôt sera initialisé (installation, lancement du pipeline, serveur de dev, tests, build).
+### Pipeline (depuis `pipeline/`)
+
+```sh
+uv sync                    # crée pipeline/.venv à partir de uv.lock (Python 3.12)
+uv run ruff check .        # lint
+uv run ruff format .       # formatage (--check pour vérifier sans modifier)
+uv run pytest              # tests
+```
+
+Chemins et constantes partagés : `pipeline/config.py` (`RAW`, `PROCESSED`, `CACHE`, `WEB_DATA`, `MIN_RATINGS`) ; il charge le `.env` de la racine.
+
+⚠️ Si la variable d'environnement `UV_PROJECT_ENVIRONMENT` est définie (globalement), uv utilise ce venv au lieu de `pipeline/.venv` — et `uv sync` y supprime les paquets absents du lock. La retirer, ou lancer `uv` avec la variable vidée.
+
+### Site
+
+À compléter quand Vite sera initialisé (serveur de dev, tests, build).
