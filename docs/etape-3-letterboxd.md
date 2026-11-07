@@ -263,5 +263,27 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
 - **Cas partagés : 78/78 identiques à Python.** **Test exhaustif : 33 252/33 252 chaînes du catalogue identiques** (`web/test-data/catalog_title_keys.json`, non versionné ; test sauté s'il manque). 81 tests Vitest verts ; `tsc`, ESLint et Prettier sans remarque.
 
 ### E4
+
+*7 novembre 2026.* Code : `web/src/adapters/types.ts` (format commun `HistoryEntry`), `letterboxd.ts` (ZIP, fichiers d'un dossier, ou CSV seul), `normalizeRatings.ts` (`percentiles`, `dedupeLatest`) ; tests `letterboxd.test.ts`, `normalizeRatings.test.ts` (97 tests Vitest au total, tous verts, aucun sauté ; `tsc`, ESLint, Prettier sans remarque).
+
+- **Colonnes réelles confirmées** sur l'export de Thibault avant d'écrire l'adaptateur (section 2) ; D4 ajusté : le journal est rattaché aux films par (titre, année), car ses liens désignent les entrées du journal.
+- **Lecture** : seuls `ratings.csv`, `watched.csv` et `diary.csv` du dossier principal (ou d'un dossier englobant) sont lus. Dans un ZIP, les autres fichiers ne sont **même pas décompressés** (filtre de fflate) : `profile.csv`, `watchlist.csv`, `reviews.csv`, `deleted/`, `orphaned/`, `likes/`. Un CSV seul est reconnu par son nom, sinon par ses colonnes. La watchlist est refusée. Une note hors de 0,5-5 ou pas sur un demi-point est ignorée avec un avertissement.
+- **Fixtures synthétiques** (écrites à la main : vrais titres, notes et dates inventées) :
+  - fusion par lien et par (titre, année) ;
+  - BOM, CRLF, virgules et guillemets doublés dans les titres, année vide ;
+  - film vu sans note ;
+  - film présent seulement dans le journal ;
+  - revisionnage (la note la plus récente du journal) ;
+  - journal seul ;
+  - ZIP avec dossier englobant, sans `ratings.csv`, avec `profile.csv` et `deleted/diary.csv` ignorés ;
+  - CSV renommé ;
+  - watchlist et fichier inconnu refusés ;
+  - note invalide.
+- **Percentiles** : identiques (égalité exacte, arrondi float32 comme le signal d'entraînement) aux `percentile` Python des **22 cas de test du fold-in**, en plus de cas calculés à la main (égalités, une seule note, films non notés).
+- **Export réel de Thibault** (test structurel, sans afficher de titre) :
+  - les trois fichiers sont lus, **aucun avertissement** ;
+  - une entrée par film vu (autant que de lignes dans `watched.csv`), toutes avec titre, année et date ;
+  - le journal est entièrement rattaché, sans film « journal seulement ».
+
 ### E5
 ### E6
