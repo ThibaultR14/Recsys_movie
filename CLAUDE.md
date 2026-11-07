@@ -60,6 +60,18 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 7. Mise en ligne (après la réponse de GroupLens), tests avec 10–20 cinéphiles.
 8. Ensuite : explications, dispo en France, listes faites main, scraping.
 
+## Quand s'arrêter
+
+Méthode de travail : avancer seul, ne s'arrêter qu'aux points de décision.
+
+- **Tous les critères d'une sous-étape atteints et rien à trancher** : résultats dans la section 5 de la spec d'étape, commit, push, puis sous-étape suivante **sans demander**.
+- **S'arrêter seulement si** :
+  - un critère échoue ;
+  - un choix sort d'une décision écrite (D1-D9 de la spec d'étape, ou §9 de `docs/stack-technique.md`) ;
+  - la spec prévoit explicitement un arrêt ;
+  - une action est irréversible ou touche aux secrets.
+- **Avant chaque arrêt** : tout est commité et poussé (`git status` à jour avec `origin`), et la section 5 de la spec est à jour, pour qu'une relecture puisse se faire directement depuis GitHub.
+
 ## Commandes
 
 ### Pipeline (depuis `pipeline/`)

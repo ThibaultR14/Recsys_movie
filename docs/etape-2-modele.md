@@ -8,7 +8,7 @@
 ## 0. Mode d'emploi (pour Claude Code)
 
 - **Relis ce document au début de chaque sous-étape.** Les décisions de la section 3 ne se changent pas sans accord : si l'une pose problème, arrête-toi et explique pourquoi.
-- Une sous-étape à la fois (C1 → C6). **Arrête-toi à la fin de chacune** et rends compte : ce qui a été fait, critères atteints ou non, choix faits sans demander.
+- Une sous-étape à la fois (C1 → C6), en suivant la section « Quand s'arrêter » de `CLAUDE.md` : si tous les critères sont atteints et qu'il n'y a rien à trancher, résultats en section 5, commit, push, et sous-étape suivante sans attendre. **Arrêts obligatoires** (mise à jour du 7 novembre 2026) : fin de C3 si ALS est plus de 20 % en dessous d'EASE ; fin du balayage de C4 (choix par Thibault) ; fin de C5 (relecture avant export). Dans chaque compte rendu : ce qui a été fait, critères atteints ou non, choix faits sans demander.
 - Après chaque sous-étape, **ajoute les résultats dans la section 5** de ce document (tableaux, chiffres, chemins des figures). C'est la trace qui servira au rapport : chiffres exacts, pas d'arrondis flatteurs.
 - **Règle d'or : le jeu de test ne sert pas à régler quoi que ce soit.** Tous les réglages (hyperparamètres, λ, choix de la popularité) se font sur les utilisateurs de validation. Le test est évalué une fois par modèle retenu, et on note le résultat même s'il déçoit.
 - Graines aléatoires fixées partout (`SEED = 42` dans `config.py`). Avant l'entraînement : `OPENBLAS_NUM_THREADS=1` et `MKL_NUM_THREADS=1` (recommandation de la librairie `implicit`).
@@ -171,7 +171,7 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 - Vérification de convergence (15 vs 30 itérations) sur la meilleure configuration.
 - La meilleure configuration bat `populaire` sur `NDCG@20` en validation, intervalles de confiance non chevauchants.
 - Une seule évaluation sur le **test** avec la configuration retenue.
-- Arrêt et compte rendu avant C3.
+- Pas d'arrêt obligatoire : si les critères sont atteints, enchaîner sur C3.
 
 ### C3 — EASE
 
@@ -183,6 +183,7 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 - RAM disponible vérifiée et rapportée avant le calcul.
 - `λ_ease` choisi sur la validation ; résultats test EASE vs ALS vs références.
 - Écart relatif ALS / EASE sur `NDCG@20` rapporté. Si ALS est plus de 20 % en dessous d'EASE : le signaler et proposer des pistes (plus de facteurs, autre `alpha`/`β`), sans les lancer.
+- **Arrêt obligatoire seulement si ALS est plus de 20 % en dessous d'EASE.** Sinon, enchaîner sur C4. Si la RAM ne suffit pas pour EASE : préparer le notebook Colab et s'arrêter pour que Thibault le lance.
 
 ### C4 — Curseur
 
@@ -198,7 +199,7 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 **Critères** :
 - Balayage λ ∈ [−0,5 ; 2,0] pas 0,1, sur la validation, pour les deux configurations ALS et les deux sources de popularité : tableau complet + figure `etape2-curseur-validation.png` (précision vs `pop_mediane@20`, une courbe par configuration × source, références en points).
 - Pour 3 utilisateurs de test au profil différent : les 10 titres recommandés à λ = 0, λ intermédiaire et λ max (`tmdb_title`, année, nombre de notes). Contrôle qualitatif : les pépites ont-elles l'air cohérentes ?
-- **Arrêt** : Thibault choisit la configuration ALS (A ou B), la source de popularité et la plage de λ. Ensuite seulement, évaluation sur le test pour la configuration choisie + figure `etape2-curseur-test.png`. Ce choix fixe le modèle réentraîné et exporté en C5.
+- **Arrêt obligatoire à la fin du balayage** : Thibault choisit la configuration ALS (A ou B), la source de popularité et la plage de λ. Ensuite seulement, évaluation sur le test pour la configuration choisie + figure `etape2-curseur-test.png`. Ce choix fixe le modèle réentraîné et exporté en C5.
 
 ### C5 — Modèle final, quantification, export
 
@@ -213,6 +214,7 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 - Relecture de `embeddings.bin` en Python → vecteurs identiques aux vecteurs déquantifiés.
 - Les cas de test du fold-in se rejouent à l'identique depuis les fichiers exportés.
 - Aucune colonne `imdbds_` dans ce qui est écrit dans `web/public/data/` (garde-fou `FORBIDDEN_WEB_PREFIXES`).
+- **Arrêt obligatoire à la fin de C5** : relecture par Thibault avant de considérer l'export comme terminé.
 
 ### C6 — Seuil ≥ 10 (optionnel)
 
