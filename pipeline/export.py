@@ -61,6 +61,8 @@ FINAL_CONFIG = {"factors": 64, "regularization": 0.05, "alpha": 1.0, "beta": 1.0
 C2_FACTORS = PROCESSED / "models" / "als_f64_r0.05_a1_b1_i30_item_factors.npy"
 FINAL_FACTORS = PROCESSED / "models" / "als_final_f64_r0.05_a1_b1_i30_item_factors.npy"
 FINAL_INFO = PROCESSED / "models" / "als_final_info.json"
+# movie_id per item_idx, saved WITH the vectors at training: item_idx is frozen there (CLAUDE.md)
+FINAL_MOVIE_IDS = PROCESSED / "models" / "als_final_movie_ids.npy"
 STAGING = PROCESSED / "export"
 FIXTURE_NAME = "foldin_cases.json"
 # The fixture holds raw MovieLens ratings of test users: never versioned (.gitignore), never served.
@@ -202,6 +204,7 @@ def cmd_train() -> None:
     Y = np.asarray(model.item_factors, dtype=np.float32)
     FINAL_FACTORS.parent.mkdir(parents=True, exist_ok=True)
     np.save(FINAL_FACTORS, Y)
+    np.save(FINAL_MOVIE_IDS, catalog.movie_ids.astype(np.int64))
     info = {
         "config": cfg,
         "seed": SEED,
@@ -358,6 +361,16 @@ def file_sizes(folder: Path) -> dict:
     return out
 
 
+def trained_movie_ids(catalog: ev.Catalog) -> np.ndarray:
+    """item_idx -> movie_id order saved at training; refuse to export if the catalogue moved."""
+    if not FINAL_MOVIE_IDS.exists():
+        raise SystemExit(f"{FINAL_MOVIE_IDS.name} missing: run `export.py train` again")
+    movie_ids = np.load(FINAL_MOVIE_IDS)
+    if not np.array_equal(movie_ids, catalog.movie_ids):
+        raise SystemExit("catalogue item order differs from the one saved at training: retrain")
+    return movie_ids
+
+
 def fixture_path(out_dir: Path) -> Path:
     return WEB_FIXTURE if out_dir == WEB_DATA else out_dir / FIXTURE_NAME
 
@@ -366,8 +379,7 @@ def cmd_export(out_dir: Path) -> None:
     if out_dir == WEB_DATA:
         print("writing to web/public/data/ (explicit request)")
     catalog = ev.load_catalog()
-    cat = pl.read_parquet(ev.CATALOG_PARQUET, columns=["item_idx", "movie_id"]).sort("item_idx")
-    movie_ids = cat["movie_id"].to_numpy()
+    movie_ids = trained_movie_ids(catalog)
     hybrid_pop, ratio = popm.production_popularity(ev.CATALOG_PARQUET)
     assert hybrid_pop.max() < 2**32
     popularity = hybrid_pop.astype(np.uint32)

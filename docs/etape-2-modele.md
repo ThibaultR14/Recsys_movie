@@ -1168,6 +1168,8 @@ Code : `pipeline/slider_variants.py` (`test`, `test-figure`). Résultats : `data
 
 **Export** (dossier intermédiaire, puis `web/public/data/`) : `popularity.bin` 92 076 octets (42 297 en gzip), `model-meta.json` 139 603 (57 999) ; `embeddings.bin` et `yty.bin` inchangés. `verify` : relecture identique, popularité = hybride recalculée, **22 vecteurs identiques et 66 listes top 10 identiques** depuis les fichiers exportés. 132 tests verts.
 
+**3. Ordre `item_idx` sauvegardé avec les vecteurs** (règle de `CLAUDE.md`) : `export.py train` enregistre maintenant le `movie_id` de chaque `item_idx` à côté des vecteurs (`als_final_movie_ids.npy`), et `export` le relit et refuse de continuer si l'ordre du catalogue a changé (auparavant, l'ordre était relu dans `catalog.parquet` : même résultat ici, catalogue inchangé depuis l'entraînement). Modèle réentraîné pour produire ce fichier : **vecteurs strictement identiques** à ceux du premier entraînement (entraînement déterministe). Exports intermédiaire et `web/` régénérés et revérifiés (22 vecteurs, 66 listes identiques).
+
 ### C6
 
 ---
