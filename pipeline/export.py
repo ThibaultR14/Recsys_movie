@@ -405,7 +405,10 @@ def cmd_export(out_dir: Path) -> None:
         "embeddings_sha256": sha256_file(out_dir / "embeddings.bin"),
     }
     assert_web_safe(meta, "model-meta.json")
-    (out_dir / "model-meta.json").write_text(json.dumps(meta, separators=(",", ":")) + "\n")
+    # newline="\n": identical bytes on every OS (no CRLF on Windows)
+    (out_dir / "model-meta.json").write_text(
+        json.dumps(meta, separators=(",", ":")) + "\n", newline="\n"
+    )
     for path in out_dir.iterdir():
         assert_web_safe(path.name, "file names")
 
@@ -428,7 +431,7 @@ def cmd_export(out_dir: Path) -> None:
         "cases": cases,
     }
     FIXTURE.parent.mkdir(parents=True, exist_ok=True)
-    FIXTURE.write_text(json.dumps(fixture, indent=1) + "\n")
+    FIXTURE.write_text(json.dumps(fixture, indent=1) + "\n", newline="\n")
     sizes = file_sizes(out_dir)
     report = {"out_dir": str(out_dir), "sizes": sizes, "fixture_bytes": FIXTURE.stat().st_size}
     (RESULTS_DIR / "export_report.json").write_text(json.dumps(report, indent=2) + "\n")

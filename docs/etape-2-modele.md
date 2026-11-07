@@ -1085,8 +1085,8 @@ Code : `pipeline/slider_variants.py` (`test`, `test-figure`). Résultats : `data
 | `embeddings.bin` | en-tête 16 o (`PEPE`, version 1, `n_items`, `dims`) + int8 23 019 × 64 + échelles float32 × 23 019 | 1 565 308 | 1 462 568 |
 | `yty.bin` | float32 64 × 64, `YᵀY` des vecteurs **déquantifiés** | 16 384 | 12 168 |
 | `popularity.bin` | uint32 × 23 019, `ml_rating_count` **complets** (plafond du curseur) | 92 076 | 41 026 |
-| `model-meta.json` | hyperparamètres, formules (signal, confiance, fold-in), curseur (8 positions), `movie_id` par `item_idx`, 51 `item_idx` non recommandables, versions des données | 139 268 | 57 778 |
-| **Total** | | **1 813 036** | **1 573 540** |
+| `model-meta.json` | hyperparamètres, formules (signal, confiance, fold-in), curseur (8 positions), `movie_id` par `item_idx`, 51 `item_idx` non recommandables, versions des données | 139 267 | 57 776 |
+| **Total** | | **1 813 035** | **1 573 538** |
 
 - `embeddings.bin` = 16 + 23 019 × 64 + 23 019 × 4 = 1 565 308 octets, comme prévu (~1,6 Mo). Les int8 se compressent peu (−7 %) : c'est attendu, la quantification a déjà retiré la redondance.
 - `model-meta.json` est surtout la liste des `movie_id` (23 019 entiers) ; 58 Ko compressé. Ajout non prévu par D8 : la liste des films **non recommandables** (le navigateur en a besoin pour les retirer des candidats), et la description du curseur.
@@ -1095,7 +1095,7 @@ Code : `pipeline/slider_variants.py` (`test`, `test-figure`). Résultats : `data
 **Vérifications** (`export.py verify`, rejouées par `tests/test_export.py`)
 - Relecture de `embeddings.bin` en Python → int8 et échelles **identiques** à la quantification du modèle final ; vecteurs déquantifiés identiques. `yty.bin` identique à `YᵀY` recalculé.
 - **Cas de test du fold-in** : 20 historiques réels de test (tirés avec la graine 42 parmi les utilisateurs de test à ≤ 400 films, fold-in uniquement) + 2 cas synthétiques (un seul film → percentile 0,5 ; cinq notes égales → percentiles à 0,5). Pour chacun : films (`item_idx` et `movie_id`), notes, percentiles, signal, vecteur utilisateur attendu (64 valeurs), top 10 attendus (`item_idx`, `movie_id`, scores) **aux positions ∞, 2 000 et 500**, plafond sur les comptes complets de `popularity.bin`. Calculés en float64 depuis les fichiers exportés relus. Rejeu : **22 vecteurs identiques (écart 0) et 66 listes top 10 identiques**. La fixture porte l'empreinte de `embeddings.bin` : le test échoue si l'export change sans régénérer la fixture.
-- Taille de la fixture : 206 Ko.
+- Taille de la fixture : 194 Ko. Fichiers JSON écrits avec des fins de ligne LF (octets identiques sur tous les systèmes).
 
 **Constat à signaler : biais des films récents.** MovieLens 32M s'arrête en 2023 : les films récents ont peu de notes **parce qu'ils sont récents**, pas parce qu'ils sont confidentiels. Le rapport médian « notes MovieLens / votes TMDB » passe de 0,43 (films de 2010) à 0,16 (2020), 0,11 (2022) et 0,07 (2023). Conséquence pour le curseur : sous le plafond 2 000, 1 887 candidats sont sortis en 2019 ou après, dont **98 très connus** (plus de 5 000 votes TMDB), par ex. *Shang-Chi*, *Black Widow*, *No Time to Die*, *Spider-Man: Across the Spider-Verse*, qui apparaissent pour le cas `test_01` au plafond 2 000. Sur les 20 cas réels, 5 % des films proposés aux plafonds 2 000 et 500 sont sortis en 2019 ou après. Pistes (à trancher, aucune n'est appliquée) : (a) accepter et l'expliquer dans l'interface ; (b) corriger la popularité par année de sortie (comptes MovieLens × facteur médian de l'année) ; (c) exclure des plafonds bas les films à beaucoup de votes TMDB ; (d) popularité hybride (MovieLens jusqu'en ~2018, TMDB après).
 
