@@ -84,7 +84,9 @@ Candidats pour un utilisateur : films `recommendable = true` qui ne sont pas dan
 - Implémentation **maison en NumPy** (`pipeline/models/als.py`), qui servira de référence pour la version TypeScript. Elle doit donner le même résultat que le recalcul d'utilisateur fourni par `implicit` (critère en C2).
 - `YᵀY` (64 × 64) est précalculé et exporté (C5) : le navigateur n'a qu'un petit système 64 × 64 à résoudre.
 
-### D5. Curseur connu ↔ pépite
+### D5. Curseur connu ↔ pépite — **en révision, voir complément C4** (section 5)
+
+> **7 novembre 2026** : sur [−0,5 ; 2], le curseur D5 ne descend pas assez (B à λ = 2 : ~19 000 notes en médiane) et n'a pas le même effet pour tous (têtes de liste à 13-26 σ). Décisions de Thibault : popularité = `ml_rating_count` (`tmdb_vote_count` abandonné) ; pas de λ < 0 (l'extrémité gauche du curseur = l'ordre du modèle) ; choix A/B suspendu jusqu'à la comparaison de trois variantes (V1 D5 prolongé, V2 reclassement du top K, V3 plafond de popularité). La formule ci-dessous est celle de la version initiale (V1).
 
 Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'un même λ ait le même effet pour tous :
 
@@ -686,6 +688,316 @@ Correctif :
 | 1,8 | 0,08520 ± 0,00269 | 0,12081 | 16 729 | 0,2201 | 0,1204 |
 | 1,9 | 0,07938 ± 0,00265 | 0,11378 | 15 319 | 0,2813 | 0,1128 |
 | 2,0 | 0,07336 ± 0,00261 | 0,10611 | 13 698 | 0,3470 | 0,1040 |
+
+</details>
+
+### C4 — complément : trois variantes du curseur (7 novembre 2026, validation uniquement)
+
+**Décisions de Thibault (7 novembre 2026, après le premier balayage)**
+- Source de popularité : **`ml_rating_count`** ; `tmdb_vote_count` est abandonné (bruit à λ élevé ; la limite 2023 est cohérente avec le catalogue et le modèle, figés en 2023).
+- Pas de λ < 0 : l'extrémité gauche du curseur sera l'ordre naturel du modèle.
+- Problème à régler avant de choisir A ou B : sur [−0,5 ; 2], même B reste à ~19 000 notes en médiane (un curseur « pépite » doit descendre vers quelques centaines), et D5 n'a pas le même effet pour tous (têtes de liste à 13-26 σ). D5 est **en révision**.
+
+Code : `pipeline/slider.py` (ajouts `top_pool`, `standardize_pool`, `rerank_pool`, `popularity_iqr`), `pipeline/slider_variants.py` (`sweep`, `composition`, `qualitative`, `figure`, `annex`), `tests/test_slider.py` (123 tests au total, tous verts). Résultats : `data/processed/results/slider/variants_val_{A,B}.json`, `variants_composition_val.json`, `variants_qualitative_test.json` (non versionnés). Figure : `docs/figures/etape2-curseur-variantes.png`. Listes : `docs/etape-2-curseur-qualitatif.md` (version 2, remplace la version 1). Durée : ~2 min de classement par configuration pour les 85 réglages, + ~5 min de métriques.
+
+**Variantes** (popularité = `ml_rating_count` des utilisateurs d'entraînement, pour le curseur comme pour les métriques)
+- **V1** — D5 tel quel (`s` réduit sur tous les candidats, `score = s − λ·z`), λ ∈ {0 ; 0,5 ; 1 ; 1,5 ; 2 ; 3 ; 4 ; 5 ; 6 ; 7 ; 8 ; 10 ; 12 ; 15 ; 20 ; 25 ; 30}.
+- **V2** — reclassement du **top K** du modèle : `s` centré-réduit **à l'intérieur** du top K, `score = s − λ·z` (même `z` que D5), λ ∈ {0 ; 0,1 ; … ; 30} (20 valeurs) ; K = 500, et K = 200 et 1 000 sur la même grille.
+- **V3** — **plafond** de popularité : candidats avec `ml_rating_count ≤ plafond`, classés par le score du modèle ; plafond ∈ {∞ ; 20 000 ; 10 000 ; 5 000 ; 2 000 ; 1 000 ; 500 ; 200}.
+- Nouvelle mesure **`regularite_pop@20`** : écart interquartile, entre utilisateurs, de la popularité médiane de leur liste (plus bas = même effet pour tous). Ajout : **composition des listes** (part des 20 films par tranche de popularité) aux réglages du contrôle qualitatif, parce que `pop_mediane@20` cache les listes « mixtes ».
+- **Contrôle** : V1 λ = 0, V2 λ = 0 (tout K) et V3 plafond ∞ redonnent exactement les métriques de C2 (A 0,15106 ; B 0,13293).
+
+> **Biais du NDCG contre les pépites.** Le held-out est surtout fait de films populaires (les utilisateurs de MovieLens notent surtout des films connus) : toute variante qui retire des films populaires perd mécaniquement du NDCG, même si ses recommandations sont bonnes. On ne compare donc **pas** les NDCG d'une popularité à l'autre, seulement **les variantes entre elles à popularité égale**. Et même à `pop_mediane@20` égale, une liste mixte (quelques films très connus + beaucoup d'obscurs) garde un NDCG plus élevé qu'une liste homogène : voir la composition.
+
+![Variantes du curseur](figures/etape2-curseur-variantes.png)
+
+**Résultats aux trois niveaux visés** (validation ; réglage dont la `pop_mediane@20` est la plus proche, échelle log ; composition = part des 20 films par tranche de notes d'entraînement)
+
+
+**Configuration A**
+
+| Niveau | Réglage | NDCG@20 | pop_mediane@20 | moy. géom. | IQR | couverture | > 10 000 | 1 001-10 000 | 201-1 000 | ≤ 200 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ≈ 10 000 | V1 · λ = 4 | 0,09785 | 11 018 | 602 | 21 536 | 0,063 | 45 % | 4 % | 0 % | 51 % |
+| ≈ 2 000 | V1 · λ = 5 | 0,05883 | 2 594 | 82 | 0 | 0,040 | 21 % | 1 % | 0 % | 78 % |
+| ≈ 500 | V1 · λ = 6 | 0,03259 | 709 | 33 | 0 | 0,025 | 10 % | 0 % | 0 % | 90 % |
+| ≈ 10 000 | V2 · K = 500, λ = 2,5 | 0,11647 | 10 215 | 6 469 | 13 202 | 0,237 | 47 % | 42 % | 11 % | 0 % |
+| ≈ 2 000 | V2 · K = 500, λ = 4 | 0,04471 | 1 932 | 1 965 | 1 144 | 0,255 | 8 % | 75 % | 18 % | 0 % |
+| ≈ 500 | V2 · K = 500, λ = 15 | 0,02073 | 1 791 | 1 547 | 1 100 | 0,207 | 0 % | 81 % | 19 % | 0 % |
+| ≈ 10 000 | V3 · plafond 10 000 | 0,06996 | 7 464 | 7 080 | 1 224 | 0,076 | 0 % | 100 % | 0 % | 0 % |
+| ≈ 2 000 | V3 · plafond 2 000 | 0,02581 | 1 624 | 1 562 | 158 | 0,090 | 0 % | 97 % | 3 % | 0 % |
+| ≈ 500 | V3 · plafond 500 | 0,00768 | 415 | 399 | 35 | 0,106 | 0 % | 0 % | 99 % | 1 % |
+
+**Configuration B**
+
+| Niveau | Réglage | NDCG@20 | pop_mediane@20 | moy. géom. | IQR | couverture | > 10 000 | 1 001-10 000 | 201-1 000 | ≤ 200 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ≈ 10 000 | V1 · λ = 3 | 0,06575 | 9 481 | 396 | 14 956 | 0,148 | 35 % | 10 % | 0 % | 54 % |
+| ≈ 2 000 | V1 · λ = 4 | 0,02626 | 2 931 | 45 | 0 | 0,066 | 13 % | 2 % | 0 % | 85 % |
+| ≈ 500 | V1 · λ = 5 | 0,01234 | 1 243 | 22 | 0 | 0,029 | 5 % | 1 % | 0 % | 94 % |
+| ≈ 10 000 | V2 · K = 500, λ = 2 | 0,09429 | 10 225 | 6 305 | 10 230 | 0,273 | 42 % | 48 % | 9 % | 1 % |
+| ≈ 2 000 | V2 · K = 500, λ = 4 | 0,03321 | 2 122 | 1 634 | 1 422 | 0,325 | 3 % | 70 % | 26 % | 1 % |
+| ≈ 500 | V2 · K = 500, λ = 30 | 0,01972 | 1 661 | 1 314 | 1 209 | 0,305 | 0 % | 69 % | 30 % | 1 % |
+| ≈ 10 000 | V3 · plafond 20 000 | 0,09353 | 12 143 | 11 135 | 4 909 | 0,145 | 68 % | 32 % | 0 % | 0 % |
+| ≈ 2 000 | V3 · plafond 2 000 | 0,02780 | 1 582 | 1 499 | 179 | 0,117 | 0 % | 93 % | 7 % | 0 % |
+| ≈ 500 | V3 · plafond 500 | 0,00885 | 400 | 378 | 46 | 0,123 | 0 % | 0 % | 97 % | 3 % |
+
+« moy. géom. » = exp(moyenne de log(1 + notes)) − 1 sur les listes ; IQR = `regularite_pop@20`. Pour V2 « ≈ 500 », c'est le plancher de K = 500 (500 notes inatteignable).
+
+**V2 : effet de K** (λ = 2,5, valeur intermédiaire où les trois K se séparent, puis plancher atteint à λ = 30)
+
+| Config | K | NDCG@20 (λ = 2,5) | pop_mediane@20 (λ = 2,5) | IQR (λ = 2,5) | plancher pop_mediane@20 (λ = 30) | NDCG@20 au plancher |
+|---|---|---|---|---|---|---|
+| A | 200 | 0,12820 | 13 302 | 12 534 | 4 784 | 0,04209 |
+| A | 500 | 0,11647 | 10 215 | 13 202 | 1 791 | 0,02037 |
+| A | 1000 | 0,10618 | 7 203 | 10 863 | 711 | 0,00835 |
+| B | 200 | 0,09452 | 10 131 | 9 618 | 4 551 | 0,04091 |
+| B | 500 | 0,06809 | 5 351 | 6 224 | 1 661 | 0,01972 |
+| B | 1000 | 0,04417 | 1 995 | 1 731 | 628 | 0,00876 |
+
+**Analyse**
+1. **V1 (D5 prolongé) est inutilisable.** Le passage est brutal entre λ = 3 et λ = 5 (A : 23 844 → 2 594 notes), puis les listes deviennent **à deux bosses** : à A · λ = 4, 45 % des films ont plus de 10 000 notes et 51 % en ont 200 ou moins, **rien entre les deux**. La partie basse est **la même pour tous** (*Fire and Ice: The Dragon Chronicles*, *The Stratton Story*, *B/W*…, ~20 notes au total, le minimum du catalogue) : l'écart interquartile tombe à 0 dès λ = 5 (A) / λ = 4 (B), et la couverture s'effondre (A : 0,063 à λ = 4 → 0,001 à λ = 30). `pop_mediane@20` est trompeuse ici (A · λ = 4 : 11 018, alors que la moyenne géométrique de la popularité est de 602). Cause : avec `s` réduit sur ~23 000 candidats, la différence de `z` entre un film moyen et le film le plus obscur (~4 σ) finit par dépasser l'écart de score entre un bon et un mauvais candidat.
+2. **V2 (top K) donne les meilleures listes à popularité moyenne, mais a un plancher fixé par K.** Les films restent pris parmi les K meilleurs du modèle, donc cohérents (A · λ = 4, profil 1 : *The Long Goodbye*, *The Last Detail*, *Le Samouraï*, *McCabe & Mrs. Miller*, *Stranger Than Paradise*, *Fitzcarraldo*). Mais la popularité ne descend pas sous le moins populaire du top K : plancher ≈ 4 800 notes (K = 200), **≈ 1 700-1 800 (K = 500)**, ≈ 630-710 (K = 1 000). **500 notes est inatteignable avec K = 500.** Le passage reste rapide autour de λ = 2-3. À popularité égale, V2 a un meilleur NDCG que V3 (A vers 2 000 notes : 0,0447 contre 0,0258 ; vers 10 000 : 0,1165 contre ~0,085 interpolé), mais ses listes sont **mixtes** : au réglage « ≈ 10 000 », 47 % des films de A ont plus de 10 000 notes, et pour le profil grand public, *Get Shorty* et *Ghost* restent en tête au réglage « ≈ 2 000 ». Une partie de son avantage de NDCG vient de là (biais ci-dessus). Régularité : écart interquartile ~3 à 10 fois celui de V3 à popularité égale.
+3. **V3 (plafond) fait exactement ce qu'on attend d'un curseur « pépite ».** Descente régulière jusqu'à ~160-170 notes, listes **homogènes** (au plafond 2 000, 93-97 % des films entre 1 000 et 2 000 notes ; au plafond 500, 97-99 % entre 200 et 500), écart interquartile 10 à 30 fois plus petit que V2 à popularité égale (régulier par construction). Qualitativement, ce sont les meilleures pépites : profil 1, plafond 500 → *Stroszek*, *Pickpocket*, *Bob le Flambeur*, *Point Blank*, *The Passenger*, *La Notte*, *Au hasard Balthazar* (A) ; *The Duellists*, *The Draughtsman's Contract*, *The Man in the White Suit*, *Gregory's Girl* (B). Profil 2 (action) → films de guerre et d'action des années 40-80 cohérents ; profil 3 (grand public) → plus hétérogène (*Capernaum*, *Dangal*, *Drive My Car*), ce qui est attendu pour un utilisateur qui n'a vu que des succès. Limites : coupure nette (un film à 2 001 notes disparaît au plafond 2 000) ; NDCG plus bas que V2 à popularité égale (listes sans film connu) ; couverture plus faible que V2 (0,08-0,14 contre 0,21-0,33).
+4. **A ou B ?** Avec V3, A est meilleur pour les plafonds hauts (∞ : 0,1511 contre 0,1329 ; 20 000 : 0,1020 contre 0,0935), les deux se croisent vers 5 000, et **B est un peu meilleur sous 5 000** (2 000 : 0,0278 contre 0,0258 ; 500 : 0,0089 contre 0,0077 ; 200 : 0,0038 contre 0,0033), avec une couverture plus élevée (0,12-0,14 contre 0,09-0,12). Les écarts sous 5 000 sont du même ordre que les intervalles de confiance, qui se chevauchent (plafond 2 000 : ± 0,0013 / ± 0,0014 ; 500 : ± 0,0007 / ± 0,0008). Avec V2, A domine B à popularité égale.
+
+**À trancher par Thibault** (arrêt prévu)
+1. **Variante** : je recommande **V3 (plafond)**. C'est la seule qui atteint quelques centaines de notes avec des listes cohérentes et le même effet pour tous ; elle est simple à expliquer dans l'interface (« des films de moins de 2 000 notes ») et à calculer dans le navigateur (un filtre). V2 est une alternative pour le haut du curseur (meilleur NDCG, listes mixtes), mais ne descend pas sous ~1 700 notes avec K = 500. V1 (D5) est à abandonner.
+   - Variante possible, non testée : V3 avec une **transition douce** (pénalité qui croît près du plafond) pour éviter la coupure nette.
+2. **Configuration A ou B** : avec V3, A en haut du curseur, B un peu meilleure en bas (écarts faibles). Proposition : **A**, meilleure à λ = 0 (là où la plupart des utilisateurs commenceront) et au-dessus de 5 000 notes, avec un léger coût sous 5 000.
+3. **Positions du curseur** (si V3) : par exemple ∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200 (positions logarithmiques).
+4. Mettre à jour D5 en conséquence (formule, plage), puis évaluation sur le test et figure `etape2-curseur-test.png`.
+
+**Choix faits sans demander (complément C4)**
+- Grilles de λ choisies pour atteindre `pop_mediane@20` < 1 000 ou le plancher : V1 jusqu'à 30 (atteint dès λ = 6) ; V2 jusqu'à 30 (plancher atteint dès λ ≈ 5-7). Les courbes de V1 et V2 sont tracées jusqu'au premier réglage sous 1 000 notes ; V3 en entier.
+- K = 200 et 1 000 évalués sur **toute** la grille de λ (pas seulement à une valeur intermédiaire) : même coût, plus d'information.
+- Niveaux du contrôle qualitatif choisis par la `pop_mediane@20` de validation la plus proche en échelle log ; V2 avec K = 500 (pour « ≈ 500 », c'est le plancher, ~1 700-1 800).
+- Plafond appliqué sur les comptes d'**entraînement** (comme les métriques). En production, ce seront les comptes complets (~10 % plus élevés).
+- Mesure supplémentaire non demandée : composition des listes par tranche de popularité (elle montre les listes mixtes, que `pop_mediane@20` cache).
+
+<details>
+<summary>Tableaux complets (validation)</summary>
+
+
+**A · V1**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V1 λ = 0 | 0,15106 ± 0,00337 | 0,18749 | 28 564 | 27 057 | 0,000 | 0,0815 | 15 150 |
+| V1 λ = 0,5 | 0,15069 ± 0,00336 | 0,18714 | 28 013 | 26 386 | 0,000 | 0,0856 | 15 385 |
+| V1 λ = 1 | 0,15029 ± 0,00336 | 0,18670 | 27 449 | 25 702 | 0,000 | 0,0912 | 15 678 |
+| V1 λ = 1,5 | 0,14966 ± 0,00335 | 0,18593 | 26 886 | 25 005 | 0,000 | 0,0968 | 15 750 |
+| V1 λ = 2 | 0,14919 ± 0,00334 | 0,18548 | 26 316 | 24 309 | 0,000 | 0,1038 | 15 934 |
+| V1 λ = 3 | 0,13948 ± 0,00321 | 0,17284 | 23 844 | 13 052 | 0,084 | 0,0959 | 17 353 |
+| V1 λ = 4 | 0,09785 ± 0,00293 | 0,11405 | 11 018 | 602 | 0,508 | 0,0631 | 21 536 |
+| V1 λ = 5 | 0,05883 ± 0,00254 | 0,06325 | 2 594 | 82 | 0,777 | 0,0397 | 0 |
+| V1 λ = 6 | 0,03259 ± 0,00204 | 0,03224 | 709 | 33 | 0,899 | 0,0249 | 0 |
+| V1 λ = 7 | 0,01706 ± 0,00157 | 0,01533 | 29 | 21 | 0,953 | 0,0161 | 0 |
+| V1 λ = 8 | 0,00832 ± 0,00114 | 0,00697 | 15 | 17 | 0,979 | 0,0109 | 0 |
+| V1 λ = 10 | 0,00131 ± 0,00044 | 0,00104 | 15 | 15 | 0,996 | 0,0059 | 0 |
+| V1 λ = 12 | 0,00033 ± 0,00019 | 0,00025 | 15 | 15 | 0,999 | 0,0037 | 0 |
+| V1 λ = 15 | 0,00009 ± 0,00008 | 0,00008 | 15 | 15 | 1,000 | 0,0019 | 0 |
+| V1 λ = 20 | 0,00006 ± 0,00005 | 0,00005 | 15 | 15 | 1,000 | 0,0012 | 0 |
+| V1 λ = 25 | 0,00004 ± 0,00003 | 0,00003 | 15 | 15 | 1,000 | 0,0011 | 0 |
+| V1 λ = 30 | 0,00004 ± 0,00003 | 0,00003 | 15 | 15 | 1,000 | 0,0011 | 0 |
+
+**A · V2 · K = 200**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V2 K = 200, λ = 0 | 0,15106 ± 0,00337 | 0,18749 | 28 564 | 27 057 | 0,000 | 0,0815 | 15 150 |
+| V2 K = 200, λ = 0,1 | 0,15091 ± 0,00337 | 0,18733 | 28 185 | 26 624 | 0,000 | 0,0831 | 15 362 |
+| V2 K = 200, λ = 0,2 | 0,15070 ± 0,00336 | 0,18712 | 27 783 | 26 187 | 0,000 | 0,0843 | 15 290 |
+| V2 K = 200, λ = 0,3 | 0,15023 ± 0,00336 | 0,18630 | 27 397 | 25 744 | 0,000 | 0,0857 | 15 304 |
+| V2 K = 200, λ = 0,4 | 0,15027 ± 0,00336 | 0,18655 | 27 000 | 25 296 | 0,000 | 0,0873 | 15 320 |
+| V2 K = 200, λ = 0,5 | 0,15002 ± 0,00335 | 0,18627 | 26 608 | 24 867 | 0,000 | 0,0896 | 15 374 |
+| V2 K = 200, λ = 0,75 | 0,14943 ± 0,00335 | 0,18546 | 25 550 | 23 711 | 0,000 | 0,0950 | 15 292 |
+| V2 K = 200, λ = 1 | 0,14853 ± 0,00333 | 0,18406 | 24 444 | 22 482 | 0,000 | 0,1027 | 15 425 |
+| V2 K = 200, λ = 1,25 | 0,14774 ± 0,00331 | 0,18268 | 23 208 | 21 063 | 0,000 | 0,1126 | 15 398 |
+| V2 K = 200, λ = 1,5 | 0,14626 ± 0,00328 | 0,18060 | 21 787 | 19 292 | 0,001 | 0,1250 | 15 091 |
+| V2 K = 200, λ = 2 | 0,13927 ± 0,00318 | 0,16808 | 18 079 | 14 677 | 0,004 | 0,1468 | 13 811 |
+| V2 K = 200, λ = 2,5 | 0,12820 ± 0,00304 | 0,14991 | 13 302 | 10 593 | 0,006 | 0,1606 | 12 534 |
+| V2 K = 200, λ = 3 | 0,11368 ± 0,00285 | 0,13054 | 9 398 | 8 055 | 0,006 | 0,1696 | 8 798 |
+| V2 K = 200, λ = 4 | 0,08473 ± 0,00240 | 0,09928 | 5 972 | 5 654 | 0,007 | 0,1784 | 4 032 |
+| V2 K = 200, λ = 5 | 0,06525 ± 0,00204 | 0,07960 | 5 110 | 4 754 | 0,007 | 0,1809 | 3 416 |
+| V2 K = 200, λ = 7 | 0,05073 ± 0,00175 | 0,06259 | 4 832 | 4 227 | 0,007 | 0,1813 | 3 235 |
+| V2 K = 200, λ = 10 | 0,04571 ± 0,00164 | 0,05574 | 4 791 | 4 095 | 0,007 | 0,1717 | 3 224 |
+| V2 K = 200, λ = 15 | 0,04360 ± 0,00158 | 0,05304 | 4 784 | 4 058 | 0,007 | 0,1667 | 3 222 |
+| V2 K = 200, λ = 20 | 0,04282 ± 0,00156 | 0,05204 | 4 784 | 4 050 | 0,007 | 0,1655 | 3 222 |
+| V2 K = 200, λ = 30 | 0,04209 ± 0,00154 | 0,05108 | 4 784 | 4 045 | 0,007 | 0,1656 | 3 222 |
+
+**A · V2 · K = 500**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V2 K = 500, λ = 0 | 0,15106 ± 0,00337 | 0,18749 | 28 564 | 27 057 | 0,000 | 0,0815 | 15 150 |
+| V2 K = 500, λ = 0,1 | 0,15085 ± 0,00337 | 0,18724 | 28 211 | 26 651 | 0,000 | 0,0832 | 15 341 |
+| V2 K = 500, λ = 0,2 | 0,15076 ± 0,00336 | 0,18732 | 27 842 | 26 242 | 0,000 | 0,0844 | 15 306 |
+| V2 K = 500, λ = 0,3 | 0,15022 ± 0,00336 | 0,18635 | 27 483 | 25 828 | 0,000 | 0,0860 | 15 432 |
+| V2 K = 500, λ = 0,4 | 0,15026 ± 0,00336 | 0,18644 | 27 120 | 25 409 | 0,000 | 0,0877 | 15 356 |
+| V2 K = 500, λ = 0,5 | 0,15010 ± 0,00336 | 0,18649 | 26 764 | 24 998 | 0,000 | 0,0896 | 15 518 |
+| V2 K = 500, λ = 0,75 | 0,14949 ± 0,00335 | 0,18581 | 25 817 | 23 939 | 0,000 | 0,0954 | 15 515 |
+| V2 K = 500, λ = 1 | 0,14899 ± 0,00334 | 0,18495 | 24 843 | 22 845 | 0,000 | 0,1020 | 15 839 |
+| V2 K = 500, λ = 1,25 | 0,14793 ± 0,00331 | 0,18332 | 23 808 | 21 647 | 0,000 | 0,1113 | 15 908 |
+| V2 K = 500, λ = 1,5 | 0,14648 ± 0,00329 | 0,18089 | 22 627 | 19 885 | 0,004 | 0,1408 | 15 785 |
+| V2 K = 500, λ = 2 | 0,13675 ± 0,00319 | 0,16238 | 18 504 | 12 864 | 0,037 | 0,2116 | 13 958 |
+| V2 K = 500, λ = 2,5 | 0,11647 ± 0,00298 | 0,12937 | 10 215 | 6 469 | 0,076 | 0,2367 | 13 202 |
+| V2 K = 500, λ = 3 | 0,08911 ± 0,00265 | 0,09497 | 4 037 | 3 617 | 0,098 | 0,2477 | 3 084 |
+| V2 K = 500, λ = 4 | 0,04471 ± 0,00180 | 0,04990 | 1 932 | 1 965 | 0,113 | 0,2546 | 1 144 |
+| V2 K = 500, λ = 5 | 0,02799 ± 0,00135 | 0,03235 | 1 810 | 1 647 | 0,116 | 0,2454 | 1 107 |
+| V2 K = 500, λ = 7 | 0,02241 ± 0,00115 | 0,02560 | 1 791 | 1 561 | 0,117 | 0,2135 | 1 100 |
+| V2 K = 500, λ = 10 | 0,02116 ± 0,00109 | 0,02409 | 1 791 | 1 550 | 0,118 | 0,2076 | 1 100 |
+| V2 K = 500, λ = 15 | 0,02073 ± 0,00108 | 0,02348 | 1 791 | 1 547 | 0,118 | 0,2070 | 1 100 |
+| V2 K = 500, λ = 20 | 0,02056 ± 0,00107 | 0,02329 | 1 791 | 1 547 | 0,118 | 0,2073 | 1 100 |
+| V2 K = 500, λ = 30 | 0,02037 ± 0,00106 | 0,02305 | 1 791 | 1 546 | 0,118 | 0,2074 | 1 100 |
+
+**A · V2 · K = 1 000**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V2 K = 1000, λ = 0 | 0,15106 ± 0,00337 | 0,18749 | 28 564 | 27 057 | 0,000 | 0,0815 | 15 150 |
+| V2 K = 1000, λ = 0,1 | 0,15083 ± 0,00337 | 0,18713 | 28 249 | 26 692 | 0,000 | 0,0832 | 15 372 |
+| V2 K = 1000, λ = 0,2 | 0,15077 ± 0,00336 | 0,18738 | 27 922 | 26 319 | 0,000 | 0,0843 | 15 338 |
+| V2 K = 1000, λ = 0,3 | 0,15050 ± 0,00336 | 0,18680 | 27 604 | 25 954 | 0,000 | 0,0859 | 15 515 |
+| V2 K = 1000, λ = 0,4 | 0,15031 ± 0,00336 | 0,18658 | 27 280 | 25 576 | 0,000 | 0,0877 | 15 445 |
+| V2 K = 1000, λ = 0,5 | 0,15017 ± 0,00336 | 0,18644 | 26 963 | 25 197 | 0,000 | 0,0896 | 15 582 |
+| V2 K = 1000, λ = 0,75 | 0,14948 ± 0,00334 | 0,18583 | 26 137 | 24 250 | 0,000 | 0,0952 | 15 580 |
+| V2 K = 1000, λ = 1 | 0,14904 ± 0,00334 | 0,18521 | 25 290 | 23 278 | 0,000 | 0,1013 | 15 848 |
+| V2 K = 1000, λ = 1,25 | 0,14834 ± 0,00332 | 0,18432 | 24 411 | 22 264 | 0,000 | 0,1092 | 16 321 |
+| V2 K = 1000, λ = 1,5 | 0,14713 ± 0,00330 | 0,18219 | 23 433 | 20 772 | 0,005 | 0,1364 | 16 126 |
+| V2 K = 1000, λ = 2 | 0,13553 ± 0,00321 | 0,16003 | 18 982 | 11 104 | 0,135 | 0,2722 | 13 970 |
+| V2 K = 1000, λ = 2,5 | 0,10618 ± 0,00294 | 0,11361 | 7 203 | 3 441 | 0,402 | 0,3271 | 10 863 |
+| V2 K = 1000, λ = 3 | 0,06823 ± 0,00244 | 0,06887 | 1 376 | 1 437 | 0,571 | 0,3339 | 452 |
+| V2 K = 1000, λ = 4 | 0,02268 ± 0,00142 | 0,02449 | 724 | 732 | 0,686 | 0,2980 | 366 |
+| V2 K = 1000, λ = 5 | 0,01217 ± 0,00095 | 0,01317 | 712 | 645 | 0,705 | 0,2601 | 365 |
+| V2 K = 1000, λ = 7 | 0,00933 ± 0,00075 | 0,01011 | 711 | 628 | 0,709 | 0,2466 | 365 |
+| V2 K = 1000, λ = 10 | 0,00870 ± 0,00070 | 0,00945 | 711 | 627 | 0,710 | 0,2447 | 365 |
+| V2 K = 1000, λ = 15 | 0,00847 ± 0,00068 | 0,00921 | 711 | 626 | 0,710 | 0,2447 | 365 |
+| V2 K = 1000, λ = 20 | 0,00841 ± 0,00068 | 0,00913 | 711 | 626 | 0,710 | 0,2447 | 365 |
+| V2 K = 1000, λ = 30 | 0,00835 ± 0,00068 | 0,00905 | 711 | 626 | 0,710 | 0,2449 | 365 |
+
+**A · V3**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V3 plafond ∞ | 0,15106 ± 0,00337 | 0,18749 | 28 564 | 27 057 | 0,000 | 0,0815 | 15 150 |
+| V3 plafond 20 000 | 0,10203 ± 0,00275 | 0,11957 | 13 509 | 12 752 | 0,000 | 0,0794 | 3 475 |
+| V3 plafond 10 000 | 0,06996 ± 0,00223 | 0,07958 | 7 464 | 7 080 | 0,000 | 0,0763 | 1 224 |
+| V3 plafond 5 000 | 0,04688 ± 0,00182 | 0,05077 | 3 940 | 3 746 | 0,000 | 0,0789 | 498 |
+| V3 plafond 2 000 | 0,02581 ± 0,00131 | 0,02697 | 1 624 | 1 562 | 0,009 | 0,0903 | 158 |
+| V3 plafond 1 000 | 0,01394 ± 0,00097 | 0,01360 | 823 | 791 | 0,482 | 0,0971 | 80 |
+| V3 plafond 500 | 0,00768 ± 0,00070 | 0,00713 | 415 | 399 | 1,000 | 0,1058 | 35 |
+| V3 plafond 200 | 0,00325 ± 0,00046 | 0,00317 | 172 | 165 | 1,000 | 0,1157 | 12 |
+
+**B · V1**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V1 λ = 0 | 0,13293 ± 0,00310 | 0,16931 | 26 480 | 22 658 | 0,001 | 0,1485 | 20 927 |
+| V1 λ = 0,5 | 0,12815 ± 0,00304 | 0,16479 | 24 357 | 19 930 | 0,003 | 0,1854 | 21 156 |
+| V1 λ = 1 | 0,12378 ± 0,00299 | 0,16076 | 22 559 | 17 655 | 0,006 | 0,2161 | 21 269 |
+| V1 λ = 1,5 | 0,11985 ± 0,00295 | 0,15686 | 20 911 | 15 610 | 0,012 | 0,2504 | 20 994 |
+| V1 λ = 2 | 0,11146 ± 0,00289 | 0,14761 | 19 116 | 10 824 | 0,058 | 0,2618 | 20 392 |
+| V1 λ = 3 | 0,06575 ± 0,00264 | 0,09220 | 9 481 | 396 | 0,545 | 0,1477 | 14 956 |
+| V1 λ = 4 | 0,02626 ± 0,00192 | 0,03975 | 2 931 | 45 | 0,851 | 0,0660 | 0 |
+| V1 λ = 5 | 0,01234 ± 0,00138 | 0,01972 | 1 243 | 22 | 0,944 | 0,0285 | 0 |
+| V1 λ = 6 | 0,00295 ± 0,00065 | 0,00347 | 33 | 16 | 0,990 | 0,0173 | 0 |
+| V1 λ = 7 | 0,00028 ± 0,00012 | 0,00029 | 15 | 15 | 0,999 | 0,0118 | 0 |
+| V1 λ = 8 | 0,00018 ± 0,00008 | 0,00018 | 15 | 15 | 1,000 | 0,0090 | 0 |
+| V1 λ = 10 | 0,00014 ± 0,00007 | 0,00015 | 15 | 15 | 1,000 | 0,0066 | 0 |
+| V1 λ = 12 | 0,00011 ± 0,00006 | 0,00011 | 15 | 15 | 1,000 | 0,0054 | 0 |
+| V1 λ = 15 | 0,00009 ± 0,00005 | 0,00010 | 15 | 15 | 1,000 | 0,0044 | 0 |
+| V1 λ = 20 | 0,00007 ± 0,00004 | 0,00007 | 15 | 15 | 1,000 | 0,0031 | 0 |
+| V1 λ = 25 | 0,00006 ± 0,00004 | 0,00007 | 15 | 15 | 1,000 | 0,0024 | 0 |
+| V1 λ = 30 | 0,00005 ± 0,00004 | 0,00005 | 15 | 15 | 1,000 | 0,0020 | 0 |
+
+**B · V2 · K = 200**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V2 K = 200, λ = 0 | 0,13293 ± 0,00310 | 0,16931 | 26 480 | 22 658 | 0,001 | 0,1485 | 20 927 |
+| V2 K = 200, λ = 0,1 | 0,13209 ± 0,00309 | 0,16847 | 25 850 | 22 011 | 0,001 | 0,1517 | 20 676 |
+| V2 K = 200, λ = 0,2 | 0,13135 ± 0,00309 | 0,16812 | 25 172 | 21 351 | 0,001 | 0,1556 | 20 334 |
+| V2 K = 200, λ = 0,3 | 0,13033 ± 0,00307 | 0,16756 | 24 490 | 20 677 | 0,001 | 0,1594 | 20 287 |
+| V2 K = 200, λ = 0,4 | 0,12939 ± 0,00305 | 0,16681 | 23 857 | 20 035 | 0,001 | 0,1627 | 20 002 |
+| V2 K = 200, λ = 0,5 | 0,12832 ± 0,00303 | 0,16571 | 23 201 | 19 381 | 0,001 | 0,1658 | 19 811 |
+| V2 K = 200, λ = 0,75 | 0,12596 ± 0,00298 | 0,16372 | 21 593 | 17 803 | 0,002 | 0,1735 | 18 755 |
+| V2 K = 200, λ = 1 | 0,12337 ± 0,00295 | 0,16083 | 19 996 | 16 235 | 0,002 | 0,1822 | 17 685 |
+| V2 K = 200, λ = 1,25 | 0,12045 ± 0,00290 | 0,15756 | 18 388 | 14 693 | 0,003 | 0,1924 | 16 118 |
+| V2 K = 200, λ = 1,5 | 0,11708 ± 0,00285 | 0,15368 | 16 719 | 13 113 | 0,005 | 0,2031 | 15 114 |
+| V2 K = 200, λ = 2 | 0,10787 ± 0,00272 | 0,14051 | 13 167 | 9 930 | 0,013 | 0,2205 | 12 203 |
+| V2 K = 200, λ = 2,5 | 0,09452 ± 0,00250 | 0,12093 | 10 131 | 7 476 | 0,020 | 0,2348 | 9 618 |
+| V2 K = 200, λ = 3 | 0,08249 ± 0,00230 | 0,10435 | 7 980 | 6 021 | 0,025 | 0,2447 | 7 624 |
+| V2 K = 200, λ = 4 | 0,06696 ± 0,00204 | 0,08323 | 5 969 | 4 682 | 0,029 | 0,2558 | 5 203 |
+| V2 K = 200, λ = 5 | 0,05812 ± 0,00187 | 0,07238 | 5 228 | 4 163 | 0,031 | 0,2597 | 4 402 |
+| V2 K = 200, λ = 7 | 0,05074 ± 0,00174 | 0,06381 | 4 780 | 3 799 | 0,033 | 0,2597 | 3 967 |
+| V2 K = 200, λ = 10 | 0,04625 ± 0,00163 | 0,05814 | 4 620 | 3 639 | 0,034 | 0,2574 | 3 797 |
+| V2 K = 200, λ = 15 | 0,04333 ± 0,00157 | 0,05424 | 4 568 | 3 566 | 0,034 | 0,2549 | 3 757 |
+| V2 K = 200, λ = 20 | 0,04211 ± 0,00154 | 0,05249 | 4 556 | 3 545 | 0,034 | 0,2545 | 3 740 |
+| V2 K = 200, λ = 30 | 0,04091 ± 0,00151 | 0,05088 | 4 551 | 3 530 | 0,034 | 0,2543 | 3 740 |
+
+**B · V2 · K = 500**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V2 K = 500, λ = 0 | 0,13293 ± 0,00310 | 0,16931 | 26 480 | 22 658 | 0,001 | 0,1485 | 20 927 |
+| V2 K = 500, λ = 0,1 | 0,13184 ± 0,00309 | 0,16818 | 25 707 | 21 850 | 0,001 | 0,1528 | 20 726 |
+| V2 K = 500, λ = 0,2 | 0,13077 ± 0,00308 | 0,16761 | 24 893 | 21 031 | 0,001 | 0,1577 | 20 479 |
+| V2 K = 500, λ = 0,3 | 0,12958 ± 0,00306 | 0,16701 | 24 076 | 20 209 | 0,001 | 0,1624 | 20 304 |
+| V2 K = 500, λ = 0,4 | 0,12809 ± 0,00304 | 0,16527 | 23 335 | 19 431 | 0,001 | 0,1663 | 20 055 |
+| V2 K = 500, λ = 0,5 | 0,12706 ± 0,00302 | 0,16426 | 22 577 | 18 665 | 0,002 | 0,1701 | 19 851 |
+| V2 K = 500, λ = 0,75 | 0,12380 ± 0,00296 | 0,16102 | 20 759 | 16 794 | 0,002 | 0,1812 | 18 562 |
+| V2 K = 500, λ = 1 | 0,12006 ± 0,00292 | 0,15655 | 18 975 | 15 011 | 0,003 | 0,1930 | 17 329 |
+| V2 K = 500, λ = 1,25 | 0,11667 ± 0,00287 | 0,15332 | 17 227 | 13 277 | 0,005 | 0,2074 | 15 720 |
+| V2 K = 500, λ = 1,5 | 0,11231 ± 0,00282 | 0,14785 | 15 368 | 11 254 | 0,016 | 0,2283 | 14 544 |
+| V2 K = 500, λ = 2 | 0,09429 ± 0,00258 | 0,12133 | 10 225 | 6 305 | 0,080 | 0,2733 | 10 230 |
+| V2 K = 500, λ = 2,5 | 0,06809 ± 0,00211 | 0,08486 | 5 351 | 3 470 | 0,131 | 0,2968 | 6 224 |
+| V2 K = 500, λ = 3 | 0,04959 ± 0,00178 | 0,05936 | 3 310 | 2 322 | 0,163 | 0,3125 | 2 874 |
+| V2 K = 500, λ = 4 | 0,03321 ± 0,00142 | 0,03912 | 2 122 | 1 634 | 0,196 | 0,3246 | 1 422 |
+| V2 K = 500, λ = 5 | 0,02715 ± 0,00127 | 0,03133 | 1 812 | 1 453 | 0,208 | 0,3244 | 1 269 |
+| V2 K = 500, λ = 7 | 0,02330 ± 0,00116 | 0,02670 | 1 683 | 1 356 | 0,218 | 0,3127 | 1 211 |
+| V2 K = 500, λ = 10 | 0,02133 ± 0,00109 | 0,02411 | 1 663 | 1 327 | 0,222 | 0,3064 | 1 209 |
+| V2 K = 500, λ = 15 | 0,02040 ± 0,00106 | 0,02299 | 1 661 | 1 317 | 0,224 | 0,3045 | 1 209 |
+| V2 K = 500, λ = 20 | 0,02008 ± 0,00105 | 0,02260 | 1 661 | 1 315 | 0,224 | 0,3048 | 1 209 |
+| V2 K = 500, λ = 30 | 0,01972 ± 0,00103 | 0,02225 | 1 661 | 1 314 | 0,224 | 0,3049 | 1 209 |
+
+**B · V2 · K = 1 000**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V2 K = 1000, λ = 0 | 0,13293 ± 0,00310 | 0,16931 | 26 480 | 22 658 | 0,001 | 0,1485 | 20 927 |
+| V2 K = 1000, λ = 0,1 | 0,13163 ± 0,00309 | 0,16800 | 25 655 | 21 767 | 0,001 | 0,1538 | 20 773 |
+| V2 K = 1000, λ = 0,2 | 0,13033 ± 0,00307 | 0,16709 | 24 785 | 20 865 | 0,001 | 0,1603 | 20 580 |
+| V2 K = 1000, λ = 0,3 | 0,12897 ± 0,00305 | 0,16629 | 23 930 | 19 969 | 0,001 | 0,1649 | 20 581 |
+| V2 K = 1000, λ = 0,4 | 0,12761 ± 0,00303 | 0,16487 | 23 173 | 19 145 | 0,002 | 0,1696 | 20 284 |
+| V2 K = 1000, λ = 0,5 | 0,12613 ± 0,00301 | 0,16310 | 22 427 | 18 339 | 0,002 | 0,1750 | 20 091 |
+| V2 K = 1000, λ = 0,75 | 0,12240 ± 0,00296 | 0,15970 | 20 542 | 16 345 | 0,003 | 0,1887 | 19 060 |
+| V2 K = 1000, λ = 1 | 0,11847 ± 0,00292 | 0,15466 | 18 803 | 14 530 | 0,004 | 0,2018 | 17 955 |
+| V2 K = 1000, λ = 1,25 | 0,11449 ± 0,00287 | 0,15061 | 17 043 | 12 776 | 0,007 | 0,2180 | 16 357 |
+| V2 K = 1000, λ = 1,5 | 0,10949 ± 0,00281 | 0,14457 | 15 191 | 10 507 | 0,023 | 0,2567 | 14 954 |
+| V2 K = 1000, λ = 2 | 0,08238 ± 0,00246 | 0,10473 | 7 651 | 3 603 | 0,243 | 0,3702 | 8 906 |
+| V2 K = 1000, λ = 2,5 | 0,04417 ± 0,00177 | 0,05372 | 1 995 | 1 217 | 0,509 | 0,4020 | 1 731 |
+| V2 K = 1000, λ = 3 | 0,02521 ± 0,00130 | 0,02962 | 983 | 733 | 0,646 | 0,4109 | 553 |
+| V2 K = 1000, λ = 4 | 0,01410 ± 0,00094 | 0,01568 | 668 | 559 | 0,736 | 0,3807 | 426 |
+| V2 K = 1000, λ = 5 | 0,01149 ± 0,00083 | 0,01275 | 633 | 530 | 0,759 | 0,3492 | 416 |
+| V2 K = 1000, λ = 7 | 0,01009 ± 0,00076 | 0,01110 | 628 | 518 | 0,771 | 0,3363 | 414 |
+| V2 K = 1000, λ = 10 | 0,00945 ± 0,00072 | 0,01033 | 628 | 515 | 0,775 | 0,3367 | 414 |
+| V2 K = 1000, λ = 15 | 0,00909 ± 0,00070 | 0,00994 | 628 | 514 | 0,776 | 0,3373 | 414 |
+| V2 K = 1000, λ = 20 | 0,00889 ± 0,00069 | 0,00974 | 628 | 514 | 0,776 | 0,3377 | 414 |
+| V2 K = 1000, λ = 30 | 0,00876 ± 0,00069 | 0,00960 | 628 | 514 | 0,777 | 0,3379 | 414 |
+
+**B · V3**
+
+| Réglage | NDCG@20 | Recall@20 | pop_mediane@20 | moy. géom. pop. | longue_traine@20 | couverture@20 | régularité (IQR) |
+|---|---|---|---|---|---|---|---|
+| V3 plafond ∞ | 0,13293 ± 0,00310 | 0,16931 | 26 480 | 22 658 | 0,001 | 0,1485 | 20 927 |
+| V3 plafond 20 000 | 0,09353 ± 0,00257 | 0,11278 | 12 143 | 11 135 | 0,001 | 0,1448 | 4 909 |
+| V3 plafond 10 000 | 0,06804 ± 0,00219 | 0,07991 | 7 012 | 6 525 | 0,001 | 0,1373 | 1 786 |
+| V3 plafond 5 000 | 0,04823 ± 0,00182 | 0,05384 | 3 775 | 3 531 | 0,002 | 0,1278 | 594 |
+| V3 plafond 2 000 | 0,02780 ± 0,00136 | 0,02949 | 1 582 | 1 499 | 0,028 | 0,1175 | 179 |
+| V3 plafond 1 000 | 0,01505 ± 0,00098 | 0,01535 | 800 | 758 | 0,533 | 0,1158 | 82 |
+| V3 plafond 500 | 0,00885 ± 0,00076 | 0,00846 | 400 | 378 | 1,000 | 0,1233 | 46 |
+| V3 plafond 200 | 0,00385 ± 0,00049 | 0,00388 | 163 | 156 | 1,000 | 0,1397 | 19 |
 
 </details>
 

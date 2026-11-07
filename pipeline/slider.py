@@ -59,3 +59,36 @@ def standardize_rows(scores: np.ndarray, mask: np.ndarray) -> np.ndarray:
 def rerank(standardized: np.ndarray, z: np.ndarray, lam: float) -> np.ndarray:
     """score_ui = s_ui - lam * z_i (non-candidates stay at -inf)."""
     return standardized - np.float32(lam) * z[None, :]
+
+
+# --- C4 complement: variants (V2 = re-rank within the model's top K, V3 = popularity cap) ---
+
+
+def top_pool(scores: np.ndarray, mask: np.ndarray, size: int) -> tuple[np.ndarray, np.ndarray]:
+    """Per row, the `size` best candidates by model score: (item indices, raw scores), unordered."""
+    masked = np.where(mask, scores.astype(np.float32), -np.inf)
+    idx = np.argpartition(-masked, size - 1, axis=1)[:, :size]
+    return idx, np.take_along_axis(masked, idx, axis=1)
+
+
+def standardize_pool(pool_scores: np.ndarray) -> np.ndarray:
+    """Per row (mean 0, std 1) over the pool; zero spread -> 0."""
+    s = pool_scores.astype(np.float64)
+    mean = s.mean(axis=1, keepdims=True)
+    std = s.std(axis=1, keepdims=True)
+    return ((s - mean) / np.where(std > 0, std, 1.0)).astype(np.float32)
+
+
+def rerank_pool(pool_idx: np.ndarray, pool_s: np.ndarray, z: np.ndarray, lam: float, k: int):
+    """V2: top k of s - lam * z inside the pool, best first (item indices)."""
+    v = pool_s - np.float32(lam) * z[pool_idx]
+    part = np.argpartition(-v, k - 1, axis=1)[:, :k]
+    order = np.argsort(-np.take_along_axis(v, part, axis=1), axis=1, kind="stable")
+    return np.take_along_axis(pool_idx, np.take_along_axis(part, order, axis=1), axis=1)
+
+
+def popularity_iqr(ranked: np.ndarray, counts: np.ndarray, k: int) -> dict[str, float]:
+    """Regularity: spread across users of the median popularity of their top-k list."""
+    med = np.median(counts[ranked[:, :k]], axis=1)
+    p25, p50, p75 = np.percentile(med, [25, 50, 75])
+    return {"p25": float(p25), "p50": float(p50), "p75": float(p75), "iqr": float(p75 - p25)}

@@ -60,3 +60,24 @@ def test_lambda_zero_keeps_model_order_and_lambda_moves_to_unpopular():
         for lam in (-0.5, 0.0, 1.0, 2.0)
     }
     assert mean_z[-0.5] > mean_z[0.0] > mean_z[1.0] > mean_z[2.0]
+
+
+def test_pool_rerank_by_hand():
+    scores = np.array([[5.0, 4.0, 3.0, 2.0, 1.0, 9.0]], dtype=np.float32)
+    mask = np.array([[True, True, True, True, True, False]])  # item 5 excluded despite 9.0
+    idx, sc = slider.top_pool(scores, mask, 3)
+    assert sorted(idx[0].tolist()) == [0, 1, 2]
+    s = slider.standardize_pool(sc)
+    assert s.mean() == pytest.approx(0, abs=1e-6) and s.std() == pytest.approx(1, rel=1e-6)
+    z = np.array([2.0, 0.0, -2.0, -5.0, -5.0, -5.0], dtype=np.float32)
+    assert slider.rerank_pool(idx, s, z, 0.0, 2)[0].tolist() == [0, 1]
+    # large lam: least popular first, but only inside the pool (items 3, 4 never come in)
+    assert slider.rerank_pool(idx, s, z, 100.0, 3)[0].tolist() == [2, 1, 0]
+
+
+def test_popularity_iqr():
+    counts = np.array([10, 20, 30, 40, 1000], dtype=np.float64)
+    ranked = np.array([[0, 1, 2], [2, 3, 4], [0, 0, 0], [4, 4, 4]])
+    out = slider.popularity_iqr(ranked, counts, 3)  # medians 20, 40, 10, 1000
+    assert out["p50"] == pytest.approx(30)
+    assert out["iqr"] == pytest.approx(np.percentile([20, 40, 10, 1000], 75) - 17.5)
