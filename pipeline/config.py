@@ -18,6 +18,8 @@ CACHE = DATA_DIR / "cache"
 
 # Static files served by the website. Nothing derived from IMDb datasets may be written here.
 WEB_DATA = REPO_ROOT / "web" / "public" / "data"
+# Column prefixes that must never reach WEB_DATA (IMDb datasets are offline-only, see CLAUDE.md).
+FORBIDDEN_WEB_PREFIXES = ("imdbds_",)
 
 # Catalogue: keep movies with at least this many MovieLens ratings.
 MIN_RATINGS = 20

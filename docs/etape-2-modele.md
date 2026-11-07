@@ -1061,6 +1061,57 @@ Code : `pipeline/slider_variants.py` (`test`, `test-figure`). Résultats : `data
 - Tiers d'utilisateurs définis par la popularité médiane (comptes d'entraînement) des films de leur fold-in, calculés séparément sur chaque split.
 
 ### C5
+
+*7 novembre 2026 — export prêt dans le dossier intermédiaire, **arrêt obligatoire pour relecture**. Rien n'a été écrit dans `web/public/data/`.* Code : `pipeline/export.py` (`train`, `int8-check`, `export`, `verify`), garde-fou `FORBIDDEN_WEB_PREFIXES = ("imdbds_",)` dans `config.py`, `tests/test_export.py`, fixture versionnée `pipeline/tests/fixtures/foldin_cases.json` (129 tests au total, tous verts).
+
+**Modèle final** (`export.py train`) : configuration A (`factors 64, reg 0,05, alpha 1, β 1, 30 it.`, graine 42), réentraînée sur **tous les utilisateurs** : 200 948 utilisateurs, 23 019 films, 31 662 542 notes, 178 s. Aucun vecteur de film nul. Vecteurs : `data/processed/models/als_final_f64_r0.05_a1_b1_i30_item_factors.npy`, informations (empreintes SHA-256 du catalogue et des notes) dans `als_final_info.json` (non versionnés).
+- Contrôle de cohérence (pas une évaluation : le modèle final a vu les utilisateurs de test) : sur les 22 cas de test du fold-in, top 10 du modèle final vs modèle de C2 : 84 % de films en commun à la position ∞, 75 % à 2 000, 68 % à 500. Le modèle reste le même dans ses grandes lignes ; les écarts viennent des ~10 % d'utilisateurs en plus.
+
+**Quantification int8** (critère D8, `export.py int8-check`, modèle de C2, **test**, positions ∞ et 2 000, `YᵀY` recalculé sur les vecteurs déquantifiés)
+
+| Position | Métrique | float32 | int8 | perte relative |
+|---|---|---|---|---|
+| ∞ | NDCG@20 | 0,15215 | 0,15205 | **0,065 %** |
+| ∞ | Recall@20 | 0,18946 | 0,18933 | **0,072 %** |
+| 2 000 | NDCG@20 | 0,02530 | 0,02528 | **0,071 %** |
+| 2 000 | Recall@20 | 0,02677 | 0,02676 | **0,033 %** |
+
+- **Critère < 1 % atteint**, avec une marge de plus de 10×. Erreur relative L2 des vecteurs : 0,58 % en moyenne, 0,99 % au pire. Les listes top 20 ne sont pas toutes identiques (quelques échanges de rangs entre films aux scores très proches), sans effet mesurable sur les métriques. Fichier : `results/int8_check.json`.
+
+**Fichiers exportés** (`export.py export`, dossier intermédiaire `pipeline/data/processed/export/`, non versionné)
+
+| Fichier | Contenu | Octets | gzip -9 |
+|---|---|---|---|
+| `embeddings.bin` | en-tête 16 o (`PEPE`, version 1, `n_items`, `dims`) + int8 23 019 × 64 + échelles float32 × 23 019 | 1 565 308 | 1 462 568 |
+| `yty.bin` | float32 64 × 64, `YᵀY` des vecteurs **déquantifiés** | 16 384 | 12 168 |
+| `popularity.bin` | uint32 × 23 019, `ml_rating_count` **complets** (plafond du curseur) | 92 076 | 41 026 |
+| `model-meta.json` | hyperparamètres, formules (signal, confiance, fold-in), curseur (8 positions), `movie_id` par `item_idx`, 51 `item_idx` non recommandables, versions des données | 139 268 | 57 778 |
+| **Total** | | **1 813 036** | **1 573 540** |
+
+- `embeddings.bin` = 16 + 23 019 × 64 + 23 019 × 4 = 1 565 308 octets, comme prévu (~1,6 Mo). Les int8 se compressent peu (−7 %) : c'est attendu, la quantification a déjà retiré la redondance.
+- `model-meta.json` est surtout la liste des `movie_id` (23 019 entiers) ; 58 Ko compressé. Ajout non prévu par D8 : la liste des films **non recommandables** (le navigateur en a besoin pour les retirer des candidats), et la description du curseur.
+- **Garde-fou** : `assert_web_safe` refuse toute clé ou valeur commençant par `imdbds_` dans `model-meta.json` et dans les noms de fichiers ; aucun fichier n'est tiré des colonnes IMDb (les `movie_id` viennent de MovieLens, `popularity.bin` de MovieLens).
+
+**Vérifications** (`export.py verify`, rejouées par `tests/test_export.py`)
+- Relecture de `embeddings.bin` en Python → int8 et échelles **identiques** à la quantification du modèle final ; vecteurs déquantifiés identiques. `yty.bin` identique à `YᵀY` recalculé.
+- **Cas de test du fold-in** : 20 historiques réels de test (tirés avec la graine 42 parmi les utilisateurs de test à ≤ 400 films, fold-in uniquement) + 2 cas synthétiques (un seul film → percentile 0,5 ; cinq notes égales → percentiles à 0,5). Pour chacun : films (`item_idx` et `movie_id`), notes, percentiles, signal, vecteur utilisateur attendu (64 valeurs), top 10 attendus (`item_idx`, `movie_id`, scores) **aux positions ∞, 2 000 et 500**, plafond sur les comptes complets de `popularity.bin`. Calculés en float64 depuis les fichiers exportés relus. Rejeu : **22 vecteurs identiques (écart 0) et 66 listes top 10 identiques**. La fixture porte l'empreinte de `embeddings.bin` : le test échoue si l'export change sans régénérer la fixture.
+- Taille de la fixture : 206 Ko.
+
+**Constat à signaler : biais des films récents.** MovieLens 32M s'arrête en 2023 : les films récents ont peu de notes **parce qu'ils sont récents**, pas parce qu'ils sont confidentiels. Le rapport médian « notes MovieLens / votes TMDB » passe de 0,43 (films de 2010) à 0,16 (2020), 0,11 (2022) et 0,07 (2023). Conséquence pour le curseur : sous le plafond 2 000, 1 887 candidats sont sortis en 2019 ou après, dont **98 très connus** (plus de 5 000 votes TMDB), par ex. *Shang-Chi*, *Black Widow*, *No Time to Die*, *Spider-Man: Across the Spider-Verse*, qui apparaissent pour le cas `test_01` au plafond 2 000. Sur les 20 cas réels, 5 % des films proposés aux plafonds 2 000 et 500 sont sortis en 2019 ou après. Pistes (à trancher, aucune n'est appliquée) : (a) accepter et l'expliquer dans l'interface ; (b) corriger la popularité par année de sortie (comptes MovieLens × facteur médian de l'année) ; (c) exclure des plafonds bas les films à beaucoup de votes TMDB ; (d) popularité hybride (MovieLens jusqu'en ~2018, TMDB après).
+
+**Points à relire avant l'écriture dans `web/public/data/`** (arrêt obligatoire)
+1. Format des fichiers et contenu de `model-meta.json` (ajouts : non recommandables, curseur).
+2. **Licence** : la fixture versionnée contient les notes (sans `userId`) de 20 utilisateurs de test MovieLens, 1 544 notes au total ; c'est de la donnée MovieLens brute dans le dépôt public. Prévu par D8, mais à confirmer vu la question en cours avec GroupLens (sinon : la générer à la volée, non versionnée).
+3. Biais des films récents (ci-dessus) : à traiter maintenant (avant l'export définitif) ou à l'étape 5.
+4. Ensuite : `uv run python export.py export --out web` écrit les mêmes fichiers dans `web/public/data/` (non versionné), puis mise à jour de `stack-technique.md` et `CLAUDE.md` (fin de l'étape 2).
+
+**Choix faits sans demander (C5)**
+- Export d'abord dans un dossier intermédiaire (`data/processed/export/`) ; `--out web` pour l'écriture définitive, après relecture.
+- Échelle 0 pour un vecteur nul (aucun en pratique) ; arrondi au plus proche (pair en cas d'égalité, `np.rint`).
+- `model-meta.json` compact (sans indentation) pour la taille ; ajout de `non_recommendable_item_idx` et du curseur.
+- Cas synthétiques ajoutés aux 20 cas réels pour couvrir les cas limites du calcul des percentiles.
+- Version des données = empreintes SHA-256 du catalogue, des notes et du manifeste du découpage, plus l'empreinte de `embeddings.bin`.
+
 ### C6
 
 ---
