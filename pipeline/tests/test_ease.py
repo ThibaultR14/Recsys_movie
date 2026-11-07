@@ -46,3 +46,33 @@ def test_model_scores_use_signal():
     s = ease.EASEModel(B, beta=1).scores(ratings)
     assert s.dtype == np.float32
     assert s[0] == pytest.approx([0.0, 4.0, 2.0])
+
+
+def test_lapack_runs_with_one_blas_thread(monkeypatch):
+    # multithreaded OpenBLAS segfaults in dpotrf on 23 019 x 23 019 (Colab): must be single-threaded
+    from threadpoolctl import threadpool_info, threadpool_limits
+
+    def blas_threads():
+        return sorted({p["num_threads"] for p in threadpool_info() if p["user_api"] == "blas"})
+
+    seen = {}
+    real_potrf, real_potri = ease.lapack.dpotrf, ease.lapack.dpotri
+
+    def spy(name, real):
+        def wrapper(*args, **kwargs):
+            seen[name] = blas_threads()
+            return real(*args, **kwargs)
+
+        return wrapper
+
+    monkeypatch.setattr(ease.lapack, "dpotrf", spy("dpotrf", real_potrf))
+    monkeypatch.setattr(ease.lapack, "dpotri", spy("dpotri", real_potri))
+    X = sp.random(40, 9, density=0.4, random_state=4, format="csr")
+    with threadpool_limits(limits=2, user_api="blas"):  # outside: several threads allowed
+        before = blas_threads()
+        B = ease.fit(X, lam=2.0)
+        after = blas_threads()
+    assert before, "no BLAS library found by threadpoolctl"
+    assert seen == {"dpotrf": [1], "dpotri": [1]}
+    assert after == before  # the limit is lifted once the inversion is done
+    assert B == pytest.approx(ease.fit_dense_reference(X.toarray(), 2.0), abs=1e-6)

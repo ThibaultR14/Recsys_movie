@@ -424,7 +424,7 @@ B perd 12 % de NDCG@20 à λ = 0 mais couvre 1,8 fois plus de films. Le balayage
 
 ### C3
 
-*7 novembre 2026 — en attente de l'exécution sur Colab.* Code : `pipeline/models/ease.py`, `pipeline/train_ease.py` (`ram`, `search`, `best`), `pipeline/colab_bundle.py`, `pipeline/notebooks/ease_colab.ipynb`, `tests/test_ease.py` (114 tests au total, tous verts). `train_ratings` déplacé de `train.py` vers `evaluate.py` (partagé, et pour ne pas hériter de `OPENBLAS_NUM_THREADS=1`, qui briderait LAPACK).
+*7 novembre 2026 — en attente de l'exécution sur Colab.* Code : `pipeline/models/ease.py`, `pipeline/train_ease.py` (`ram`, `search`, `best`), `pipeline/colab_bundle.py`, `pipeline/notebooks/ease_colab.ipynb`, `tests/test_ease.py` (115 tests au total, tous verts). `train_ratings` déplacé de `train.py` vers `evaluate.py` (partagé, et pour ne pas hériter de `OPENBLAS_NUM_THREADS=1`, qui briderait LAPACK).
 
 **RAM** (`train_ease.py ram`, 7 novembre 2026, 09 h 11) : 15,7 Gio au total, **2,28 Gio disponibles** (1,1 à 2,6 Gio selon le moment) ; besoin estimé **5,92 Gio** (G en float32 + une matrice de travail float64, 23 019² × 12 octets), plus les données (~1 Gio). → **Insuffisant : calcul sur Google Colab** (environnement CPU standard, ~12 Gio).
 
@@ -441,6 +441,13 @@ B perd 12 % de NDCG@20 à λ = 0 mais couvre 1,8 fois plus de films. Le balayage
 1. Depuis `pipeline/` : `uv run python colab_bundle.py` → `data/processed/colab/ease_bundle.zip` (150 Mo : code, catalogue réduit à `item_idx`/`movie_id`/`recommendable`, fichiers du découpage ; ni `.env` ni données brutes).
 2. Déposer le zip dans `Mon Drive/pepite/` ; ouvrir `pipeline/notebooks/ease_colab.ipynb` dans Colab ; Exécution → Tout exécuter (~1 h à 1 h 30, reprise possible).
 3. Télécharger `Mon Drive/pepite/ease_results.zip` et le décompresser dans `pipeline/data/processed/results/`. Claude Code complète ensuite cette section (tableau de validation, test EASE vs ALS vs références, écart relatif).
+
+**Incident Colab n° 1** (7 novembre 2026) : le premier lancement a planté (segfault, code 139) dans `lapack.dpotrf` (`models/ease.py`), juste après le calcul de G (« beta=1: gram 85s »). Diagnostic (Claude Web), reproduit avec les versions de Colab (numpy 2.4.6, scipy 1.16.3) sur une matrice 23 019 × 23 019 : **OpenBLAS avec 2 threads → segfault ; `OPENBLAS_NUM_THREADS=1` → OK** (`dpotrf` 66 s, `dpotri` 131 s). Bug d'OpenBLAS multithread sur les très grosses matrices ; les tests utilisaient de petites matrices et ne pouvaient pas le voir. La cellule finale avait en plus créé une archive vide (160 octets).
+Correctif :
+- `models/ease.py` : `dpotrf` / `dpotri` tournent sous `threadpool_limits(1, "blas")` (`threadpoolctl` 3.8.0, ajouté aux dépendances) ; le calcul de G et le produit `x @ B` gardent plusieurs threads.
+- Test `test_lapack_runs_with_one_blas_thread` : relève `threadpool_info()` pendant les appels à `dpotrf` / `dpotri` (1 thread) et vérifie que la limite est levée après (2 threads avant et après).
+- Notebook : `OPENBLAS_NUM_THREADS=1 python -X faulthandler` dans les cellules `search` et `best` (filet de sécurité + trace en cas de nouveau plantage) ; `threadpoolctl==3.8.0` installé après `polars` ; durée estimée ~3,5 min par configuration, ~1 h au total ; pas d'archive si `results/` est vide ; consigne en tête : supprimer `results/` et `ease_results.zip` de `Mon Drive/pepite/` avant un nouveau paquet.
+- `ease_bundle.zip` régénéré depuis le commit du correctif (voir `bundle_info.json`).
 
 **Choix faits sans demander (C3)**
 - G stocké en float32 (erreur relative ~10⁻⁷ sur B, vérifiée par test) pour tenir en RAM ; tout le reste en float64.

@@ -15,11 +15,17 @@ from __future__ import annotations
 import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import lapack
+from threadpoolctl import threadpool_limits
 
 from models.als import signal_values
 
 GRAM_BLOCK = 2048
 SYM_BLOCK = 2048
+# Threads for BLAS during dpotrf / dpotri. Multithreaded OpenBLAS segfaults (exit 139) inside
+# dpotrf on a 23 019 x 23 019 matrix: seen on Colab (numpy 2.4.6, scipy 1.16.3, 2 threads) and
+# reproduced; with one thread it works (dpotrf ~66 s, dpotri ~131 s). Small test matrices never
+# hit it. Only the factorisation / inversion is limited: gram() and x @ B keep all threads.
+LAPACK_THREADS = 1
 
 
 def bytes_needed(n_items: int) -> int:
@@ -57,14 +63,15 @@ def fit_from_gram(G: np.ndarray, lam: float) -> np.ndarray:
     work[...] = G
     work[np.diag_indices(n)] += lam
 
-    c, info = lapack.dpotrf(work, lower=0, overwrite_a=1, clean=0)
-    if info != 0:
-        raise np.linalg.LinAlgError(f"dpotrf failed (info={info})")
-    assert np.shares_memory(c, work), "dpotrf did not work in place"
-    p, info = lapack.dpotri(c, lower=0, overwrite_c=1)
-    if info != 0:
-        raise np.linalg.LinAlgError(f"dpotri failed (info={info})")
-    assert np.shares_memory(p, work), "dpotri did not work in place"
+    with threadpool_limits(limits=LAPACK_THREADS, user_api="blas"):
+        c, info = lapack.dpotrf(work, lower=0, overwrite_a=1, clean=0)
+        if info != 0:
+            raise np.linalg.LinAlgError(f"dpotrf failed (info={info})")
+        assert np.shares_memory(c, work), "dpotrf did not work in place"
+        p, info = lapack.dpotri(c, lower=0, overwrite_c=1)
+        if info != 0:
+            raise np.linalg.LinAlgError(f"dpotri failed (info={info})")
+        assert np.shares_memory(p, work), "dpotri did not work in place"
     del c, p
 
     _symmetrize_from_upper(work)  # work = P
