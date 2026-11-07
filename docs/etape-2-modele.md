@@ -177,7 +177,7 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 
 **Objectif** : la référence de précision.
 
-**Fichiers** : `pipeline/models/ease.py`, tests (petit exemple calculable à la main). Notebook Colab si la RAM manque.
+**Fichiers** : `pipeline/models/ease.py`, tests (petit exemple calculable à la main). Notebook Colab si la RAM manque (`pipeline/train_ease.py`, `pipeline/colab_bundle.py`, `pipeline/notebooks/ease_colab.ipynb`).
 
 **Critères** :
 - RAM disponible vérifiée et rapportée avant le calcul.
@@ -423,6 +423,30 @@ Meilleure en NDCG@20 parmi `alpha ≥ 10` dans la recherche : `factors 128, reg 
 B perd 12 % de NDCG@20 à λ = 0 mais couvre 1,8 fois plus de films. Le balayage du curseur se fera pour A et B (spec C4 mise à jour). Fichier : `results/als_f64_r0.1_a10_b1_i30_val.json`.
 
 ### C3
+
+*7 novembre 2026 — en attente de l'exécution sur Colab.* Code : `pipeline/models/ease.py`, `pipeline/train_ease.py` (`ram`, `search`, `best`), `pipeline/colab_bundle.py`, `pipeline/notebooks/ease_colab.ipynb`, `tests/test_ease.py` (114 tests au total, tous verts). `train_ratings` déplacé de `train.py` vers `evaluate.py` (partagé, et pour ne pas hériter de `OPENBLAS_NUM_THREADS=1`, qui briderait LAPACK).
+
+**RAM** (`train_ease.py ram`, 7 novembre 2026, 09 h 11) : 15,7 Gio au total, **2,28 Gio disponibles** (1,1 à 2,6 Gio selon le moment) ; besoin estimé **5,92 Gio** (G en float32 + une matrice de travail float64, 23 019² × 12 octets), plus les données (~1 Gio). → **Insuffisant : calcul sur Google Colab** (environnement CPU standard, ~12 Gio).
+
+**Implémentation** (D7)
+- `G = XᵀX` calculé par blocs de 2 048 colonnes (produit creux, accumulation float64), stocké en float32 et gardé pour les 5 valeurs de λ.
+- Pour chaque λ : copie float64 (ordre Fortran) + λ sur la diagonale, Cholesky et inverse **en place** (LAPACK `dpotrf` / `dpotri`), symétrisation par blocs, puis `B_ij = −P_ij / P_jj` et diagonale à 0, toujours en place. Pic ≈ 6 Gio au lieu de 3-4 × G.
+- Score : `x_u · B`, avec `x_u` = signal D2 (`1 + β·p`) calculé sur le fold-in seul.
+- Tests : exemple 2 × 2 calculé à la main ; égalité avec la formule de manuel (`np.linalg.inv`) à 10⁻⁹ près avec un G float64, < 10⁻⁶ avec le G float32 de production ; blocs de Gram et symétrisation.
+- Mesure locale d'un bloc de G sur les vraies données (β = 1) : 29 s pour les 2 048 premiers films (les plus denses), 4 s pour les derniers → G complet en ~2-5 min.
+
+**Protocole** : `search` = λ_ease ∈ {100, 300, 1 000, 3 000, 10 000} × {β = 1 (celui d'A et B), binaire β = 0}, validation, 10 configurations ; `best --split test` = la meilleure en `NDCG@20` de validation, évaluée **une seule fois** sur le test (refuse d'écraser un résultat existant).
+
+**Pour lancer** (Thibault) :
+1. Depuis `pipeline/` : `uv run python colab_bundle.py` → `data/processed/colab/ease_bundle.zip` (150 Mo : code, catalogue réduit à `item_idx`/`movie_id`/`recommendable`, fichiers du découpage ; ni `.env` ni données brutes).
+2. Déposer le zip dans `Mon Drive/pepite/` ; ouvrir `pipeline/notebooks/ease_colab.ipynb` dans Colab ; Exécution → Tout exécuter (~1 h à 1 h 30, reprise possible).
+3. Télécharger `Mon Drive/pepite/ease_results.zip` et le décompresser dans `pipeline/data/processed/results/`. Claude Code complète ensuite cette section (tableau de validation, test EASE vs ALS vs références, écart relatif).
+
+**Choix faits sans demander (C3)**
+- G stocké en float32 (erreur relative ~10⁻⁷ sur B, vérifiée par test) pour tenir en RAM ; tout le reste en float64.
+- Variante « β retenu » = β = 1 (A et B ont β = 1).
+- Le choix de λ_ease et de la variante est automatique (meilleur `NDCG@20` de validation) : pas de décision humaine prévue par D7.
+
 ### C4
 ### C5
 ### C6

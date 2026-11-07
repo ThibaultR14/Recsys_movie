@@ -87,6 +87,20 @@ def train_counts(catalog: Catalog, train_path=SPLIT_DIR / "train.parquet") -> np
     return counts["n"].fill_null(0).to_numpy().astype(np.int64)
 
 
+def train_ratings(catalog: Catalog) -> sp.csr_matrix:
+    """(training users x items) ratings matrix, users in userId order."""
+    df = pl.read_parquet(SPLIT_DIR / "train.parquet", columns=["userId", "movieId", "rating"])
+    df = df.join(item_index(catalog).select("movieId", "item_idx"), on="movieId")
+    rows = df["userId"].rank("dense").cast(pl.Int32).to_numpy() - 1
+    m = sp.csr_matrix(
+        (df["rating"].to_numpy(), (rows, df["item_idx"].to_numpy())),
+        shape=(int(rows.max()) + 1, catalog.n_items),
+        dtype=np.float32,
+    )
+    m.sort_indices()
+    return m
+
+
 def build_eval_set(foldin: pl.DataFrame, heldout: pl.DataFrame, catalog: Catalog) -> EvalSet:
     idx = item_index(catalog)
     foldin = foldin.join(idx, on="movieId", how="inner")

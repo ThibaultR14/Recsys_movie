@@ -26,11 +26,10 @@ import time  # noqa: E402
 from datetime import UTC, datetime  # noqa: E402
 
 import numpy as np  # noqa: E402
-import polars as pl  # noqa: E402
 import scipy.sparse as sp  # noqa: E402
 
 import evaluate as ev  # noqa: E402
-from config import RESULTS_DIR, SEED, SPLIT_DIR  # noqa: E402
+from config import RESULTS_DIR, SEED  # noqa: E402
 from models import als  # noqa: E402
 
 SEARCH_DIR = RESULTS_DIR / "als_search"
@@ -46,18 +45,7 @@ REFERENCE_CONFIG = {"factors": 64, "regularization": 0.05, "alpha": 10, "beta": 
 N_FOLDIN_CHECK = 200
 
 
-def train_ratings(catalog: ev.Catalog) -> sp.csr_matrix:
-    """(training users x items) ratings matrix, users in userId order."""
-    df = pl.read_parquet(SPLIT_DIR / "train.parquet", columns=["userId", "movieId", "rating"])
-    df = df.join(ev.item_index(catalog).select("movieId", "item_idx"), on="movieId")
-    rows = df["userId"].rank("dense").cast(pl.Int32).to_numpy() - 1
-    m = sp.csr_matrix(
-        (df["rating"].to_numpy(), (rows, df["item_idx"].to_numpy())),
-        shape=(int(rows.max()) + 1, catalog.n_items),
-        dtype=np.float32,
-    )
-    m.sort_indices()
-    return m
+train_ratings = ev.train_ratings  # moved to evaluate.py (shared with train_ease.py)
 
 
 def config_key(cfg: dict) -> str:

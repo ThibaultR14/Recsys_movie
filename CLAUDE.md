@@ -88,6 +88,8 @@ uv run python enrich_tmdb.py --limit 50  # essai TMDB, catalogue non modifié
 uv run python enrich_tmdb.py             # enrichissement complet (repart du cache data/cache/tmdb/)
 ```
 
+EASE (comparaison, ~6 Gio de RAM libre) : `uv run python train_ease.py ram` ; si insuffisant, `uv run python colab_bundle.py` puis `notebooks/ease_colab.ipynb` sur Colab.
+
 Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB : relancer ensuite `enrich_tmdb.py`.
 
 Chemins et constantes partagés : `pipeline/config.py` (`RAW`, `PROCESSED`, `CACHE`, `WEB_DATA`, `MIN_RATINGS`) ; il charge le `.env` de la racine.
