@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "match-report": "tsx scripts/match-report.ts"
+    "match-report": "tsx scripts/match-report.ts",
+    "reco-report": "tsx scripts/reco-report.ts",
+    "reco-bench": "tsx scripts/reco-bench.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",

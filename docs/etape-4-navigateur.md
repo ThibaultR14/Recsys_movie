@@ -157,3 +157,38 @@ Les réponses contiennent :
 - 125 tests Vitest verts ; `tsc`, ESLint et Prettier sans remarque.
 
 ### F5
+
+*7 novembre 2026 — **arrêt de fin d'étape** pour relecture.* Scripts du terminal, qui utilisent **le même gestionnaire que le Web Worker** (`createHandler`) avec un `fetch` qui lit `web/public/data/` sur le disque (`web/scripts/local.ts`). Ils n'écrivent rien :
+- `npm run reco-bench -- [--export <export>]` : temps de calcul ;
+- `npm run reco-report -- <export> [--top 20]` : top 20 aux positions ∞, 2 000 et 500 (titre, année, popularité, score), plus le résumé de l'import.
+
+**Temps** (Node 24, PC de développement, médiane de 7 passages)
+
+| Mesure | Temps | Critère |
+|---|---|---|
+| Lecture et analyse des 6 fichiers (lecture 89 ms, modèle 9 ms, index des titres 35 ms) | **133 ms** | ≤ 500 ms ✅ |
+| Construction du `Matcher` (index sans article, trigrammes par année), rapportée à part | 405 ms | — (une fois, dans le worker) |
+| Fold-in + scores + 8 positions × 50 : export de Thibault (188 films utilisés) | **19 ms** | ≤ 50 ms ✅ |
+| Idem, historique synthétique de 225 films | 17 ms | ≤ 50 ms ✅ |
+| Idem, 1 000 films | 22 ms | — |
+| Idem, 3 000 films | **42 ms** | ≤ 100 ms ✅ |
+| Lecture de l'export + correspondance : Thibault / 1 000 / 3 000 films | 10 / 11 / 42 ms | — |
+
+La construction du `Matcher` est le poste le plus lourd. Elle se fait une fois, dans le worker, sans bloquer l'interface. Piste si besoin (étape 5, mesure sur téléphone) : construire l'index des trigrammes seulement au premier titre qui passe par la recherche floue.
+
+**Export de Thibault** (`reco-report`, résultats montrés à Thibault dans le compte rendu, pas ici) :
+- 225 films dans l'export, 188 utilisés pour le fold-in (tous `exact`) ;
+- **190 films exclus** des recommandations : les 188 vus, plus les 2 candidats principaux des correspondances floues (D4) ;
+- score relatif : **0,212** au plafond 2 000 et **0,054** au plafond 500 (moyenne des utilisateurs de test à l'étape 2 : 0,17 et 0,06).
+
+**À reporter à l'étape 5** (vus dans les listes) :
+- spectacles et documentaires dans les recommandations (spectacle filmé, documentaires de plateforme) : afficher le genre, voire permettre de les filtrer ;
+- versions alternatives d'un film déjà vu (montage intégral d'une œuvre en deux parties) : à repérer, par exemple par les réalisateurs et les titres proches.
+
+**Critères** (état à l'arrêt) : tous atteints.
+- 22 vecteurs à 3,3·10⁻¹⁵ près ; 66/66 listes identiques ;
+- lecture, exclusions et confidentialité testées ;
+- temps dans les seuils ; worker compilé à part ;
+- 125 tests Vitest, `tsc`, ESLint et Prettier verts.
+
+Les temps dans un vrai navigateur (téléphone compris) seront mesurés à l'étape 5 ; le bouton « tester le moteur » de la page provisoire en donne déjà le chargement.
