@@ -286,4 +286,26 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
   - le journal est entièrement rattaché, sans film « journal seulement ».
 
 ### E5
+
+*7 novembre 2026.* Code : `web/src/matching/titleIndex.ts` (chargement de `title-index.json`, `catalog.json` pour les années et `popularity.bin` pour les départages ; refuse un index d'une autre version de normalisation), `match.ts` (`Matcher`, statuts D5), `history.ts` (`matchHistory`, `toUserHistory` : statuts utilisables, un film par `item_idx` en gardant l'entrée la plus récente, percentiles) ; tests `match.test.ts` (110 tests Vitest au total, tous verts ; `tsc`, ESLint, Prettier sans remarque).
+
+- **Algorithme** (D5) :
+  - correspondance exacte : clé normalisée, année ±1 (TMDB ou MovieLens), classement par écart d'année, source du titre, popularité ; `ambiguous` si les deux premiers sont à égalité ;
+  - sans année : clé seule, film unique ;
+  - `probable_variant` :
+    - « & » ↔ « and » ;
+    - année entre parenthèses retirée ;
+    - titre principal avant « : » ou « - » (film unique seulement) ;
+    - **article de tête ignoré des deux côtés** : une table des clés sans article, construite au chargement, couvre « Misérables » ↔ « Les Misérables » comme « The Matrix » ↔ « Matrix ». La première version retirait seulement l'article du titre saisi et ratait le premier cas ;
+  - `probable_fuzzy` : Fuse.js (seuil 0,3), 3 candidats.
+- **Performance** :
+  - une première version (Fuse.js sur tous les films de l'année ±1) mettait **5,0 s** pour 3 000 entrées dont 10 % de titres altérés ;
+  - le flou est désormais préfiltré par trigrammes, avec un index **découpé par année** : seuls les films de l'année ±1 sont parcourus, et les 40 plus proches (coefficient de Dice ≥ 0,3) sont confiés à Fuse.js ;
+  - **101 ms pour 3 000 entrées** (Node, catalogue réel, 10 % de titres altérés qui passent par les replis) ; critère ≤ 300 ms ✅. La construction du `Matcher` (index sans article et trigrammes) se fait une fois au chargement.
+- **Tests** :
+  - catalogue synthétique : exacte, double année (via `ml_year`), écart > 1 rejeté, ambigu (deux « Hamlet » de 1964), sans année, chaque variante, flou limité à l'année ±1 et absent sans année, titre vide ou inconnu ;
+  - `toUserHistory` : doublons, statuts exclus, percentiles ;
+  - **confidentialité** : le chargement ne demande que `/data/title-index.json`, `/data/catalog.json` et `/data/popularity.bin`, et la correspondance n'appelle jamais `fetch` (vérifié en remplaçant `fetch` global) ;
+  - catalogue réel : 5 films connus en `exact`, et le test de vitesse.
+
 ### E6

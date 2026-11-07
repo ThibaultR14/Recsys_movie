@@ -27,15 +27,16 @@ export function percentiles(ratings: readonly (number | undefined)[]): number[] 
 }
 
 /** One item per key: the most recent (undated entries lose; later rows win ties). */
-export function dedupeLatest<T extends { date?: string }>(
+export function dedupeLatest<T>(
   items: readonly T[],
   keyOf: (item: T) => number | string,
+  dateOf: (item: T) => string | undefined = (item) => (item as { date?: string }).date,
 ): T[] {
   const best = new Map<number | string, T>();
   for (const item of items) {
     const key = keyOf(item);
     const current = best.get(key);
-    if (!current || (item.date ?? '') >= (current.date ?? '')) best.set(key, item);
+    if (!current || (dateOf(item) ?? '') >= (dateOf(current) ?? '')) best.set(key, item);
   }
   return [...best.values()];
 }
