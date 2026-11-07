@@ -108,7 +108,33 @@ Les temps dans un vrai navigateur (téléphone compris) seront mesurés à l'ét
 *À remplir à la fin de chaque sous-étape.*
 
 ### F1
+
+*7 novembre 2026.* `web/src/reco/modelFiles.ts` :
+- `parseEmbeddings` vérifie l'en-tête et la taille exacte ;
+- `dequantize` produit un `Float32Array` (`q × scale` arrondi en float32) ;
+- `buildModelFiles` vérifie la cohérence de `n_items`, `dims`, `yty.bin`, `popularity.bin` et `catalog.json`, et marque les films non recommandables ;
+- `fetchModelFiles` utilise un `fetch` injectable.
+
+Tests synthétiques : déquantification identique à numpy float32 ; en-tête faux, fichier tronqué, fichiers incohérents refusés avec un message clair.
+
 ### F2
+
+*7 novembre 2026.* `web/src/reco/foldIn.ts` : `signal` (`fround(1 + β·fround(p))`) et `foldIn` (système 64 × 64 en float64, triangle supérieur puis symétrie, `choleskySolve`).
+- Sur les 22 cas de `foldin_cases.json`, calculés depuis les vrais fichiers de `web/public/data/` : percentiles et signal **identiques**, **écart maximal sur les vecteurs : 3,3·10⁻¹⁵** (critère ≤ 10⁻⁹) ✅. Cholesky contre LU de LAPACK : l'écart reste au niveau de l'arrondi float64.
+- Cas limites testés : système résolu à la main, matrice non définie positive refusée, historique vide refusé (« aucun film reconnu »).
+
 ### F3
+
+*7 novembre 2026.* `web/src/reco/recommend.ts` :
+- `scoreAll` (produit scalaire float64) ;
+- `rankCandidates` (recommandables et non exclus, score décroissant puis `item_idx` croissant) ;
+- `topByPosition` (N premiers sous chaque plafond, score relatif toujours calculé sur les 20 premiers de la position, rapporté à ∞).
+
+`web/src/reco/engine.ts` : moteur partagé par le worker et les scripts (`loadEngine`, `importExport`, `exclusions`, `recommend`).
+- **66 listes top 10 sur 66 identiques** (`item_idx` et ordre), **écart maximal sur les scores : 1,9·10⁻¹⁵** ✅.
+- `recommend()` sur un cas réel : 8 positions × 50 films, aucun film vu ni non recommandable, plafonds respectés. Le top 10 à ∞ est celui de la fixture.
+- **Exclusions (D4)** testées : historique du fold-in + candidats à égalité des `ambiguous` (pas les candidats moins bien classés) + candidat principal des `probable_fuzzy`. L'historique du fold-in reste `toUserHistory` (`exact` + `probable_variant`).
+- 123 tests Vitest verts ; `tsc` et ESLint sans remarque.
+
 ### F4
 ### F5

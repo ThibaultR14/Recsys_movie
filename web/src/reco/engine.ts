@@ -1,0 +1,161 @@
+/**
+ * Recommendation engine shared by the Web Worker and the terminal scripts
+ * (docs/etape-4-navigateur.md, D1-D5). Pure: the only I/O is the injected `fetch` for /data/.
+ */
+import {
+  parseLetterboxdCsv,
+  parseLetterboxdFiles,
+  parseLetterboxdZip,
+} from '../adapters/letterboxd';
+import type { AdapterResult } from '../adapters/types';
+import { matchHistory, toUserHistory, type MatchedEntry, type UserFilm } from '../matching/history';
+import { Matcher, type MatchStatus } from '../matching/match';
+import { TitleIndex, type TitleIndexFile } from '../matching/titleIndex';
+import { foldIn } from './foldIn';
+import { buildModelFiles, fetchModelFiles, type FetchFn, type ModelFiles } from './modelFiles';
+import { rankCandidates, scoreAll, topByPosition, type PositionResult } from './recommend';
+
+export interface CatalogFile {
+  v: number;
+  n: number;
+  title: string[];
+  original_title: Record<string, string>;
+  year: (number | null)[];
+  tmdb_id: (number | null)[];
+  imdb_id: (string | null)[];
+  directors: string[][];
+  poster_path: (string | null)[];
+  genres: number[][];
+  genre_names: string[];
+}
+
+export interface Engine {
+  model: ModelFiles;
+  catalog: CatalogFile;
+  index: TitleIndex;
+  matcher: Matcher;
+  timings: { fetchMs: number; modelMs: number; indexMs: number; matcherMs: number };
+}
+
+export async function loadEngine(fetchFn: FetchFn, base = '/data/'): Promise<Engine> {
+  const t0 = performance.now();
+  const [files, catalog, indexFile] = await Promise.all([
+    fetchModelFiles(fetchFn, base),
+    fetchFn(`${base}catalog.json`).then((r) => r.json() as Promise<CatalogFile>),
+    fetchFn(`${base}title-index.json`).then((r) => r.json() as Promise<TitleIndexFile>),
+  ]);
+  const t1 = performance.now();
+  const model = buildModelFiles(
+    files.meta,
+    files.embeddings,
+    files.yty,
+    files.popularity,
+    catalog.n,
+  );
+  const t2 = performance.now();
+  const index = new TitleIndex(indexFile, catalog.year, model.popularity);
+  const t3 = performance.now();
+  const matcher = new Matcher(index);
+  const t4 = performance.now();
+  return {
+    model,
+    catalog,
+    index,
+    matcher,
+    timings: { fetchMs: t1 - t0, modelMs: t2 - t1, indexMs: t3 - t2, matcherMs: t4 - t3 },
+  };
+}
+
+export type ExportInput =
+  | { kind: 'zip'; bytes: Uint8Array }
+  | { kind: 'files'; files: Record<string, string> }
+  | { kind: 'csv'; name: string; text: string };
+
+export function readExport(input: ExportInput): AdapterResult {
+  if (input.kind === 'zip') return parseLetterboxdZip(input.bytes);
+  if (input.kind === 'files') return parseLetterboxdFiles(input.files);
+  return parseLetterboxdCsv(input.name, input.text);
+}
+
+export interface ImportSummary {
+  nEntries: number;
+  counts: Record<MatchStatus, number>;
+  nHistoryFilms: number;
+  warnings: string[];
+  filesRead: string[];
+}
+
+export function summarize(adapter: AdapterResult, matched: readonly MatchedEntry[]): ImportSummary {
+  const counts: Record<MatchStatus, number> = {
+    exact: 0,
+    probable_variant: 0,
+    probable_fuzzy: 0,
+    ambiguous: 0,
+    not_found: 0,
+  };
+  for (const m of matched) counts[m.result.status]++;
+  return {
+    nEntries: adapter.entries.length,
+    counts,
+    nHistoryFilms: toUserHistory(matched).length,
+    warnings: adapter.warnings,
+    filesRead: adapter.filesRead,
+  };
+}
+
+export function importExport(engine: Engine, input: ExportInput) {
+  const adapter = readExport(input);
+  const matched = matchHistory(engine.matcher, adapter.entries);
+  return { matched, summary: summarize(adapter, matched) };
+}
+
+/**
+ * Films never recommended (D4): the history used for the fold-in, the tied candidates of
+ * ambiguous entries and the main candidate of fuzzy ones (possibly seen, never used in the
+ * fold-in).
+ */
+export function exclusions(matched: readonly MatchedEntry[], history: readonly UserFilm[]) {
+  const out = new Set<number>(history.map((h) => h.item));
+  for (const m of matched) {
+    const r = m.result;
+    if (r.status === 'ambiguous') {
+      const [first] = r.candidates;
+      for (const c of r.candidates) {
+        if (first && c.yearGap === first.yearGap && c.source === first.source) out.add(c.item);
+      }
+    } else if (r.status === 'probable_fuzzy' && r.item !== undefined) {
+      out.add(r.item);
+    }
+  }
+  return out;
+}
+
+export interface Recommendations {
+  positions: PositionResult[];
+  history: UserFilm[];
+  nExcluded: number;
+}
+
+/** Fold-in on exact + probable_variant, scores, exclusions, slider positions. */
+export function recommend(
+  engine: Engine,
+  matched: readonly MatchedEntry[],
+  options: { n?: number; caps?: readonly (number | null)[] } = {},
+): Recommendations {
+  const { model } = engine;
+  const history = toUserHistory(matched); // exact + probable_variant only
+  const x = foldIn(
+    model,
+    history.map((h) => h.item),
+    history.map((h) => h.percentile),
+  );
+  const scores = scoreAll(model, x);
+  const excluded = exclusions(matched, history);
+  const ranked = rankCandidates(scores, model.recommendable, excluded);
+  const caps = options.caps ?? model.meta.slider.positions;
+  return {
+    positions: topByPosition(ranked, scores, model.popularity, caps, options.n ?? 50),
+    history,
+    nExcluded: excluded.size,
+  };
+}
