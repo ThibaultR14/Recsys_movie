@@ -538,9 +538,81 @@ def cmd_verify(out_dir: Path) -> dict:
     return out
 
 
+CATALOG_FILES = ("catalog.json", "title-index.json")
+WEB_DATA_GZIP_BUDGET = 5 * 1024 * 1024  # step 3 criterion: all of web/public/data <= 5 MB gzip
+
+
+def write_compact_json(path: Path, obj) -> None:
+    assert_web_safe(obj, path.name)
+    text = json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n"
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def cmd_catalog(out_dir: Path) -> dict:
+    """catalog.json + title-index.json (step 3, D2/D3), in the item order saved at training."""
+    import site_catalog as sc
+
+    catalog = ev.load_catalog()
+    trained_movie_ids(catalog)  # refuses a catalogue whose item order moved since training
+    cat = sc.load_catalog_frame(ev.CATALOG_PARQUET)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_compact_json(out_dir / "catalog.json", sc.build_catalog_json(cat))
+    write_compact_json(out_dir / "title-index.json", sc.build_title_index(cat))
+    sizes = file_sizes(out_dir)
+    total = sum(v["gzip_bytes"] for v in sizes.values())
+    report = {
+        "out_dir": str(out_dir),
+        "sizes": sizes,
+        "total_bytes": sum(v["bytes"] for v in sizes.values()),
+        "total_gzip_bytes": total,
+        "within_5mb_gzip": total <= WEB_DATA_GZIP_BUDGET,
+    }
+    (RESULTS_DIR / "catalog_export_report.json").write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report, indent=2))
+    return report
+
+
+def cmd_catalog_verify(out_dir: Path) -> dict:
+    """Re-read catalog.json / title-index.json: shapes, item references, every title findable."""
+    import site_catalog as sc
+    from titles import normalize_title
+
+    cat_json = json.loads((out_dir / "catalog.json").read_text(encoding="utf-8"))
+    index = json.loads((out_dir / "title-index.json").read_text(encoding="utf-8"))
+    n = cat_json["n"]
+    meta = json.loads((out_dir / "model-meta.json").read_text())
+    assert n == meta["n_items"]
+    for col in ("title", "year", "tmdb_id", "imdb_id", "directors", "poster_path", "genres"):
+        assert len(cat_json[col]) == n, col
+    assert index["keys"] == sorted(set(index["keys"])) and len(index["keys"]) == len(index["post"])
+    where: dict[int, dict[str, int]] = {}
+    for key, post in zip(index["keys"], index["post"], strict=True):
+        for code in post:
+            assert 0 <= code // 4 < n
+            where.setdefault(code // 4, {})[key] = code % 4
+    cat = sc.load_catalog_frame(ev.CATALOG_PARQUET)
+    missing = 0
+    for r in cat.iter_rows(named=True):
+        key = normalize_title(r["tmdb_title"]) if r["tmdb_title"] else None
+        if key and where.get(r["item_idx"], {}).get(key) != sc.SRC_TMDB:
+            missing += 1
+    films_without_key = n - len(where)
+    out = {
+        "n": n,
+        "keys": len(index["keys"]),
+        "films_without_key": films_without_key,
+        "tmdb_title_not_indexed_as_source_0": missing,
+    }
+    assert films_without_key == 0 and missing == 0, out
+    print(json.dumps(out, indent=2))
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("cmd", choices=["train", "int8-check", "export", "verify"])
+    parser.add_argument(
+        "cmd", choices=["train", "int8-check", "export", "verify", "catalog", "catalog-verify"]
+    )
     parser.add_argument("--out", default="staging", help="'staging' (default) or 'web'")
     args = parser.parse_args()
     out_dir = WEB_DATA if args.out == "web" else STAGING
@@ -550,6 +622,10 @@ def main() -> int:
         cmd_int8_check()
     elif args.cmd == "export":
         cmd_export(out_dir)
+    elif args.cmd == "catalog":
+        cmd_catalog(out_dir)
+    elif args.cmd == "catalog-verify":
+        cmd_catalog_verify(out_dir)
     else:
         cmd_verify(out_dir)
     return 0

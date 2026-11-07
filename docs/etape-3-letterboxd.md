@@ -241,6 +241,20 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
 - **Test exhaustif** : `web/test-data/catalog_title_keys.json` (33 252 chaînes, non versionné) généré pour E3.
 
 ### E2
+
+*7 novembre 2026.* Code : `pipeline/site_catalog.py` (construction, fonctions pures), `export.py catalog` et `export.py catalog-verify` (écriture, garde-fou, tailles, relecture), `tests/test_site_catalog.py` (219 tests au total, tous verts). Fichiers écrits dans le dossier intermédiaire puis dans `web/public/data/` (identiques, non versionnés).
+
+| Fichier | Octets | gzip -9 | Cible |
+|---|---|---|---|
+| `catalog.json` | 2 543 586 | **1 117 252** | ≤ 1,5 Mo ✅ |
+| `title-index.json` | 1 069 768 | **367 969** | ≤ 0,5 Mo ✅ |
+| `embeddings.bin`, `yty.bin`, `popularity.bin`, `model-meta.json` (étape 2) | 1 813 371 | 1 575 032 | |
+| **Total `web/public/data/`** | 5 426 725 | **3 060 253** (2,92 Mio) | ≤ 5 Mo ✅ |
+
+- `catalog.json` : 23 019 films ; `original_title` pour 4 815 films (différent du titre affiché) ; `imdb_id_aliases` pour 40 films ; 19 genres MovieLens (« (no genres listed) » → liste vide). Le titre affiché est `tmdb_title`, sinon le titre MovieLens nettoyé (45 films).
+- `title-index.json` : 34 723 clés, 36 318 entrées (source 0 `tmdb_title` : 22 973 ; 1 `ml_title` : 7 235 ; 2 titre original : 4 453 ; 3 titre alternatif ML : 1 657) ; 1 345 clés partagées par plusieurs films ; `ml_year` pour 1 663 films.
+- **Contrôles** (`catalog-verify`) : tailles des colonnes = 23 019 = `n_items` de `model-meta.json` ; clés triées et uniques ; toutes les entrées pointent vers un film existant ; **chaque film a au moins une clé** ; chaque `tmdb_title` est indexé avec la source 0. Ordre des films = celui sauvegardé à l'entraînement (`trained_movie_ids`). Garde-fou `assert_web_safe` sur les deux fichiers.
+
 ### E3
 ### E4
 ### E5
