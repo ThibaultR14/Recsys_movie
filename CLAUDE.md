@@ -14,7 +14,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - **Site 100 % statique.** Pas de serveur, pas de base de données, pas de comptes.
 - **Tout le calcul de reco se fait dans le navigateur** (Web Worker). Les données de l'utilisateur ne quittent jamais son navigateur : aucun appel réseau ne doit contenir ses films ou ses notes.
 - **Pipeline Python hors ligne** (`pipeline/`) : MovieLens 32M + TMDB (+ IMDb datasets pour les contrôles hors ligne seulement, voir « Données IMDb ») → modèle **ALS** → fichiers statiques dans `web/public/data/`.
-- Arborescence : `pipeline/` (`config.py`, `download.py`, `build_catalog.py`, `enrich_tmdb.py`, `titles.py`, `manual_overrides.csv`, étape 2 : `split.py`, `metrics.py`, `baselines.py`, `evaluate.py`, `models/`, `train.py`, `train_ease.py`, `colab_bundle.py`, `slider.py`, `sweep_slider.py`, `slider_variants.py`, `popularity.py`, `export.py`, `{notebooks,tests,data/raw,data/processed,data/cache}`), `web/src/{adapters,matching,reco,components,pages,styles}`, `web/public/data/`, `web/test-data/` (ignoré), `.github/workflows/`, `docs/` (dont `etape-2-modele.md`, `figures/` ; voir `docs/stack-technique.md` §7).
+- Arborescence : `pipeline/` (`config.py`, `download.py`, `build_catalog.py`, `enrich_tmdb.py`, `titles.py`, `manual_overrides.csv`, étape 2 : `split.py`, `metrics.py`, `baselines.py`, `evaluate.py`, `models/`, `train.py`, `train_ease.py`, `colab_bundle.py`, `slider.py`, `sweep_slider.py`, `slider_variants.py`, `popularity.py`, `export.py`, étape 3 : `site_catalog.py`, `title_fixtures.py`, `match_diagnostics.py`, `{notebooks,tests,data/raw,data/processed,data/cache}`), `web/src/{adapters,matching,reco,components,pages,styles}`, `web/scripts/`, `web/public/data/`, `web/test-data/` (ignoré), `shared/fixtures/` (cas partagés Python / TypeScript), `.github/workflows/`, `docs/` (dont `etape-2-modele.md`, `etape-3-letterboxd.md`, `figures/` ; voir `docs/stack-technique.md` §7).
 - Corrections manuelles du catalogue : **uniquement** via `pipeline/manual_overrides.csv` (`exclude` / `merge_into`, avec une raison), jamais en dur dans le code.
 - **Front** (`web/`) : **React + Vite + TypeScript**, Tailwind CSS, PapaParse, fflate, Fuse.js, idb-keyval.
 - Hébergement : Cloudflare Pages (ou GitHub Pages). Métadonnées TMDB rafraîchies chaque mois par GitHub Actions.
@@ -27,6 +27,8 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - Films récents (après 2023) : **trou accepté au MVP**, à signaler honnêtement dans l'interface.
 - Import : architecture d'**adaptateurs** (un par source) qui produisent tous le même format interne `{ titre, annee, imdbId?, tmdbId?, noteNormalisee, date? }`. Notes normalisées en percentiles par utilisateur.
 - Pas d'IA au MVP pour les listes faites main : correspondance floue (Fuse.js).
+- Correspondance des titres : normalisation « v2 » **identique** en Python (`pipeline/titles.py`) et en TypeScript (`web/src/matching/normalize.ts`), vérifiée par `shared/fixtures/` ; toute modification passe par les deux et par les cas partagés. Titre + année ±1 (TMDB ou ML), puis variantes ; le flou (Fuse.js) n'est **jamais** utilisé automatiquement pour les recommandations.
+- Dataset Letterboxd 10M : **non utilisé** (collecte probablement par scraping).
 - Scraping Letterboxd : **hors MVP**, option secondaire seulement (contraire aux conditions de Letterboxd).
 
 ## Règles impératives
@@ -40,6 +42,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - Données brutes (MovieLens, IMDb) dans `pipeline/data/raw/`, intermédiaires dans `pipeline/data/processed/`, cache des appels TMDB dans `pipeline/data/cache/` : **contenu ignoré par git** (seuls les `.gitkeep` sont versionnés).
 - **`item_idx` est figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais.** (Si une étape du pipeline retire des films avant l'entraînement, elle renumérote 0..n-1.)
 - **`web/public/data/` n'est pas versionné tant que GroupLens n'a pas répondu** sur la licence (données dérivées de MovieLens). Seul le `.gitkeep` y est suivi.
+- **Exports réels** (Thibault, volontaires) : uniquement dans `web/test-data/exports/` (ignoré) ; ceux des volontaires sont supprimés après la mesure, et on n'en cite jamais les films (taux seulement). Pas de pseudo ni de titre d'un export dans un fichier versionné.
 - **Aucune note MovieLens brute dans le dépôt** : les cas de test du fold-in (`foldin_cases.json`) sont générés par `export.py` dans `pipeline/data/processed/export/` ou `web/test-data/`, tous deux ignorés par git ; les tests qui en dépendent sont sautés s'ils sont absents. (Un ancien commit les contenait : historique purgé le 7 novembre 2026.)
 
 ## Conventions
@@ -54,7 +57,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 
 1. ✅ Pipeline de données : téléchargement MovieLens + IMDb, catalogue, correspondances d'ids (MovieLens ↔ IMDb ↔ TMDB via `links.csv`). Fait : 23 019 films (seuil 20 → 23 350, − 1 exclu à la main, − 315 séries/épisodes, − 15 fusions) ; TMDB : tmdb_id 99,96 %, titres/années 99,8 %, réalisateurs et affiches 99,7 % ; 51 films `recommendable = false`.
 2. ✅ Modèle ALS + évaluation hors ligne, avec et sans curseur. Fait (`docs/etape-2-modele.md`) : ALS 64 facteurs, NDCG@20 test **0,152** (EASE 0,172, −11 % ; populaire 0,084) ; curseur = plafond de popularité (8 positions) ; popularité hybride MovieLens/TMDB ; export int8 dans `web/public/data/` : `embeddings.bin` 1,57 Mo, `yty.bin`, `popularity.bin`, `model-meta.json` (1,57 Mo gzip au total) ; perte int8 < 0,08 % ; 22 cas de test du fold-in pour l'étape 4.
-3. Adaptateur Letterboxd + correspondance des titres (titre + année → id).
+3. ✅ Adaptateur Letterboxd + correspondance des titres. Fait (`docs/etape-3-letterboxd.md`) : `catalog.json` (1,12 Mo gzip) et `title-index.json` (0,37 Mo), total `web/public/data/` 3,06 Mo gzip ; sur l'export de Thibault, 188/188 films du catalogue reconnus (précision vérifiée à la main 100/100), les 37 autres hors catalogue (après 2023, séries) ; 3 000 entrées en ~100 ms.
 4. Calcul dans le navigateur : fold-in ALS, scores, curseur (plafond) ; à valider contre `web/test-data/foldin_cases.json` (régénérer avec `export.py export --out web` s'il manque).
 5. Interface (style C) : accueil / dépôt, analyse du fichier, résultats + curseur, fiche film.
 6. Adaptateur IMDb.
@@ -112,6 +115,23 @@ Chemins et constantes partagés : `pipeline/config.py` (`RAW`, `PROCESSED`, `CAC
 
 ⚠️ Si la variable d'environnement `UV_PROJECT_ENVIRONMENT` est définie (globalement), uv utilise ce venv au lieu de `pipeline/.venv` — et `uv sync` y supprime les paquets absents du lock. La retirer, ou lancer `uv` avec la variable vidée.
 
-### Site
+Étape 3 :
 
-À compléter quand Vite sera initialisé (serveur de dev, tests, build).
+```sh
+uv run python export.py catalog [--out web]   # catalog.json + title-index.json (puis catalog-verify)
+uv run python title_fixtures.py catalog-keys   # web/test-data/catalog_title_keys.json (test TS exhaustif)
+uv run python match_diagnostics.py ../web/test-data/reports/<nom>.json [--show]  # --show : export de Thibault seulement
+```
+
+### Site (depuis `web/`)
+
+```sh
+npm install
+npm run dev                 # serveur de développement (Vite)
+npm test                    # Vitest ; les tests sur données réelles sont sautés si web/public/data ou web/test-data manquent
+npm run typecheck           # tsc strict
+npm run lint                # ESLint
+npm run format:check        # Prettier (npm run format pour corriger)
+npm run build
+npm run match-report -- test-data/exports/<export> --name <nom>  # rapport → test-data/reports/
+```

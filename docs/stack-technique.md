@@ -53,11 +53,11 @@
 
 | Source | Format | Identifiant disponible | Échelle de notes |
 |---|---|---|---|
-| **Letterboxd** | ZIP d'export (`ratings.csv`, `watched.csv`, `diary.csv`, `watchlist.csv`) | ❌ Pas d'id IMDb/TMDB : seulement titre + année + URL Letterboxd | 0,5 à 5 |
+| **Letterboxd** | ZIP d'export : on lit `ratings.csv`, `watched.csv`, `diary.csv` (jamais `profile.csv`) | ❌ Pas d'id IMDb/TMDB : seulement titre + année + lien `boxd.it` (celui du journal désigne l'entrée, pas le film) | 0,5 à 5 |
 | **IMDb** | CSV d'export des notes | ✅ Id IMDb (`tt…`) : correspondance directe | 1 à 10 |
 | **Liste faite main** (plus tard) | Texte libre | ❌ Titre (et parfois année) | Variable ou absente |
 
-> ⚠️ Colonnes exactes des exports à vérifier sur de vrais fichiers avant de coder les adaptateurs.
+> Colonnes de l'export Letterboxd vérifiées sur un vrai export (étape 3, `docs/etape-3-letterboxd.md` §2). Export IMDb : à vérifier à l'étape 6.
 
 ---
 
@@ -93,7 +93,7 @@ Scripts dans `pipeline/` (lancés depuis ce dossier avec `uv run python <script>
 | `download.py` | Télécharge MovieLens 32M + IMDb `title.basics` et `title.ratings` (seulement), avec un `manifest.json` (md5, dates) | `data/raw/`, `ratings.parquet` |
 | `build_catalog.py` | Catalogue : seuil, exclusions et fusions, filtre de type | `catalog.parquet`, `ratings_filtered.parquet`, `movie_id_merges.parquet` |
 | `enrich_tmdb.py` | Enrichissement TMDB + vérification des ids | `catalog.parquet` (colonnes TMDB ajoutées), `tmdb_mismatch.csv` |
-| `titles.py` | Normalisation des titres (partagée par B3/B4, base de l'index de correspondance) | — |
+| `titles.py` | Normalisation des titres « v2 » (identique à `web/src/matching/normalize.ts`, cas partagés dans `shared/fixtures/`), base de l'index de correspondance | — |
 | `manual_overrides.csv` (versionné) | Corrections manuelles du catalogue, une ligne documentée par décision | — |
 
 Étapes de `build_catalog.py`, dans l'ordre :
@@ -143,7 +143,7 @@ Détail complet, chiffres et figures : `docs/etape-2-modele.md` (décisions D1-D
 | `export.py` | modèle final, int8, fichiers du site, cas de test du fold-in |
 
 ### Fichiers produits (dans `web/public/data/`)
-Écrits par `export.py` (sauf `catalog.json` et `title-index.json`, étapes 3-4). **Uniquement des champs MovieLens et TMDB**, rien qui vienne des datasets IMDb (garde-fou `FORBIDDEN_WEB_PREFIXES`). Non versionnés tant que GroupLens n'a pas répondu.
+Écrits par `export.py` (`export` pour le modèle, `catalog` pour le catalogue et l'index des titres). **Uniquement des champs MovieLens et TMDB**, rien qui vienne des datasets IMDb (garde-fou `FORBIDDEN_WEB_PREFIXES`). Non versionnés tant que GroupLens n'a pas répondu.
 
 | Fichier | Contenu | Taille (gzip) |
 |---|---|---|
@@ -151,10 +151,10 @@ Détail complet, chiffres et figures : `docs/etape-2-modele.md` (décisions D1-D
 | `yty.bin` | `YᵀY` 64 × 64 en float32, calculé sur les vecteurs déquantifiés (fold-in) | 16 Ko (12 Ko) |
 | `popularity.bin` | popularité hybride (uint32 par film) : le plafond du curseur porte sur elle | 92 Ko (42 Ko) |
 | `model-meta.json` | hyperparamètres, formules (signal, confiance, fold-in, popularité), positions du curseur, `movie_id` par `item_idx`, films non recommandables, versions des données | 140 Ko (58 Ko) |
-| `catalog.json` (étape 3-4) | `item_idx`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, titre et titre original TMDB, `year`, réalisateurs TMDB, `poster_path`, genres MovieLens, `recommendable` | ~1,35-1,5 Mo estimé |
-| `title-index.json` (étape 3) | index de correspondance : `tmdb_title`, `tmdb_original_title`, `ml_title` nettoyé + titre alternatif entre parenthèses, normalisés, avec les deux années (TMDB et ML) | à mesurer |
+| `catalog.json` | en colonnes, ordre = `item_idx` : titre affiché, titre original (s'il diffère), `year`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, réalisateurs, `poster_path`, genres MovieLens | 2,5 Mo (1,12 Mo) |
+| `title-index.json` | clés de titre normalisées → `4 × item_idx + source` (titre TMDB, titre MovieLens, titre original, titre alternatif ML) ; `ml_year` quand il diffère | 1,07 Mo (0,37 Mo) |
 
-Modèle : **1,57 Mo** gzip mesuré ; avec `catalog.json` ≈ 3 Mo, sous la cible de ~5 Mo.
+Total mesuré : **3,06 Mo** gzip (5,4 Mo bruts), sous la cible de 5 Mo.
 
 Les **cas de test du fold-in** (`foldin_cases.json`, 22 historiques, vecteur et top 10 attendus aux positions ∞, 2 000 et 500) contiennent des notes MovieLens brutes : ils sont écrits dans `web/test-data/` (ignoré par git, hors de `web/public/`, donc jamais servi) et ne sont **jamais versionnés**.
 
@@ -173,7 +173,7 @@ Les **cas de test du fold-in** (`foldin_cases.json`, 22 historiques, vecteur et 
 | Polices | **Courier Prime** + **Caveat** (Google Fonts) | Direction visuelle « C · Fanzine » retenue |
 | Lecture des CSV | **PapaParse** | Robuste, gère les virgules dans les titres, les encodages |
 | Lecture du ZIP Letterboxd | **fflate** | Petit et rapide, dézippe dans le navigateur |
-| Correspondance floue des titres | **Fuse.js** (ou un index maison normalisé) | Gérer « Le Fabuleux Destin d'Amélie Poulain » vs « Amélie » |
+| Correspondance des titres | Index précalculé (`title-index.json`) + **Fuse.js** en dernier recours (préfiltre par trigrammes, par année) | Titre + année ±1, variantes ; le flou ne sert qu'à proposer des candidats |
 | Calcul des scores | TypeScript pur sur des `Float32Array` | Produit scalaire sur ~23 000 films = quelques millisecondes |
 | Calcul lourd sans bloquer la page | **Web Worker** | L'interface reste fluide pendant le calcul |
 | Cache du modèle | **IndexedDB** (via `idb-keyval`) | Le modèle n'est téléchargé qu'une fois |
@@ -247,18 +247,20 @@ projet/
 │   ├── notebooks/            # 01_explore.py (seuils), ease_colab.ipynb (EASE sur Colab)
 │   ├── tests/                # un fichier de tests par module
 │   └── data/                 # raw/, processed/, cache/tmdb/ : contenu ignoré par git
-├── web/                      # site statique (Vite pas encore initialisé)
+├── web/                      # site statique : Vite + React + TypeScript (npm, Vitest, ESLint, Prettier)
 │   ├── src/
-│   │   ├── adapters/         # letterboxd.ts, imdb.ts, (manual.ts)
-│   │   ├── matching/         # correspondance des titres
+│   │   ├── adapters/         # types.ts (format commun), letterboxd.ts, normalizeRatings.ts (percentiles) ; imdb.ts (étape 6)
+│   │   ├── matching/         # normalize.ts, titleIndex.ts, match.ts, history.ts
 │   │   ├── reco/             # fold-in, scores, curseur (dans un Web Worker)
 │   │   ├── components/       # composants React (Curseur, CarteFilm, ZoneDepot…)
 │   │   ├── pages/            # Accueil, Analyse, Resultats, Fiche
 │   │   └── styles/           # tokens de la direction C (design-system.md)
 │   ├── public/data/          # fichiers produits par le pipeline (non versionnés)
-│   └── test-data/            # cas de test du fold-in (ignoré par git, jamais servi)
+│   ├── scripts/              # match-report.ts (mesure de la correspondance sur un export réel)
+│   └── test-data/            # ignoré par git, jamais servi : cas de test du fold-in, titres du catalogue, exports réels, rapports
+├── shared/fixtures/          # cas de normalisation des titres partagés Python / TypeScript (versionnés)
 ├── .github/workflows/        # mise à jour mensuelle TMDB (à venir)
-├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md, maquette, figures/
+├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md, etape-3-letterboxd.md, maquette, figures/
 └── CLAUDE.md                 # instructions pour Claude Code
 ```
 
@@ -282,6 +284,23 @@ uv run python export.py int8-check      # perte int8 (test)
 uv run python export.py export          # → data/processed/export/ (relecture)
 uv run python export.py export --out web  # → web/public/data/ + web/test-data/
 uv run python export.py verify [--out web]  # relecture + rejeu des cas de test du fold-in
+
+# étape 3 (correspondance des titres)
+uv run python export.py catalog [--out web]       # catalog.json + title-index.json
+uv run python export.py catalog-verify [--out web]
+uv run python title_fixtures.py catalog-keys       # titres du catalogue pour le test TypeScript exhaustif
+uv run python match_diagnostics.py ../web/test-data/reports/<nom>.json  # films non reconnus
+```
+
+### Commandes du site (depuis `web/`)
+
+```sh
+npm install
+npm run dev                 # serveur de développement
+npm test                    # Vitest (cas partagés, adaptateur, correspondance…)
+npm run typecheck && npm run lint && npm run format:check
+npm run build
+npm run match-report -- test-data/exports/<export> --name <nom>  # mesure sur un export réel
 ```
 
 Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB : relancer ensuite `enrich_tmdb.py` (il repart du cache).
@@ -295,7 +314,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 
 1. ✅ **Pipeline de données** : télécharger MovieLens + IMDb, construire le catalogue et les correspondances d'ids (fait : 23 019 films, enrichis par TMDB, voir §3).
 2. ✅ **Modèle** : ALS (et EASE pour comparer), évaluation hors ligne avec et sans curseur (fait : ALS 64 facteurs, NDCG@20 test 0,152, EASE 0,172 ; curseur = plafond de popularité ; export int8 de 1,57 Mo, voir §3 « Modèle »).
-3. **Adaptateur Letterboxd** + correspondance des titres, testé sur nos propres exports. L'index de correspondance utilise `tmdb_title`, `tmdb_original_title` et `ml_title` nettoyé (article replacé : « Usual Suspects, The » → « The Usual Suspects »), plus le titre alternatif entre parenthèses, tous normalisés (casse, accents, ponctuation, comme `pipeline/titles.py`), avec les deux années (TMDB et ML) acceptées à ±1 an. Mesuré en B4 : 28,6 % des titres TMDB diffèrent du titre ML brut normalisé, 6,7 % après nettoyage.
+3. ✅ **Adaptateur Letterboxd** + correspondance des titres (fait, `docs/etape-3-letterboxd.md` : sur l'export de Thibault, 188/188 films du catalogue reconnus, précision vérifiée à la main 100/100, 0 échec ; les 37 autres films sont hors catalogue, sortis après 2023 ou séries). L'index de correspondance utilise `tmdb_title`, `tmdb_original_title` et `ml_title` nettoyé (article replacé : « Usual Suspects, The » → « The Usual Suspects »), plus le titre alternatif entre parenthèses, tous normalisés (casse, accents, ponctuation, comme `pipeline/titles.py`), avec les deux années (TMDB et ML) acceptées à ±1 an. Mesuré en B4 : 28,6 % des titres TMDB diffèrent du titre ML brut normalisé, 6,7 % après nettoyage.
 4. **Calcul dans le navigateur** : fold-in, scores, curseur ; vérifié contre les cas de test du fold-in (`web/test-data/foldin_cases.json`).
 5. **Interface** : dépôt du fichier, liste de recos, curseur.
 6. **Adaptateur IMDb**.
@@ -304,7 +323,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 
 ---
 
-## 9. Décisions prises (6-7 novembre 2026)
+## 9. Décisions prises (6-7 novembre 2026, étapes 1-3)
 
 | Sujet | Décision |
 |---|---|
@@ -318,6 +337,9 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 | `item_idx` | Figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais |
 | Films récents | Après 2023 : **trou accepté au MVP**, modèle de contenu en v2. 2019-2023 : popularité corrigée par TMDB pour le curseur |
 | Framework | **React** + Vite + TypeScript |
+| Correspondance des titres | Normalisation v2 identique Python / TypeScript ; titre + année ±1 (TMDB ou ML), variantes ; **flou (Fuse.js) jamais utilisé automatiquement** (séries rattachées à des films), seulement proposé dans l'écran « films non reconnus » |
+| Export Letterboxd | Lu dans le navigateur ; `ratings.csv`, `watched.csv`, `diary.csv` seulement ; journal rattaché par (titre, année) |
+| Dataset Letterboxd 10M | **Non utilisé** (collecte probablement par scraping, pas de vérité terrain) |
 | IA pour les listes faites main | **Pas d'IA au MVP** (Fuse.js) ; API + Cloudflare Worker plus tard |
 | Licences | **Contact direct** avec GroupLens et TMDB |
 
