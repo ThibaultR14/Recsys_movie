@@ -8,14 +8,27 @@ from __future__ import annotations
 
 import unicodedata
 
+NORMALIZATION_VERSION = "titles-v2"
+
 
 def normalize_title(title: str | None) -> str:
-    """Lowercase, strip accents and punctuation, collapse spaces."""
+    """Title key, v2 (docs/etape-3-letterboxd.md, D1). Must stay identical to the TypeScript
+    `normalize` in web/src/matching/normalize.ts (shared cases: shared/fixtures/).
+
+    casefold -> NFKD -> drop every mark (category M) -> keep letters and numbers (categories L, N),
+    anything else becomes a space -> collapse spaces. Defined on Unicode categories only, so that
+    JavaScript can reproduce it with \\p{M}, \\p{L}, \\p{N} (v1 used combining classes and isalnum).
+    """
     if not title:
         return ""
     t = unicodedata.normalize("NFKD", title.casefold())
-    t = "".join(c if c.isalnum() else " " for c in t if not unicodedata.combining(c))
-    return " ".join(t.split())
+    out = []
+    for c in t:
+        cat = unicodedata.category(c)[0]
+        if cat == "M":
+            continue
+        out.append(c if cat in "LN" else " ")
+    return " ".join("".join(out).split())
 
 
 ARTICLES = ("the", "a", "an", "les", "le", "la", "l'", "il", "el", "der", "die", "das")

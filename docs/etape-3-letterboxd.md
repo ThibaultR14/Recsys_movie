@@ -231,6 +231,15 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
 *À remplir à la fin de chaque sous-étape.*
 
 ### E1
+
+*7 novembre 2026.* Code : `pipeline/titles.py` (v2, `NORMALIZATION_VERSION = "titles-v2"`), `pipeline/title_fixtures.py` (`casefold-table`, `catalog-keys`), `pipeline/tests/test_titles.py` (214 tests au total, tous verts). Fichiers partagés versionnés : `shared/fixtures/title_normalization.json`, `shared/fixtures/casefold_table.json`.
+
+- **Effet de la v2** : sur les 33 252 chaînes de titre du catalogue (`tmdb_title`, `tmdb_original_title`, `ml_title`), **309 changent de forme normalisée, toutes en écriture non latine** (signes vocaliques indiens, thaïs… supprimés au lieu de devenir des espaces) ; aucune chaîne latine ne change.
+- **Catalogue reconstruit** (`build_catalog.py` puis `enrich_tmdb.py` depuis le cache) et comparé à la sauvegarde : `catalog.parquet`, `ratings_filtered.parquet`, `movie_id_merges.parquet` et `tmdb_mismatch.csv` **identiques** ; l'empreinte SHA-256 de `catalog.parquet` est celle enregistrée à l'entraînement du modèle final. **Pas d'arrêt, pas de réentraînement.**
+- **Repli de casse** : 183 caractères déjà en minuscules ont un `casefold` différent (ß → ss, ς → σ, µ → μ, ſ → s…). Vérifié en Python sur **tous les points de code Unicode** : `lower()` puis cette table = `casefold()`. La table versionnée est contrôlée à chaque test (elle doit rester égale à la table recalculée).
+- **Cas partagés** : 78 cas écrits à la main, en 10 groupes (bases, accents et signes, lettres sans décomposition comme æ œ ø ł, repli de casse, compatibilité NFKD comme ½ ⅓ ﬁ Ⅻ et pleine chasse, ponctuation, chiffres, écritures non latines, signes indiens, formes MovieLens). Sorties relues une à une. À noter : « 8½ » → `81 2`, « Schindler's List » → `schindler s list`, « Mr. & Mrs. Smith » → `mr mrs smith` (le « & » disparaît : la variante « & » ↔ « and » est traitée par le repli 1 de D5).
+- **Test exhaustif** : `web/test-data/catalog_title_keys.json` (33 252 chaînes, non versionné) généré pour E3.
+
 ### E2
 ### E3
 ### E4

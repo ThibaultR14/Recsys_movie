@@ -1,0 +1,396 @@
+{
+ "description": "Title normalisation cases shared by pytest and Vitest (docs/etape-3-letterboxd.md, D1). Inputs chosen by hand; expected values reviewed by hand.",
+ "norm": "titles-v2",
+ "cases": [
+  {
+   "group": "basics",
+   "input": "Toy Story",
+   "expected": "toy story"
+  },
+  {
+   "group": "basics",
+   "input": "  Toy   Story  ",
+   "expected": "toy story"
+  },
+  {
+   "group": "basics",
+   "input": "TOY STORY",
+   "expected": "toy story"
+  },
+  {
+   "group": "basics",
+   "input": "Whiplash",
+   "expected": "whiplash"
+  },
+  {
+   "group": "basics",
+   "input": "",
+   "expected": ""
+  },
+  {
+   "group": "basics",
+   "input": "?",
+   "expected": ""
+  },
+  {
+   "group": "basics",
+   "input": "...",
+   "expected": ""
+  },
+  {
+   "group": "basics",
+   "input": "tab\tsep",
+   "expected": "tab sep"
+  },
+  {
+   "group": "basics",
+   "input": "line\nbreak",
+   "expected": "line break"
+  },
+  {
+   "group": "basics",
+   "input": "a​b",
+   "expected": "a b"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Amélie",
+   "expected": "amelie"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Le Fabuleux Destin d'Amélie Poulain",
+   "expected": "le fabuleux destin d amelie poulain"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Léon: The Professional",
+   "expected": "leon the professional"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Çà et là",
+   "expected": "ca et la"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Ça",
+   "expected": "ca"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Smörgåsbord",
+   "expected": "smorgasbord"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Ñandú",
+   "expected": "nandu"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Café́",
+   "expected": "cafe"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Café",
+   "expected": "cafe"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Reël",
+   "expected": "reel"
+  },
+  {
+   "group": "accents_and_marks",
+   "input": "Les Misérables",
+   "expected": "les miserables"
+  },
+  {
+   "group": "letters_without_decomposition",
+   "input": "Æon Flux",
+   "expected": "æon flux"
+  },
+  {
+   "group": "letters_without_decomposition",
+   "input": "Œdipe roi",
+   "expected": "œdipe roi"
+  },
+  {
+   "group": "letters_without_decomposition",
+   "input": "Ørsted",
+   "expected": "ørsted"
+  },
+  {
+   "group": "letters_without_decomposition",
+   "input": "Łódź",
+   "expected": "łodz"
+  },
+  {
+   "group": "letters_without_decomposition",
+   "input": "Ð",
+   "expected": "ð"
+  },
+  {
+   "group": "letters_without_decomposition",
+   "input": "ıstanbul",
+   "expected": "ıstanbul"
+  },
+  {
+   "group": "letters_without_decomposition",
+   "input": "İstanbul",
+   "expected": "istanbul"
+  },
+  {
+   "group": "casefold",
+   "input": "Straße",
+   "expected": "strasse"
+  },
+  {
+   "group": "casefold",
+   "input": "Die weiße Rose",
+   "expected": "die weisse rose"
+  },
+  {
+   "group": "casefold",
+   "input": "STRASSE",
+   "expected": "strasse"
+  },
+  {
+   "group": "casefold",
+   "input": "ΑΛΈΞΗΣ ΖΟΡΜΠΆΣ",
+   "expected": "αλεξησ ζορμπασ"
+  },
+  {
+   "group": "casefold",
+   "input": "Αλέξης Ζορμπάς",
+   "expected": "αλεξησ ζορμπασ"
+  },
+  {
+   "group": "casefold",
+   "input": "Ὀδύσσεια",
+   "expected": "οδυσσεια"
+  },
+  {
+   "group": "casefold",
+   "input": "Ǆ",
+   "expected": "dz"
+  },
+  {
+   "group": "casefold",
+   "input": "ǅ",
+   "expected": "dz"
+  },
+  {
+   "group": "compatibility_nfkd",
+   "input": "8½",
+   "expected": "81 2"
+  },
+  {
+   "group": "compatibility_nfkd",
+   "input": "½",
+   "expected": "1 2"
+  },
+  {
+   "group": "compatibility_nfkd",
+   "input": "Naked Gun 33⅓: The Final Insult",
+   "expected": "naked gun 331 3 the final insult"
+  },
+  {
+   "group": "compatibility_nfkd",
+   "input": "ﬁnding ﬂow",
+   "expected": "finding flow"
+  },
+  {
+   "group": "compatibility_nfkd",
+   "input": "Ⅻ Monkeys",
+   "expected": "xii monkeys"
+  },
+  {
+   "group": "compatibility_nfkd",
+   "input": "Episode Ⅳ",
+   "expected": "episode iv"
+  },
+  {
+   "group": "compatibility_nfkd",
+   "input": "x²",
+   "expected": "x2"
+  },
+  {
+   "group": "compatibility_nfkd",
+   "input": "Ｓｐｉｒｉｔｅｄ　Ａｗａｙ",
+   "expected": "spirited away"
+  },
+  {
+   "group": "punctuation",
+   "input": "Schindler's List",
+   "expected": "schindler s list"
+  },
+  {
+   "group": "punctuation",
+   "input": "Schindler’s List",
+   "expected": "schindler s list"
+  },
+  {
+   "group": "punctuation",
+   "input": "WALL·E",
+   "expected": "wall e"
+  },
+  {
+   "group": "punctuation",
+   "input": "M*A*S*H",
+   "expected": "m a s h"
+  },
+  {
+   "group": "punctuation",
+   "input": "Mr. & Mrs. Smith",
+   "expected": "mr mrs smith"
+  },
+  {
+   "group": "punctuation",
+   "input": "Mr. and Mrs. Smith",
+   "expected": "mr and mrs smith"
+  },
+  {
+   "group": "punctuation",
+   "input": "Tomorrow, When the War Began",
+   "expected": "tomorrow when the war began"
+  },
+  {
+   "group": "punctuation",
+   "input": "Spider-Man: Across the Spider-Verse",
+   "expected": "spider man across the spider verse"
+  },
+  {
+   "group": "punctuation",
+   "input": "Spider‐Man",
+   "expected": "spider man"
+  },
+  {
+   "group": "punctuation",
+   "input": "(500) Days of Summer",
+   "expected": "500 days of summer"
+  },
+  {
+   "group": "punctuation",
+   "input": "!Women Art Revolution",
+   "expected": "women art revolution"
+  },
+  {
+   "group": "punctuation",
+   "input": "Kill Bill: Vol. 1",
+   "expected": "kill bill vol 1"
+  },
+  {
+   "group": "punctuation",
+   "input": "Kill Bill – Vol. 1",
+   "expected": "kill bill vol 1"
+  },
+  {
+   "group": "punctuation",
+   "input": "Mamma Mia! Here We Go Again",
+   "expected": "mamma mia here we go again"
+  },
+  {
+   "group": "punctuation",
+   "input": "L'Avventura",
+   "expected": "l avventura"
+  },
+  {
+   "group": "punctuation",
+   "input": "L’Avventura",
+   "expected": "l avventura"
+  },
+  {
+   "group": "punctuation",
+   "input": "Hamilton (2020)",
+   "expected": "hamilton 2020"
+  },
+  {
+   "group": "punctuation",
+   "input": "😀 Smile",
+   "expected": "smile"
+  },
+  {
+   "group": "punctuation",
+   "input": "Hello😀World",
+   "expected": "hello world"
+  },
+  {
+   "group": "digits",
+   "input": "Se7en",
+   "expected": "se7en"
+  },
+  {
+   "group": "digits",
+   "input": "2001: A Space Odyssey",
+   "expected": "2001 a space odyssey"
+  },
+  {
+   "group": "digits",
+   "input": "١٢٣",
+   "expected": "١٢٣"
+  },
+  {
+   "group": "non_latin_scripts",
+   "input": "千と千尋の神隠し",
+   "expected": "千と千尋の神隠し"
+  },
+  {
+   "group": "non_latin_scripts",
+   "input": "올드보이",
+   "expected": "올드보이"
+  },
+  {
+   "group": "non_latin_scripts",
+   "input": "Старикам тут не место",
+   "expected": "старикам тут не место"
+  },
+  {
+   "group": "non_latin_scripts",
+   "input": "ألف ليلة وليلة",
+   "expected": "الف ليلة وليلة"
+  },
+  {
+   "group": "non_latin_scripts",
+   "input": "שלום",
+   "expected": "שלום"
+  },
+  {
+   "group": "non_latin_scripts",
+   "input": "ภาพยนตร์",
+   "expected": "ภาพยนตร"
+  },
+  {
+   "group": "indic_marks_dropped",
+   "input": "पथेर पांचाली",
+   "expected": "पथर पचल"
+  },
+  {
+   "group": "indic_marks_dropped",
+   "input": "বৈঁচি",
+   "expected": "বচ"
+  },
+  {
+   "group": "indic_marks_dropped",
+   "input": "தீவிரவாதி",
+   "expected": "தவரவத"
+  },
+  {
+   "group": "movielens_forms_normalised_as_is",
+   "input": "Usual Suspects, The",
+   "expected": "usual suspects the"
+  },
+  {
+   "group": "movielens_forms_normalised_as_is",
+   "input": "Misérables, Les",
+   "expected": "miserables les"
+  },
+  {
+   "group": "movielens_forms_normalised_as_is",
+   "input": "City of Lost Children, The (Cité des enfants perdus, La)",
+   "expected": "city of lost children the cite des enfants perdus la"
+  }
+ ]
+}
