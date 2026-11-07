@@ -14,16 +14,16 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - **Site 100 % statique.** Pas de serveur, pas de base de données, pas de comptes.
 - **Tout le calcul de reco se fait dans le navigateur** (Web Worker). Les données de l'utilisateur ne quittent jamais son navigateur : aucun appel réseau ne doit contenir ses films ou ses notes.
 - **Pipeline Python hors ligne** (`pipeline/`) : MovieLens 32M + TMDB (+ IMDb datasets pour les contrôles hors ligne seulement, voir « Données IMDb ») → modèle **ALS** → fichiers statiques dans `web/public/data/`.
-- Arborescence : `pipeline/` (`config.py`, `download.py`, `build_catalog.py`, `enrich_tmdb.py`, `titles.py`, `manual_overrides.csv`, `{notebooks,tests,data/raw,data/processed,data/cache}`), `web/src/{adapters,matching,reco,components,pages,styles}`, `web/public/data/`, `.github/workflows/`, `docs/` (voir `docs/stack-technique.md` §7).
+- Arborescence : `pipeline/` (`config.py`, `download.py`, `build_catalog.py`, `enrich_tmdb.py`, `titles.py`, `manual_overrides.csv`, étape 2 : `split.py`, `metrics.py`, `baselines.py`, `evaluate.py`, `models/`, `train.py`, `train_ease.py`, `colab_bundle.py`, `slider.py`, `sweep_slider.py`, `slider_variants.py`, `popularity.py`, `export.py`, `{notebooks,tests,data/raw,data/processed,data/cache}`), `web/src/{adapters,matching,reco,components,pages,styles}`, `web/public/data/`, `web/test-data/` (ignoré), `.github/workflows/`, `docs/` (dont `etape-2-modele.md`, `figures/` ; voir `docs/stack-technique.md` §7).
 - Corrections manuelles du catalogue : **uniquement** via `pipeline/manual_overrides.csv` (`exclude` / `merge_into`, avec une raison), jamais en dur dans le code.
 - **Front** (`web/`) : **React + Vite + TypeScript**, Tailwind CSS, PapaParse, fflate, Fuse.js, idb-keyval.
 - Hébergement : Cloudflare Pages (ou GitHub Pages). Métadonnées TMDB rafraîchies chaque mois par GitHub Actions.
 
 ## Décisions prises (ne pas remettre en question sans raison)
 
-- Modèle en production : **ALS** (`implicit`). EASE uniquement pour comparer hors ligne.
+- Modèle en production : **ALS** (`implicit`), 64 facteurs, `regularization` 0,05, `alpha` 1, β 1, 30 itérations, réentraîné sur tous les utilisateurs, vecteurs en int8. EASE uniquement pour comparer hors ligne.
 - Catalogue : films avec **≥ 20 notes** MovieLens, ~20 000–25 000 films, ~5 Mo de données au total.
-- Curseur : `score_final = score − λ × log(popularité)`, λ suit le curseur.
+- Curseur : **plafond de popularité**. À chaque position, seuls les films avec une popularité ≤ plafond sont candidats, classés par le score du modèle ; positions ∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200 (∞ = ordre du modèle). Popularité = `max(ml_rating_count, arrondi(r × tmdb_vote_count))`, r ≈ 0,285 (films récents). Le re-classement `score − λ × log(popularité)` a été testé et écarté (`docs/etape-2-modele.md`, D5).
 - Films récents (après 2023) : **trou accepté au MVP**, à signaler honnêtement dans l'interface.
 - Import : architecture d'**adaptateurs** (un par source) qui produisent tous le même format interne `{ titre, annee, imdbId?, tmdbId?, noteNormalisee, date? }`. Notes normalisées en percentiles par utilisateur.
 - Pas d'IA au MVP pour les listes faites main : correspondance floue (Fuse.js).
@@ -40,6 +40,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - Données brutes (MovieLens, IMDb) dans `pipeline/data/raw/`, intermédiaires dans `pipeline/data/processed/`, cache des appels TMDB dans `pipeline/data/cache/` : **contenu ignoré par git** (seuls les `.gitkeep` sont versionnés).
 - **`item_idx` est figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais.** (Si une étape du pipeline retire des films avant l'entraînement, elle renumérote 0..n-1.)
 - **`web/public/data/` n'est pas versionné tant que GroupLens n'a pas répondu** sur la licence (données dérivées de MovieLens). Seul le `.gitkeep` y est suivi.
+- **Aucune note MovieLens brute dans le dépôt** : les cas de test du fold-in (`foldin_cases.json`) sont générés par `export.py` dans `pipeline/data/processed/export/` ou `web/test-data/`, tous deux ignorés par git ; les tests qui en dépendent sont sautés s'ils sont absents. (Un ancien commit les contenait : historique purgé le 7 novembre 2026.)
 
 ## Conventions
 
@@ -52,9 +53,9 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 ## Ordre de construction
 
 1. ✅ Pipeline de données : téléchargement MovieLens + IMDb, catalogue, correspondances d'ids (MovieLens ↔ IMDb ↔ TMDB via `links.csv`). Fait : 23 019 films (seuil 20 → 23 350, − 1 exclu à la main, − 315 séries/épisodes, − 15 fusions) ; TMDB : tmdb_id 99,96 %, titres/années 99,8 %, réalisateurs et affiches 99,7 % ; 51 films `recommendable = false`.
-2. Modèle ALS + évaluation hors ligne (Recall@20, NDCG@20, popularité moyenne, couverture), avec et sans curseur.
+2. ✅ Modèle ALS + évaluation hors ligne, avec et sans curseur. Fait (`docs/etape-2-modele.md`) : ALS 64 facteurs, NDCG@20 test **0,152** (EASE 0,172, −11 % ; populaire 0,084) ; curseur = plafond de popularité (8 positions) ; popularité hybride MovieLens/TMDB ; export int8 dans `web/public/data/` : `embeddings.bin` 1,57 Mo, `yty.bin`, `popularity.bin`, `model-meta.json` (1,57 Mo gzip au total) ; perte int8 < 0,08 % ; 22 cas de test du fold-in pour l'étape 4.
 3. Adaptateur Letterboxd + correspondance des titres (titre + année → id).
-4. Calcul dans le navigateur : fold-in ALS, scores, curseur.
+4. Calcul dans le navigateur : fold-in ALS, scores, curseur (plafond) ; à valider contre `web/test-data/foldin_cases.json` (régénérer avec `export.py export --out web` s'il manque).
 5. Interface (style C) : accueil / dépôt, analyse du fichier, résultats + curseur, fiche film.
 6. Adaptateur IMDb.
 7. Mise en ligne (après la réponse de GroupLens), tests avec 10–20 cinéphiles.
@@ -88,7 +89,22 @@ uv run python enrich_tmdb.py --limit 50  # essai TMDB, catalogue non modifié
 uv run python enrich_tmdb.py             # enrichissement complet (repart du cache data/cache/tmdb/)
 ```
 
+Étape 2 (modèle) :
+
+```sh
+uv run python split.py                    # découpage validation / test (déterministe)
+uv run python train.py search             # recherche ALS sur la validation
+uv run python slider_variants.py sweep    # variantes du curseur (validation) ; test : `test`
+uv run python export.py train             # modèle final, tous les utilisateurs (~3 min)
+uv run python export.py int8-check        # perte int8 sur le test
+uv run python export.py export            # → data/processed/export/ (relecture)
+uv run python export.py export --out web  # → web/public/data/ + web/test-data/foldin_cases.json
+uv run python export.py verify [--out web]  # relecture des fichiers + rejeu des cas de test
+```
+
 EASE (comparaison, ~6 Gio de RAM libre) : `uv run python train_ease.py ram` ; si insuffisant, `uv run python colab_bundle.py` puis `notebooks/ease_colab.ipynb` sur Colab.
+
+Si le catalogue change (`build_catalog.py`, `enrich_tmdb.py`), relancer `export.py train` avant `export` : l'ordre `item_idx` est sauvegardé avec les vecteurs et `export` refuse un catalogue différent.
 
 Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB : relancer ensuite `enrich_tmdb.py`.
 

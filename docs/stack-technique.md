@@ -69,18 +69,20 @@
 | Gestion de l'environnement | **uv** | Rapide, simple, reproductible |
 | Manipulation des données | **Polars** (ou pandas) | Polars tient 32 M de lignes sans problème sur un PC |
 | Calcul matriciel | **NumPy**, **SciPy** (matrices creuses) | Base de tous les modèles |
-| **Modèle retenu** | **ALS** via la librairie `implicit` | Vecteurs compacts, faciles à charger dans le navigateur |
-| Modèle de comparaison (hors ligne uniquement) | **EASE** codé en NumPy (~20 lignes) | Référence de précision pour juger ALS ; jamais embarqué dans le site |
+| **Modèle retenu** | **ALS** via la librairie `implicit` 0.7 (64 facteurs, voir « Modèle ») | Vecteurs compacts, faciles à charger dans le navigateur |
+| Modèle de comparaison (hors ligne uniquement) | **EASE** en NumPy/LAPACK, calculé sur Google Colab (RAM) | Référence de précision pour juger ALS ; jamais embarqué dans le site |
 | Modèle n°3 (plus tard) | **SASRec** (PyTorch) exporté en ONNX | Tient compte de l'ordre du journal de visionnage |
-| Évaluation | Scripts maison (Recall@20, NDCG@20, popularité moyenne, couverture du catalogue) | Mesurer précision **et** découverte |
+| Évaluation | Scripts maison (Recall@20, NDCG@20, popularité médiane, longue traîne, couverture, régularité) | Mesurer précision **et** découverte |
+| Figures | **matplotlib** (dépendance de développement) | Courbes du curseur, `docs/figures/` |
 | Expérimentation | **Jupyter** en local ou **Google Colab** (gratuit) | Colab si le PC manque de RAM |
 | Qualité du code | **ruff** | Lint + formatage |
 
 ### Points d'attention
 - **Taille du catalogue embarqué (décidé)** : seuil bas de **≥ 20 notes** dans MovieLens, cible **~20 000 à 25 000 films**. On garde volontairement la longue traîne (ce sont les pépites). Seuil ajusté pour rester autour de **5 Mo** de données au total. **Réel : 23 019 films** (voir « Pipeline de données » ci-dessous).
 - **Pourquoi ALS et pas EASE en production** : EASE produit une matrice film × film, trop lourde pour le navigateur. ALS donne un vecteur de 64-128 nombres par film.
-- **Compression** : vecteurs en `float16` ou quantifiés en `int8` → 23 019 films × 64 dims × 1 octet ≈ **1,5 Mo** (≈ 1,4 Mo gzip, mesuré à l'exploration des seuils).
+- **Compression (fait)** : vecteurs quantifiés en **`int8`** (une échelle par film) → `embeddings.bin` = **1 565 308 octets** (1,46 Mo gzip). Perte mesurée sur le test : < 0,08 % de NDCG@20 et Recall@20.
 - **Films récents (après 2023), décidé** : absents de MovieLens, donc non recommandables. **On accepte le trou au MVP** et on l'affiche honnêtement sur le site. En v2 : modèle basé sur le contenu (genres, mots-clés, réalisateur via TMDB).
+- **Films de 2019-2023** : présents, mais avec peu de notes MovieLens parce que récents. Pour le curseur, leur popularité est relevée avec les votes TMDB (popularité hybride, voir « Modèle »).
 
 ### Pipeline de données (étape 1, faite)
 
@@ -118,17 +120,43 @@ Colonnes et règles à retenir :
 - **`recommendable`** (publiable) : `false` pour les films encore en `tmdb_mismatch` (51). Ils restent dans le catalogue et l'entraînement, mais ne sont jamais affichés en reco.
 - **`item_idx`** = 0..n-1 dans l'ordre du catalogue. **Il est figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais.** Une étape qui retire des films avant l'entraînement renumérote.
 
+### Modèle (étape 2, faite)
+
+Détail complet, chiffres et figures : `docs/etape-2-modele.md` (décisions D1-D9, résultats en section 5).
+
+- **Protocole** : 10 000 utilisateurs de validation et 10 000 de test, jamais vus à l'entraînement ; pour chacun, les 80 % de notes les plus anciennes servent de fold-in, les 20 % les plus récentes sont à retrouver. Réglages sur la validation, test évalué une fois par modèle retenu.
+- **Signal** : tout film vu est un positif, pondéré par le percentile de sa note dans l'historique de l'utilisateur (`r = 1 + β·p`, β = 1).
+- **ALS retenu** (configuration A) : 64 facteurs, `regularization` 0,05, `alpha` 1, β 1, 30 itérations. Fold-in maison en NumPy, identique au recalcul d'`implicit` ; c'est la référence de la version TypeScript.
+- **Résultats test** (NDCG@20) : ALS **0,1522** ; EASE (référence, jamais embarqué) 0,1715, soit ALS à −11,3 % ; `populaire` 0,0841 ; hasard 0,0010.
+- **Curseur connu ↔ pépite** : **plafond de popularité**. À la position `plafond`, seuls les films avec au plus `plafond` « notes » sont candidats, classés par le score du modèle ; positions ∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200. Retenu après comparaison de trois variantes (le re-classement `score − λ × log(popularité)` prévu au départ ne descendait pas assez et donnait des listes mixtes ou identiques pour tous).
+- **Popularité** = `max(ml_rating_count, arrondi(r × tmdb_vote_count))`, r = médiane MovieLens / TMDB des films de 2010-2018 (0,285) : corrige les films récents, sous-représentés dans MovieLens.
+- **Modèle final** : configuration A réentraînée sur tous les utilisateurs (200 948), vecteurs en int8.
+
+| Script (`pipeline/`) | Rôle |
+|---|---|
+| `split.py` | découpage validation / test / entraînement → `data/processed/split/` |
+| `metrics.py`, `baselines.py`, `evaluate.py` | métriques, références `populaire` / hasard, protocole d'évaluation |
+| `models/als.py`, `train.py` | signal, entraînement ALS, fold-in NumPy, recherche d'hyperparamètres |
+| `models/ease.py`, `train_ease.py`, `colab_bundle.py`, `notebooks/ease_colab.ipynb` | EASE (comparaison), paquet pour Google Colab |
+| `slider.py`, `sweep_slider.py`, `slider_variants.py` | curseur : variantes, balayages, figures, évaluation test |
+| `popularity.py` | popularité hybride MovieLens + TMDB |
+| `export.py` | modèle final, int8, fichiers du site, cas de test du fold-in |
+
 ### Fichiers produits (dans `web/public/data/`)
-Écrits par `export.py` (à venir). **Uniquement des champs MovieLens et TMDB**, rien qui vienne des datasets IMDb.
+Écrits par `export.py` (sauf `catalog.json` et `title-index.json`, étapes 3-4). **Uniquement des champs MovieLens et TMDB**, rien qui vienne des datasets IMDb (garde-fou `FORBIDDEN_WEB_PREFIXES`). Non versionnés tant que GroupLens n'a pas répondu.
 
-| Fichier | Contenu | Taille (estimée à l'exploration, gzip, seuil 20) |
+| Fichier | Contenu | Taille (gzip) |
 |---|---|---|
-| `catalog.json` | `item_idx`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, titre et titre original TMDB, `year`, réalisateurs TMDB, `poster_path`, genres MovieLens, `recommendable` | ~1,35-1,5 Mo (gzip/brotli par l'hébergeur) |
-| `embeddings.bin` | vecteurs des films (binaire, ordre = `item_idx`) | ~1,4 Mo (int8, 64 dims) |
-| `popularity.bin` | `ml_rating_count` ou `tmdb_vote_count` (choix à l'étape 2), en log, pour le curseur | ~40 Ko |
-| `title-index.json` | index de correspondance : `tmdb_title`, `tmdb_original_title`, `ml_title` nettoyé + titre alternatif entre parenthèses, normalisés, avec les deux années (TMDB et ML) | à mesurer |
+| `embeddings.bin` | en-tête `PEPE` (version, `n_items`, `dims`), vecteurs int8 23 019 × 64 (ordre = `item_idx`), une échelle float32 par film | 1,57 Mo (1,46 Mo) |
+| `yty.bin` | `YᵀY` 64 × 64 en float32, calculé sur les vecteurs déquantifiés (fold-in) | 16 Ko (12 Ko) |
+| `popularity.bin` | popularité hybride (uint32 par film) : le plafond du curseur porte sur elle | 92 Ko (42 Ko) |
+| `model-meta.json` | hyperparamètres, formules (signal, confiance, fold-in, popularité), positions du curseur, `movie_id` par `item_idx`, films non recommandables, versions des données | 140 Ko (58 Ko) |
+| `catalog.json` (étape 3-4) | `item_idx`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, titre et titre original TMDB, `year`, réalisateurs TMDB, `poster_path`, genres MovieLens, `recommendable` | ~1,35-1,5 Mo estimé |
+| `title-index.json` (étape 3) | index de correspondance : `tmdb_title`, `tmdb_original_title`, `ml_title` nettoyé + titre alternatif entre parenthèses, normalisés, avec les deux années (TMDB et ML) | à mesurer |
 
-Total estimé ≈ **2,8 Mo** gzip hors index des titres, sous la cible de ~5 Mo.
+Modèle : **1,57 Mo** gzip mesuré ; avec `catalog.json` ≈ 3 Mo, sous la cible de ~5 Mo.
+
+Les **cas de test du fold-in** (`foldin_cases.json`, 22 historiques, vecteur et top 10 attendus aux positions ∞, 2 000 et 500) contiennent des notes MovieLens brutes : ils sont écrits dans `web/test-data/` (ignoré par git, hors de `web/public/`, donc jamais servi) et ne sont **jamais versionnés**.
 
 ---
 
@@ -154,11 +182,14 @@ Total estimé ≈ **2,8 Mo** gzip hors index des titres, sous la cible de ~5 Mo.
 | Qualité du code | **ESLint** + **Prettier** | Standard |
 
 ### Comment on calcule une recommandation (ALS)
-1. On construit le vecteur de goût de l'utilisateur à partir de ses films notés (« fold-in » : une petite résolution de moindres carrés, faisable dans le navigateur).
-2. Score de chaque film = produit scalaire entre ce vecteur et le vecteur du film.
-3. On retire les films déjà vus et les films `recommendable = false`.
-4. **Curseur** : `score_final = score − λ × log(popularité)`, λ suit la position du curseur.
-5. On affiche les 50 meilleurs.
+1. Signal : pour chaque film vu, `r = 1 + β·p`, `p` = percentile de sa note dans l'historique de l'utilisateur (0,5 sans note).
+2. Vecteur de goût de l'utilisateur (« fold-in ») : résolution d'un système 64 × 64, `(YᵀY + reg·I + Σ (C − 1) y yᵀ) x = Σ C y` avec `C = alpha·r`, `YᵀY` lu dans `yty.bin`. Quelques millisecondes dans le navigateur.
+3. Score de chaque film = produit scalaire entre ce vecteur et le vecteur du film (déquantifié).
+4. On retire les films déjà vus et les films non recommandables (`model-meta.json`).
+5. **Curseur** : on ne garde que les films dont la popularité (`popularity.bin`) est au plus le plafond de la position choisie (∞ = pas de filtre), classés par score.
+6. On affiche les 50 meilleurs.
+
+Le score moyen de la liste par rapport à la position ∞ mesure l'éloignement du goût de l'utilisateur (0,17 en moyenne au plafond 2 000, 0,06 à 500, plus bas pour les profils grand public) : piste pour un avertissement dans l'interface (étape 5).
 
 ---
 
@@ -206,11 +237,15 @@ projet/
 │   ├── enrich_tmdb.py        # métadonnées TMDB + vérification des ids → catalog.parquet
 │   ├── titles.py             # normalisation des titres (partagée)
 │   ├── manual_overrides.csv  # corrections manuelles du catalogue (versionné)
-│   ├── train.py              # (à venir) entraîne ALS / EASE
-│   ├── evaluate.py           # (à venir) Recall, NDCG, popularité, couverture
-│   ├── export.py             # (à venir) écrit les fichiers dans web/public/data
-│   ├── notebooks/            # 01_explore.py (seuils du catalogue)
-│   ├── tests/                # test_download, test_catalog, test_manual_overrides, test_enrich_tmdb…
+│   ├── split.py              # découpage validation / test / entraînement
+│   ├── metrics.py, baselines.py, evaluate.py  # protocole d'évaluation
+│   ├── models/               # als.py (ALS + fold-in), ease.py (comparaison)
+│   ├── train.py, train_ease.py, colab_bundle.py  # entraînement, recherche, EASE (Colab)
+│   ├── slider.py, sweep_slider.py, slider_variants.py  # curseur
+│   ├── popularity.py         # popularité hybride MovieLens + TMDB
+│   ├── export.py             # modèle final, int8 → web/public/data, cas de test du fold-in
+│   ├── notebooks/            # 01_explore.py (seuils), ease_colab.ipynb (EASE sur Colab)
+│   ├── tests/                # un fichier de tests par module
 │   └── data/                 # raw/, processed/, cache/tmdb/ : contenu ignoré par git
 ├── web/                      # site statique (Vite pas encore initialisé)
 │   ├── src/
@@ -220,9 +255,10 @@ projet/
 │   │   ├── components/       # composants React (Curseur, CarteFilm, ZoneDepot…)
 │   │   ├── pages/            # Accueil, Analyse, Resultats, Fiche
 │   │   └── styles/           # tokens de la direction C (design-system.md)
-│   └── public/data/          # fichiers produits par le pipeline
+│   ├── public/data/          # fichiers produits par le pipeline (non versionnés)
+│   └── test-data/            # cas de test du fold-in (ignoré par git, jamais servi)
 ├── .github/workflows/        # mise à jour mensuelle TMDB (à venir)
-├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, maquette
+├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md, maquette, figures/
 └── CLAUDE.md                 # instructions pour Claude Code
 ```
 
@@ -236,6 +272,16 @@ uv run python enrich_tmdb.py --limit 50  # essai sur 50 films, catalogue non mod
 uv run python enrich_tmdb.py             # tout le catalogue (~20 min sans cache, quelques minutes au plus avec)
 uv run ruff check . && uv run ruff format --check .
 uv run pytest
+
+# étape 2 (modèle)
+uv run python split.py                  # découpage validation / test
+uv run python train.py search           # recherche ALS (validation)
+uv run python slider_variants.py sweep  # variantes du curseur (validation)
+uv run python export.py train           # modèle final (tous les utilisateurs, ~3 min)
+uv run python export.py int8-check      # perte int8 (test)
+uv run python export.py export          # → data/processed/export/ (relecture)
+uv run python export.py export --out web  # → web/public/data/ + web/test-data/
+uv run python export.py verify [--out web]  # relecture + rejeu des cas de test du fold-in
 ```
 
 Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB : relancer ensuite `enrich_tmdb.py` (il repart du cache).
@@ -248,9 +294,9 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 ## 8. Ordre de construction conseillé
 
 1. ✅ **Pipeline de données** : télécharger MovieLens + IMDb, construire le catalogue et les correspondances d'ids (fait : 23 019 films, enrichis par TMDB, voir §3).
-2. **Modèle** : ALS (et EASE pour comparer), évaluation hors ligne avec et sans curseur.
+2. ✅ **Modèle** : ALS (et EASE pour comparer), évaluation hors ligne avec et sans curseur (fait : ALS 64 facteurs, NDCG@20 test 0,152, EASE 0,172 ; curseur = plafond de popularité ; export int8 de 1,57 Mo, voir §3 « Modèle »).
 3. **Adaptateur Letterboxd** + correspondance des titres, testé sur nos propres exports. L'index de correspondance utilise `tmdb_title`, `tmdb_original_title` et `ml_title` nettoyé (article replacé : « Usual Suspects, The » → « The Usual Suspects »), plus le titre alternatif entre parenthèses, tous normalisés (casse, accents, ponctuation, comme `pipeline/titles.py`), avec les deux années (TMDB et ML) acceptées à ±1 an. Mesuré en B4 : 28,6 % des titres TMDB diffèrent du titre ML brut normalisé, 6,7 % après nettoyage.
-4. **Calcul dans le navigateur** : fold-in, scores, curseur.
+4. **Calcul dans le navigateur** : fold-in, scores, curseur ; vérifié contre les cas de test du fold-in (`web/test-data/foldin_cases.json`).
 5. **Interface** : dépôt du fichier, liste de recos, curseur.
 6. **Adaptateur IMDb**.
 7. Mise en ligne, tests avec 10-20 cinéphiles.
@@ -258,16 +304,19 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 
 ---
 
-## 9. Décisions prises (6 novembre 2026)
+## 9. Décisions prises (6-7 novembre 2026)
 
 | Sujet | Décision |
 |---|---|
-| Modèle en production | **ALS** (EASE seulement pour comparer hors ligne) |
+| Modèle en production | **ALS** (EASE seulement pour comparer hors ligne) : 64 facteurs, `reg` 0,05, `alpha` 1, β 1, 30 itérations, réentraîné sur tous les utilisateurs |
+| Curseur | **Plafond de popularité**, 8 positions (∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200), classement par le score du modèle ; pas de transition douce au MVP |
+| Popularité | `max(ml_rating_count, arrondi(0,285 × tmdb_vote_count))` (correction des films récents) |
+| Export | Vecteurs **int8** + `YᵀY` déquantifié ; cas de test du fold-in jamais versionnés (notes MovieLens brutes) |
 | Catalogue | **≥ 20 notes**, ~20 000 à 25 000 films (réel : 23 019), ~5 Mo de données |
 | Données IMDb | **Hors ligne uniquement** (jointures, vérif des imdbId, contrôles qualité), jamais embarquées ; colonnes préfixées `imdbds_` |
 | Corrections du catalogue | Fusions de doublons, filtre de type, `manual_overrides.csv` versionné ; films en mismatch TMDB gardés pour l'entraînement mais `recommendable = false` |
 | `item_idx` | Figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais |
-| Films récents | **Trou accepté au MVP**, modèle de contenu en v2 |
+| Films récents | Après 2023 : **trou accepté au MVP**, modèle de contenu en v2. 2019-2023 : popularité corrigée par TMDB pour le curseur |
 | Framework | **React** + Vite + TypeScript |
 | IA pour les listes faites main | **Pas d'IA au MVP** (Fuse.js) ; API + Cloudflare Worker plus tard |
 | Licences | **Contact direct** avec GroupLens et TMDB |
