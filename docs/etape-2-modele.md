@@ -84,19 +84,31 @@ Candidats pour un utilisateur : films `recommendable = true` qui ne sont pas dan
 - Implémentation **maison en NumPy** (`pipeline/models/als.py`), qui servira de référence pour la version TypeScript. Elle doit donner le même résultat que le recalcul d'utilisateur fourni par `implicit` (critère en C2).
 - `YᵀY` (64 × 64) est précalculé et exporté (C5) : le navigateur n'a qu'un petit système 64 × 64 à résoudre.
 
-### D5. Curseur connu ↔ pépite — **en révision, voir complément C4** (section 5)
+### D5. Curseur connu ↔ pépite — plafond de popularité (V3)
 
-> **7 novembre 2026** : sur [−0,5 ; 2], le curseur D5 ne descend pas assez (B à λ = 2 : ~19 000 notes en médiane) et n'a pas le même effet pour tous (têtes de liste à 13-26 σ). Décisions de Thibault : popularité = `ml_rating_count` (`tmdb_vote_count` abandonné) ; pas de λ < 0 (l'extrémité gauche du curseur = l'ordre du modèle) ; choix A/B suspendu jusqu'à la comparaison de trois variantes (V1 D5 prolongé, V2 reclassement du top K, V3 plafond de popularité). La formule ci-dessous est celle de la version initiale (V1).
+> Révisé le 7 novembre 2026 après C4 (section 5 : « C4 » puis « C4 — complément »). Décisions de Thibault : variante **V3**, configuration **A**, popularité **`ml_rating_count`**, 8 positions, pas de transition douce au MVP.
 
-Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'un même λ ait le même effet pour tous :
+**Règle.** À la position `plafond`, les candidats sont les films recommandables, hors films déjà vus, **avec au plus `plafond` notes MovieLens** ; ils sont classés **par le score du modèle** (`x_u · y_i`), sans autre re-pondération.
 
-- `s_ui` = score ALS **centré-réduit sur les candidats de l'utilisateur** (moyenne 0, écart-type 1).
-- `z_i` = `log(1 + popularité_i)` **centré-réduit sur l'ensemble des films recommandables** (calculé une fois).
-- **Score final : `score_ui = s_ui − λ × z_i`.**
-- Balayage de λ de **−0,5 à 2,0 par pas de 0,1** (les valeurs négatives favorisent les classiques : à voir si l'extrémité gauche du curseur doit aller jusque-là).
-- Deux sources de popularité testées : `ml_rating_count` (comptes d'entraînement) et `tmdb_vote_count` (manquant → plus petite valeur observée).
-- **Livrable clé** : la courbe `NDCG@20` (ou `Recall@20`) en fonction de `pop_mediane@20` quand λ varie, une courbe par source de popularité, avec les références `populaire` et `hasard` en points.
-- Le choix de la source et de la plage de λ se fait sur la validation, **par Thibault**, au vu des courbes (C4). Le choix de la configuration ALS finale aussi (deux candidates, voir C4).
+- Positions du curseur, de gauche à droite : **∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200**. L'extrémité gauche (∞) est l'ordre naturel du modèle. Pas de position « classiques » (pas de bonus aux films populaires).
+- Popularité = **`ml_rating_count`**. `tmdb_vote_count` est abandonné : à fort curseur, il faisait remonter des films de fans et des curiosités peu présentes sur TMDB. Les comptes MovieLens s'arrêtent en 2023, comme le catalogue et le modèle.
+- **Comptes utilisés** : l'évaluation (validation, test) utilise les comptes des **seuls utilisateurs d'entraînement** (pas de fuite, D3). **En production, le plafond porte sur les comptes complets** (`popularity.bin`, tous les utilisateurs), qui sont **~10 % plus élevés** : à une position donnée, le site propose donc un peu moins de films que l'évaluation (les films juste sous le plafond en entraînement peuvent le dépasser en comptes complets). L'écart est accepté.
+- **Pas de transition douce au MVP** : un film à 2 001 notes disparaît à la position 2 000. Une pénalité progressive près du plafond reste une piste pour plus tard.
+
+**Pourquoi V3** (chiffres : validation, configuration A)
+- **Même effet pour tous** : l'écart interquartile, entre utilisateurs, de la popularité médiane de leur liste est 10 à 30 fois plus petit qu'avec les autres variantes à popularité égale (plafond 2 000 : 158 notes, contre 1 144 pour V2).
+- **Listes homogènes** : au plafond 2 000, 97 % des films ont entre 1 000 et 2 000 notes ; au plafond 500, 99 % entre 200 et 500. Pas de mélange « quelques films très connus + beaucoup d'obscurs ».
+- **Descend vraiment** : jusqu'à ~170 notes en médiane (plafond 200), avec des listes cohérentes avec le goût de l'utilisateur (profil cinéphile au plafond 500 : *Stroszek*, *Pickpocket*, *Bob le Flambeur*, *Au hasard Balthazar*).
+- **Calcul trivial dans le navigateur** : un filtre sur `popularity.bin` avant le tri des scores ; pas de centrage-réduction, pas de paramètre à régler, et l'interface peut l'expliquer simplement (« des films de moins de 2 000 notes »).
+
+**Variantes écartées**
+- **V1 — D5 initial** (`score = s − λ·z`, `s` = score centré-réduit sur tous les candidats de l'utilisateur, `z` = `log(1 + popularité)` centré-réduit sur les films recommandables). Sur [−0,5 ; 2], effet quasi nul pour A (popularité médiane −8 %) : les têtes de liste sont à 13-26 σ alors que `z` ne varie que de ~5. Prolongé, le passage est brutal (λ = 3 → 5 : 23 844 → 2 594 notes), puis les listes deviennent à deux bosses (A, λ = 4 : 45 % de films à plus de 10 000 notes, 51 % à 200 ou moins), et la moitié basse est **la même pour tous** (les films à ~20 notes du catalogue) : écart interquartile 0, couverture effondrée.
+- **V2 — reclassement du top K** (`s` centré-réduit dans les K meilleurs candidats du modèle, puis `s − λ·z`). Listes cohérentes et meilleur NDCG à popularité égale, mais **plancher fixé par K** (K = 200 : ~4 800 notes ; 500 : ~1 700 ; 1 000 : ~650) et **listes mixtes** (A, « ≈ 10 000 » : 47 % de films à plus de 10 000 notes ; pour un profil grand public, *Get Shorty* et *Ghost* restent en tête à « ≈ 2 000 »). Régularité 3 à 10 fois moins bonne que V3.
+- Configuration **B** (alpha 10) : écartée. Avec V3, A est meilleure au-dessus de ~5 000 notes et à la position ∞ (là où la plupart des utilisateurs commencent) ; B n'est un peu meilleure qu'en dessous, dans les intervalles de confiance.
+
+**Biais du NDCG contre les pépites.** Le held-out des utilisateurs MovieLens est surtout fait de films populaires : toute position qui retire des films populaires perd mécaniquement du NDCG, même si ses recommandations sont bonnes. On ne compare donc **jamais** des NDCG d'une position à l'autre comme une perte de qualité ; on compare des variantes **entre elles, à popularité égale**. Et même à `pop_mediane@20` égale, une **liste mixte** garde un NDCG plus élevé qu'une liste homogène (ses quelques films connus captent les succès) : c'est une partie de l'avantage apparent de V2, d'où la mesure de **composition** des listes par tranche de popularité.
+
+**Livrables** (C4) : figures `etape2-curseur-validation.png` (premier balayage, V1), `etape2-curseur-variantes.png` (V1 / V2 / V3), `etape2-curseur-test.png` (A + V3 sur le test) ; listes du contrôle qualitatif dans `docs/etape-2-curseur-qualitatif.md`.
 
 ### D6. Hyperparamètres d'ALS
 
@@ -124,13 +136,13 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 
 - Vecteurs des films en **int8**, échelle symétrique par film : `scale_i = max|y_i| / 127`, une échelle float32 par film.
 - **`YᵀY` est calculé à partir des vecteurs déquantifiés**, pour que le navigateur fasse exactement le même calcul que le test.
-- Critère : perte **< 1 % relative** sur `NDCG@20` et `Recall@20` (test, à λ = 0 et à une valeur de λ intermédiaire) entre float32 et int8.
+- Critère : perte **< 1 % relative** sur `NDCG@20` et `Recall@20` (test, aux positions ∞ et 2 000 du curseur, D5) entre float32 et int8.
 - Fichiers produits dans `web/public/data/` (non versionnés) :
   - `embeddings.bin` : en-tête (magie `PEPE`, version, `n_items`, `dims`, little-endian), puis vecteurs int8 `n_items × dims`, puis échelles float32 `n_items` ;
   - `yty.bin` : float32 `dims × dims` ;
   - `model-meta.json` : version, date, `dims`, `regularization`, `alpha`, `β`, formule de confiance, source de popularité choisie, liste des `movie_id` dans l'ordre de `item_idx`, version des données (hash du manifeste) ;
-  - `popularity.bin` : comptes de la source choisie (uint32), dans l'ordre de `item_idx`.
-- **Cas de test du fold-in** : `pipeline/tests/fixtures/foldin_cases.json` (versionné) : 20 historiques de test (films, percentiles), vecteur attendu et top 10 attendu à λ = 0 et à λ intermédiaire. Calculés avec les vecteurs **déquantifiés**. Ils serviront à tester le code TypeScript à l'étape 4.
+  - `popularity.bin` : `ml_rating_count` **complets** (tous les utilisateurs, uint32), dans l'ordre de `item_idx` ; c'est sur eux que porte le plafond du curseur (D5).
+- **Cas de test du fold-in** : `pipeline/tests/fixtures/foldin_cases.json` (versionné) : 20 historiques de test (films, percentiles), vecteur attendu et top 10 attendus aux positions ∞, 2 000 et 500 du curseur (plafond sur les comptes complets de `popularity.bin`). Calculés avec les vecteurs **déquantifiés**. Ils serviront à tester le code TypeScript à l'étape 4.
 - `catalog.json` et `title-index.json` ne sont **pas** produits ici (étapes 3-4).
 
 ### D9. Seuil ≥ 10 (optionnel)
@@ -1000,6 +1012,53 @@ Code : `pipeline/slider.py` (ajouts `top_pool`, `standardize_pool`, `rerank_pool
 | V3 plafond 200 | 0,00385 ± 0,00049 | 0,00388 | 163 | 156 | 1,000 | 0,1397 | 19 |
 
 </details>
+
+### C4 — décision et évaluation test (7 novembre 2026)
+
+**Décisions de Thibault** : curseur **V3** (plafond de popularité sur `ml_rating_count`), configuration **A** (B abandonnée) ; positions **∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200**, l'extrémité gauche (∞) étant l'ordre naturel du modèle ; pas de transition douce au MVP. D5 réécrit en conséquence (section 3), D8 aligné (critère int8 et cas de test aux positions du curseur).
+
+Code : `pipeline/slider_variants.py` (`test`, `test-figure`). Résultats : `data/processed/results/slider/v3_A_test.json` (métriques test, évaluées **une seule fois** ; le script refuse d'écraser), `v3_A_drift_{val,test}.json` (mesures pour l'interface). Figure : `docs/figures/etape2-curseur-test.png`.
+
+![Curseur retenu, test](figures/etape2-curseur-test.png)
+
+**Test vs validation** (A + V3, 10 000 utilisateurs chacun ; popularité = comptes d'entraînement)
+
+| Position | NDCG@20 validation | NDCG@20 test | Recall@20 val. / test | pop_mediane@20 val. / test | couverture@20 val. / test | longue_traine@20 test | régularité (IQR) test |
+|---|---|---|---|---|---|---|---|
+| ∞ | 0,15106 ± 0,00337 | 0,15215 ± 0,00334 | 0,18749 / 0,18946 | 28 564 / 28 524 | 0,0815 / 0,0811 | 0,000 | 15 164 |
+| 20 000 | 0,10203 ± 0,00275 | 0,10456 ± 0,00271 | 0,11957 / 0,12464 | 13 509 / 13 485 | 0,0794 / 0,0793 | 0,000 | 3 452 |
+| 10 000 | 0,06996 ± 0,00223 | 0,07171 ± 0,00223 | 0,07958 / 0,08018 | 7 464 / 7 454 | 0,0763 / 0,0750 | 0,000 | 1 201 |
+| 5 000 | 0,04688 ± 0,00182 | 0,04751 ± 0,00182 | 0,05077 / 0,05151 | 3 940 / 3 936 | 0,0789 / 0,0788 | 0,000 | 498 |
+| 2 000 | 0,02581 ± 0,00131 | 0,02530 ± 0,00128 | 0,02697 / 0,02677 | 1 624 / 1 624 | 0,0903 / 0,0892 | 0,009 | 155 |
+| 1 000 | 0,01394 ± 0,00097 | 0,01414 ± 0,00094 | 0,01360 / 0,01404 | 823 / 823 | 0,0971 / 0,0966 | 0,482 | 80 |
+| 500 | 0,00768 ± 0,00070 | 0,00709 ± 0,00068 | 0,00713 / 0,00682 | 415 / 415 | 0,1058 / 0,1054 | 1,000 | 36 |
+| 200 | 0,00325 ± 0,00046 | 0,00310 ± 0,00042 | 0,00317 / 0,00292 | 172 / 172 | 0,1157 / 0,1160 | 1,000 | 12 |
+
+- **Contrôle** : la position ∞ du test redonne exactement le résultat test de C2 (0,15215 ± 0,00334).
+- **Le test confirme la validation** à toutes les positions : écarts de NDCG@20 entre −0,0006 et +0,0025, toujours dans les intervalles de confiance ; popularité médiane, couverture, longue traîne et régularité quasi identiques (les plafonds fixent la popularité). Pas de sur-ajustement du choix du curseur.
+- Rappel (D5) : la baisse du NDCG le long du curseur mesure surtout le biais contre les pépites (held-out MovieLens surtout populaire), pas une baisse de qualité perçue. EASE (0,17154) et `populaire` (0,08413) sont en points de repère sur la figure.
+
+**Préparation de l'interface** (test ; mêmes mesures sur la validation, à ±0,003 près)
+
+| Position | listes < 20 films (comptes entr. / complets) | min. candidats (complets) | score relatif moyen | médiane | 10e centile | tiers pointu | tiers intermédiaire | tiers grand public | part des utilisateurs < 0,5 |
+|---|---|---|---|---|---|---|---|---|---|
+| ∞ | 0 % / 0 % | 19 314 | 1,000 | 1,000 | 1,000 | 1,000 | 1,000 | 1,000 | 0 % |
+| 20 000 | 0 % / 0 % | 19 293 | 0,693 | 0,719 | 0,423 | 0,809 | 0,738 | 0,532 | 18 % |
+| 10 000 | 0 % / 0 % | 19 159 | 0,477 | 0,474 | 0,206 | 0,652 | 0,498 | 0,281 | 55 % |
+| 5 000 | 0 % / 0 % | 18 884 | 0,316 | 0,296 | 0,112 | 0,470 | 0,316 | 0,163 | 85 % |
+| 2 000 | 0 % / 0 % | 18 097 | 0,169 | 0,140 | 0,058 | 0,272 | 0,156 | 0,078 | 98 % |
+| 1 000 | 0 % / 0 % | 17 109 | 0,098 | 0,076 | 0,036 | 0,163 | 0,085 | 0,046 | 100 % |
+| 500 | 0 % / 0 % | 15 788 | 0,056 | 0,042 | 0,022 | 0,094 | 0,046 | 0,028 | 100 % |
+| 200 | 0 % / 0 % | 13 100 | 0,028 | 0,021 | 0,011 | 0,044 | 0,022 | 0,016 | 100 % |
+
+- **Listes incomplètes** (moins de 20 candidats sous le plafond) : **aucune**, à aucune position, ni avec les comptes d'entraînement ni avec les comptes complets de production. Même au plafond 200, chaque utilisateur de test garde au moins 13 100 candidats (comptes complets). Le cas ne se présentera qu'avec des historiques énormes ; l'interface peut quand même prévoir le message.
+- **Éloignement du goût** : « score relatif » = score moyen du modèle (`x_u · y_i`) des 20 films proposés / même moyenne à la position ∞, par utilisateur. Il baisse vite : 0,69 au plafond 20 000, 0,48 à 10 000, **0,17 à 2 000, 0,06 à 500**. Plus l'utilisateur est « grand public », plus il s'éloigne : au plafond 500, 0,094 pour le tiers le plus pointu contre **0,028** pour le tiers grand public (tiers = popularité médiane des films de son fold-in). C'est ce qu'on voyait sur le profil grand public au plafond 500 (*Capernaum*, *Dangal*, *Drive My Car* pour un fan de *Mrs. Doubtfire*).
+- Pistes pour l'interface (étape 5, à décider plus tard) : un indicateur « ces films sont loin de tes goûts habituels » quand le score relatif de la liste passe sous un seuil (par ex. 0,1, atteint vers 1 000 notes en moyenne, dès 2 000 pour le tiers grand public) ; ou afficher le score relatif comme une jauge. Le score relatif se calcule dans le navigateur sans coût (il faut seulement garder le score moyen à la position ∞).
+
+**Choix faits sans demander (C4, test)**
+- Les nouvelles mesures sont aussi calculées sur la validation, pour comparer ; les métriques de qualité test ne sont calculées qu'une fois.
+- Score relatif sur les scores bruts du modèle (pas centrés-réduits) : les 20 premiers scores à ∞ sont toujours positifs, le rapport est bien défini. Rapport des moyennes par utilisateur, puis moyenne, médiane et 10e centile sur les utilisateurs.
+- Tiers d'utilisateurs définis par la popularité médiane (comptes d'entraînement) des films de leur fold-in, calculés séparément sur chaque split.
 
 ### C5
 ### C6

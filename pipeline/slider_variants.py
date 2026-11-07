@@ -15,6 +15,8 @@ Subcommands (from `pipeline/`):
     uv run python slider_variants.py composition  # -> results/slider/variants_composition_val.json
     uv run python slider_variants.py qualitative  # -> results/slider/variants_qualitative_test.json
     uv run python slider_variants.py figure       # -> docs/figures/etape2-curseur-variantes.png
+    uv run python slider_variants.py test         # A + V3 on test (once) -> results/slider/v3_A_*
+    uv run python slider_variants.py test-figure  # -> docs/figures/etape2-curseur-test.png
     uv run python slider_variants.py annex        # -> docs/etape-2-curseur-qualitatif.md
 """
 
@@ -31,6 +33,7 @@ import math  # noqa: E402
 import sys  # noqa: E402
 import time  # noqa: E402
 from datetime import UTC, datetime  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 import numpy as np  # noqa: E402
 
@@ -432,17 +435,224 @@ def cmd_annex() -> None:
     print(f"-> {ANNEX}")
 
 
+# --- Retained slider (D5 revised): A + V3, evaluated once on the test split -----------------------
+
+V3_TEST_JSON = sw.SLIDER_DIR / "v3_A_test.json"
+V3_DRIFT_JSON = sw.SLIDER_DIR / "v3_A_drift_{}.json"
+TERCILES = ("pointu", "intermediaire", "grand_public")
+TERCILE_NAMES = {
+    "pointu": "« pointu »",
+    "intermediaire": "intermédiaire",
+    "grand_public": "« grand public »",
+}
+
+
+def v3_lists(model, foldin, recommendable, counts, full_counts, caps, k):
+    """Per cap: top k (training-count cap), raw model scores of the list, candidate counts.
+
+    Returns {cap: (ranked, list_scores, n_cand_train, n_cand_full)}; ranked entries past the
+    number of candidates point to -inf scores (lists shorter than k are flagged by n_cand).
+    """
+    out = {cap: ([], [], [], []) for cap in caps}
+    for start in range(0, foldin.shape[0], ev.BATCH_SIZE):
+        batch = foldin[start : start + ev.BATCH_SIZE]
+        scores = model.scores(batch)
+        seen = slider.candidate_mask(batch, np.ones_like(recommendable))  # False on fold-in
+        for cap in caps:
+            cand = recommendable & (counts <= cap)
+            ranked = ev.top_k(scores.copy(), batch, cand, k)
+            out[cap][0].append(ranked)
+            out[cap][1].append(np.take_along_axis(scores, ranked, axis=1))
+            out[cap][2].append((seen & cand).sum(axis=1))
+            full = recommendable & (full_counts <= cap)
+            out[cap][3].append((seen & full).sum(axis=1))
+    return {cap: tuple(np.concatenate(p) for p in parts) for cap, parts in out.items()}
+
+
+def user_terciles(eval_set: ev.EvalSet, counts: np.ndarray) -> np.ndarray:
+    """0/1/2 = tercile of the median training popularity of the user's fold-in (0 = most niche)."""
+    fi = eval_set.foldin
+    med = np.array(
+        [np.median(counts[fi.indices[fi.indptr[u] : fi.indptr[u + 1]]]) for u in range(fi.shape[0])]
+    )
+    cuts = np.quantile(med, [1 / 3, 2 / 3])
+    return np.searchsorted(cuts, med, side="right")
+
+
+def drift_stats(lists: dict, terciles: np.ndarray, k: int) -> list[dict]:
+    """Per cap: short lists and mean model score of the list relative to the ∞ position."""
+    base = lists[math.inf][1].mean(axis=1)  # mean raw score of the top k at ∞, per user
+    rows = []
+    for cap, (_ranked, sc, n_train, n_full) in lists.items():
+        valid = np.isfinite(sc)
+        mean_sc = np.where(valid, sc, 0).sum(axis=1) / np.maximum(valid.sum(axis=1), 1)
+        ratio = mean_sc / base
+        top1 = sc[:, 0] / lists[math.inf][1][:, 0]
+        row = {
+            "cap": None if math.isinf(cap) else cap,
+            "share_short_lists_train_counts": float((n_train < k).mean()),
+            "share_short_lists_full_counts": float((n_full < k).mean()),
+            "min_candidates_train_counts": int(n_train.min()),
+            "min_candidates_full_counts": int(n_full.min()),
+            "score_ratio_mean": float(ratio.mean()),
+            "score_ratio_p10": float(np.percentile(ratio, 10)),
+            "score_ratio_median": float(np.median(ratio)),
+            "top1_score_ratio_median": float(np.median(top1)),
+            "score_ratio_mean_by_tercile": {
+                TERCILES[t]: float(ratio[terciles == t].mean()) for t in range(3)
+            },
+            "share_users_ratio_below_0.5": float((ratio < 0.5).mean()),
+        }
+        rows.append(row)
+    return rows
+
+
+def cmd_test() -> None:
+    """A + V3 at the 8 positions: test metrics (once), drift measures on validation and test."""
+    if V3_TEST_JSON.exists():
+        raise SystemExit(f"{V3_TEST_JSON.name} exists: the test split is evaluated once")
+    catalog = ev.load_catalog()
+    counts = ev.train_counts(catalog)
+    full_counts = sw.catalog_frame()["ml_rating_count"].to_numpy().astype(np.int64)
+    model = sw.adapter("A", catalog)
+    manifest = json.loads((SPLIT_DIR / "manifest.json").read_text())
+    for split in ("val", "test"):
+        eval_set = ev.load_eval_set(split, catalog)
+        lists = v3_lists(
+            model, eval_set.foldin, catalog.recommendable, counts, full_counts, V3_CAPS, TOP_K
+        )
+        terciles = user_terciles(eval_set, counts)
+        drift = drift_stats(lists, terciles, TOP_K)
+        sw.SLIDER_DIR.mkdir(parents=True, exist_ok=True)
+        meta = {
+            "config_name": "A",
+            "config": sw.CONFIGS["A"],
+            "split": split,
+            "k": TOP_K,
+            "slider": "V3 popularity cap on training-user ml_rating_count",
+            "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "split_sha256": manifest["sha256"],
+            "n_users": len(eval_set.user_ids),
+            "tercile_sizes": [int((terciles == t).sum()) for t in range(3)],
+        }
+        path = Path(str(V3_DRIFT_JSON).format(split))
+        path.write_text(json.dumps(meta | {"positions": drift}, indent=2) + "\n")
+        print(f"-> {path}", flush=True)
+        if split == "test":
+            rows = []
+            for cap, (ranked, *_rest) in lists.items():
+                metrics = ev.compute_metrics(ranked, eval_set, counts, catalog.recommendable)
+                metrics["regularite_pop@20"] = slider.popularity_iqr(ranked, counts, TOP_K)
+                rows.append({"cap": None if math.isinf(cap) else cap, "metrics": metrics})
+                print(
+                    f"  cap {cap:>8} ndcg {metrics['ndcg@20']['mean']:.5f} "
+                    f"popmed {metrics['pop_mediane@20']['mean']:.0f}",
+                    flush=True,
+                )
+            V3_TEST_JSON.write_text(json.dumps(meta | {"positions": rows}, indent=2) + "\n")
+            print(f"-> {V3_TEST_JSON}", flush=True)
+
+
+def cmd_test_figure() -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    test = json.loads(V3_TEST_JSON.read_text())["positions"]
+    val = [r for r in load_sweep("A") if r["variant"] == "V3"]
+    drift = json.loads(Path(str(V3_DRIFT_JSON).format("test")).read_text())["positions"]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    for rows, label, color, ls in (
+        (val, "validation", "#5b9bd5", "--"),
+        (test, "test", "#1f4e79", "-"),
+    ):
+        x = [r["metrics"]["pop_mediane@20"]["mean"] for r in rows]
+        y = [r["metrics"]["ndcg@20"]["mean"] for r in rows]
+        e = [r["metrics"]["ndcg@20"]["ci95"] for r in rows]
+        ax1.errorbar(
+            x,
+            y,
+            yerr=e,
+            ls=ls,
+            marker="o",
+            ms=4,
+            color=color,
+            capsize=3,
+            label=f"ALS A + plafond (V3) · {label}",
+        )
+    for r, xi, yi in zip(
+        test,
+        [r["metrics"]["pop_mediane@20"]["mean"] for r in test],
+        [r["metrics"]["ndcg@20"]["mean"] for r in test],
+        strict=True,
+    ):
+        cap = "∞" if r["cap"] is None else f"{r['cap']:,}".replace(",", " ")
+        ax1.annotate(cap, (xi, yi), textcoords="offset points", xytext=(5, 6), fontsize=8)
+    refs = {
+        "populaire (test)": (RESULTS_DIR / "popular_test.json", "k", "^"),
+        "hasard (test)": (RESULTS_DIR / "random_test.json", "grey", "v"),
+        "EASE (test)": (RESULTS_DIR / "ease_b1_l10000_test.json", "#2e8b57", "*"),
+    }
+    for label, (path, color, marker) in refs.items():
+        m = json.loads(path.read_text())["metrics"]
+        ax1.scatter(
+            m["pop_mediane@20"]["mean"],
+            m["ndcg@20"]["mean"],
+            color=color,
+            marker=marker,
+            s=140 if marker == "*" else 60,
+            zorder=5,
+            label=label,
+        )
+    ax1.set_xscale("log")
+    ax1.invert_xaxis()
+    ax1.set_xlabel("pop_mediane@20 (notes d'entraînement, log ; ← connu · pépite →)")
+    ax1.set_ylabel("NDCG@20 (± IC 95 %)")
+    ax1.set_title("NDCG@20 aux 8 positions du curseur (étiquettes = plafond)")
+    ax1.grid(True, which="both", alpha=0.3)
+    ax1.legend(fontsize=8)
+    pos = ["∞" if r["cap"] is None else f"{r['cap']:,}".replace(",", " ") for r in drift]
+    for t, color in zip(TERCILES, ("#1f4e79", "#7f7f7f", "#a93226"), strict=True):
+        ax2.plot(
+            pos,
+            [r["score_ratio_mean_by_tercile"][t] for r in drift],
+            marker="o",
+            color=color,
+            label=f"tiers {TERCILE_NAMES[t]} des utilisateurs",
+        )
+    ax2.plot(
+        pos, [r["score_ratio_p10"] for r in drift], ls=":", color="k", label="10e centile (tous)"
+    )
+    ax2.axhline(1, color="grey", lw=0.8)
+    ax2.set_xlabel("position du curseur (plafond de notes)")
+    ax2.set_ylabel("score moyen du modèle de la liste / score à la position ∞")
+    ax2.set_title("Éloignement du goût : score des films proposés vs position ∞ (test)")
+    ax2.grid(True, alpha=0.3)
+    ax2.legend(fontsize=8)
+    fig.suptitle(
+        "Étape 2 · C4 — curseur retenu (ALS A + plafond de popularité), test, 10 000 utilisateurs",
+        fontsize=11,
+    )
+    fig.tight_layout()
+    path = sw.FIGURES_DIR / "etape2-curseur-test.png"
+    fig.savefig(path, dpi=120)
+    print(f"-> {path}")
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("cmd", choices=["sweep", "composition", "qualitative", "figure", "annex"])
-    args = parser.parse_args()
     cmds = {
         "sweep": cmd_sweep,
+        "composition": cmd_composition,
         "qualitative": cmd_qualitative,
         "figure": cmd_figure,
         "annex": cmd_annex,
-        "composition": cmd_composition,
+        "test": cmd_test,
+        "test-figure": cmd_test_figure,
     }
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("cmd", choices=list(cmds))
+    args = parser.parse_args()
     cmds[args.cmd]()
     return 0
 
