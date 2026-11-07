@@ -137,4 +137,23 @@ Tests synthétiques : déquantification identique à numpy float32 ; en-tête fa
 - 123 tests Vitest verts ; `tsc` et ESLint sans remarque.
 
 ### F4
+
+*7 novembre 2026.* Fichiers du worker et de son client :
+- `web/src/reco/workerCore.ts` : protocole typé (`init`, `import`, `recommend`) et `createHandler`, pur et testé en Node. Les erreurs sont renvoyées en français pour l'interface : « modèle pas encore chargé », « aucun historique importé », etc.
+- `worker.ts` : aiguillage des messages vers `createHandler`.
+- `client.ts` : `RecoClient`, API à base de promesses ; les octets d'un ZIP sont **transférés** au worker, pas copiés.
+
+Les réponses contiennent :
+- pour l'import : le résumé de la correspondance et la liste des entrées non utilisées (`ambiguous`, `probable_fuzzy`, `not_found`) avec leurs candidats, prévue pour l'écran « films non reconnus » ;
+- pour les recommandations : par position, les films (titre, année, réalisateurs, affiche, popularité, score) et le score relatif.
+
+- **Test de bout en bout** (`worker.test.ts`) : un faux worker passe par le vrai gestionnaire, avec copie structurée des messages comme à la frontière d'un vrai worker. Le parcours `init` → `import` (export synthétique de 6 films) → `recommend` est vérifié :
+  - 4 films `exact`, 1 `ambiguous` (les deux *Hamlet* de 1964), 1 `not_found` ;
+  - 8 positions × 20 films, aucun film vu, plafonds respectés ;
+  - **les deux Hamlet ambigus jamais recommandés** (D4) ;
+  - **seules les 6 URL `/data/…` sont demandées** (D6) ;
+  - erreurs avant `init` et avant `import`.
+- **Compilation** : `npm run build` produit le worker en module séparé (`dist/assets/worker-….js`, 68 Ko, avec PapaParse, fflate et Fuse.js) et la page (221 Ko, 69 Ko gzip). La page provisoire a un bouton « tester le moteur » qui charge le modèle dans le worker et affiche le temps (vérification dans un vrai navigateur, sans données personnelles). `dist/` est ignoré par git.
+- 125 tests Vitest verts ; `tsc`, ESLint et Prettier sans remarque.
+
 ### F5
