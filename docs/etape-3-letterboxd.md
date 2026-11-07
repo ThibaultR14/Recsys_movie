@@ -256,6 +256,12 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
 - **Contrôles** (`catalog-verify`) : tailles des colonnes = 23 019 = `n_items` de `model-meta.json` ; clés triées et uniques ; toutes les entrées pointent vers un film existant ; **chaque film a au moins une clé** ; chaque `tmdb_title` est indexé avec la source 0. Ordre des films = celui sauvegardé à l'entraînement (`trained_movie_ids`). Garde-fou `assert_web_safe` sur les deux fichiers.
 
 ### E3
+
+*7 novembre 2026.* Site initialisé dans `web/` : Vite 8 + React 19 + TypeScript 6 (strict, `noUncheckedIndexedAccess`), Vitest 5, ESLint 10 (typescript-eslint, react-hooks), Prettier 3 ; dépendances papaparse 5.7, fflate 0.8, fuse.js 7.5 ; tsx en développement. Squelette créé à la main (le dossier contenait déjà l'arborescence), page provisoire « en construction ». Commandes : `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run dev`.
+
+- `web/src/matching/normalize.ts` : `casefoldText` (`toLowerCase()` + table `shared/fixtures/casefold_table.json`) et `normalizeTitle` (NFKD, `\p{M}` supprimés, `\p{L}\p{N}` gardés).
+- **Cas partagés : 78/78 identiques à Python.** **Test exhaustif : 33 252/33 252 chaînes du catalogue identiques** (`web/test-data/catalog_title_keys.json`, non versionné ; test sauté s'il manque). 81 tests Vitest verts ; `tsc`, ESLint et Prettier sans remarque.
+
 ### E4
 ### E5
 ### E6

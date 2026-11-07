@@ -1,0 +1,5 @@
+dist
+node_modules
+public/data
+test-data
+package-lock.json
