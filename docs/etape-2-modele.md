@@ -183,6 +183,7 @@ Les scores ALS n'ont pas la même échelle d'un utilisateur à l'autre. Pour qu'
 - RAM disponible vérifiée et rapportée avant le calcul.
 - `λ_ease` choisi sur la validation ; résultats test EASE vs ALS vs références.
 - Écart relatif ALS / EASE sur `NDCG@20` rapporté. Si ALS est plus de 20 % en dessous d'EASE : le signaler et proposer des pistes (plus de facteurs, autre `alpha`/`β`), sans les lancer.
+- **Le seuil des 20 % s'applique au modèle retenu en C2 (A).** La candidate B (C4) n'a pas à le passer : son écart est rapporté pour information, et elle est jugée sur les courbes du curseur (précision ↔ popularité). Pas de piste d'amélioration lancée pour B (décision du 7 novembre 2026).
 - **Arrêt obligatoire seulement si ALS est plus de 20 % en dessous d'EASE.** Sinon, enchaîner sur C4. Si la RAM ne suffit pas pour EASE : préparer le notebook Colab et s'arrêter pour que Thibault le lance.
 
 ### C4 — Curseur
@@ -481,6 +482,7 @@ Correctif :
 **Écart relatif ALS / EASE** (NDCG@20)
 - **ALS A (retenue en C2), test : −11,3 %** (Recall@20 : −9,6 %) ; validation : −11,7 %. Sous le seuil de 20 % → **critère atteint, pas d'arrêt obligatoire pour A.** EASE est aussi meilleur en couverture (×1,4) à popularité médiane comparable.
 - **ALS B (candidate « alpha élevé » pour C4), validation : −22,3 %** (0,13293 vs 0,17113 ; pas d'évaluation test, prévue seulement si B est choisie en C4). B dépasse donc le seuil à λ = 0, ce qui était attendu (−12 % vs A, choisie pour la variété et le curseur). Pistes, **non lancées** : plus de facteurs pour B (128, `reg 0,1`) ; `alpha` intermédiaire (3 ou 5) à `β = 1` ; `β = 3` avec `alpha 10`. Le vrai juge reste la courbe précision ↔ popularité de C4.
+- **Décision (Thibault, 7 novembre 2026) : C3 validé.** Le seuil s'applique à A (critère atteint) ; B n'a pas à le passer et sera jugée sur les courbes du curseur. Les pistes ci-dessus ne sont pas lancées.
 - EASE n'est jamais exporté (D7) : il ne sert que de repère.
 
 **Choix faits sans demander (C3)**
@@ -491,6 +493,202 @@ Correctif :
 - Seuil des 20 % appliqué à la configuration retenue en C2 (A) ; l'écart de B est rapporté à part.
 
 ### C4
+
+*7 novembre 2026 — balayage terminé sur la validation, **arrêt prévu : choix par Thibault**.* Code : `pipeline/slider.py` (re-classement D5), `pipeline/sweep_slider.py` (`sweep`, `qualitative`, `figure`), `tests/test_slider.py` (121 tests au total, tous verts). Résultats : `data/processed/results/slider/val_{A,B}_{ml_rating_count,tmdb_vote_count}.json` et `qualitative_test.json` (non versionnés). Figure : `docs/figures/etape2-curseur-validation.png`. Listes du contrôle qualitatif : `docs/etape-2-curseur-qualitatif.md`.
+
+![Curseur, validation](figures/etape2-curseur-validation.png)
+
+**Mise en œuvre** (D5)
+- `s_ui` centré-réduit sur les candidats de l'utilisateur (recommandables, hors fold-in ; écart-type de population, calcul en float64) ; `z_i = log(1 + popularité)` centré-réduit sur les 22 968 films recommandables ; `score = s − λ·z`.
+- Sources : `ml_rating_count` = comptes des **utilisateurs d'entraînement** (pas de fuite, D3) ; `tmdb_vote_count`, manquant → plus petite valeur observée. Les métriques de popularité (`pop_mediane`, `longue_traine`) restent mesurées avec `ml_rating_count` d'entraînement pour les deux sources, pour que les courbes soient comparables.
+- Vecteurs de B réentraînés (`factors 64, reg 0,1, alpha 10, β 1, 30 it.`, graine 42) et sauvegardés : `data/processed/models/als_f64_r0.1_a10_b1_i30_item_factors.npy`.
+- **Contrôle** : à λ = 0, **toutes** les métriques de validation sont identiques à celles de C2, pour A (vecteurs sauvegardés) comme pour B (réentraîné) : le centrage-réduction ne change pas l'ordre, et le réentraînement est déterministe.
+- Durée : ~2 min de classement par configuration (26 λ × 2 sources) + ~1,5 min de métriques par source ; ~15 min en tout, entraînement de B compris.
+
+**Résumé** (validation, 10 000 utilisateurs ; tableau complet plus bas)
+
+| Config · source | λ | NDCG@20 | Recall@20 | pop_mediane@20 | longue_traine@20 | couverture@20 |
+|---|---|---|---|---|---|---|
+| A · ml | −0,5 | 0,15119 ± 0,00338 | 0,18733 | 29 109 | 0,0000 | 0,0775 |
+| A · ml | 0 | 0,15106 ± 0,00337 | 0,18749 | 28 564 | 0,0000 | 0,0815 |
+| A · ml | 1,0 | 0,15029 ± 0,00336 | 0,18670 | 27 449 | 0,0000 | 0,0912 |
+| A · ml | 2,0 | 0,14919 ± 0,00334 | 0,18548 | 26 316 | 0,0002 | 0,1038 |
+| A · tmdb | −0,5 | 0,15179 ± 0,00339 | 0,18812 | 29 074 | 0,0000 | 0,0783 |
+| A · tmdb | 1,0 | 0,14879 ± 0,00334 | 0,18542 | 27 442 | 0,0000 | 0,0887 |
+| A · tmdb | 2,0 | 0,14042 ± 0,00320 | 0,17576 | 25 652 | 0,0362 | 0,0828 |
+| B · ml | −0,5 | 0,13661 ± 0,00318 | 0,17222 | 29 028 | 0,0002 | 0,1115 |
+| B · ml | 0 | 0,13293 ± 0,00310 | 0,16931 | 26 480 | 0,0009 | 0,1485 |
+| B · ml | 1,0 | 0,12378 ± 0,00299 | 0,16076 | 22 559 | 0,0062 | 0,2161 |
+| B · ml | 2,0 | 0,11146 ± 0,00289 | 0,14761 | 19 116 | 0,0584 | 0,2618 |
+| B · tmdb | −0,5 | 0,13836 ± 0,00321 | 0,17381 | 28 965 | 0,0003 | 0,1163 |
+| B · tmdb | 1,0 | 0,11589 ± 0,00289 | 0,15367 | 22 349 | 0,0083 | 0,1756 |
+| B · tmdb | 2,0 | 0,07336 ± 0,00261 | 0,10611 | 13 698 | 0,3470 | 0,1040 |
+| *réf.* EASE (λ = 0) | — | 0,17113 ± 0,00357 | 0,20858 | 29 046 | 0,0005 | 0,1148 |
+| *réf.* `populaire` | — | 0,08544 ± 0,00263 | 0,10052 | 59 050 | 0,0000 | 0,0108 |
+| *réf.* `hasard` | — | 0,00107 | 0,00110 | 129 | 0,80 | 1,00 |
+
+**Analyse**
+1. **Sur [−0,5 ; 2,0], le curseur agit très peu sur A** : de λ = 0 à 2, la popularité médiane ne baisse que de 7,9 % (28 564 → 26 316 notes) pour −1,2 % de NDCG@20 ; `longue_traine@20` reste ≈ 0, et dans le contrôle qualitatif les listes de A changent d'1 ou 2 films sur 10 au plus. Avec B, l'effet est réel : −27,8 % de popularité médiane (→ 19 116) pour −16,2 % de NDCG@20 (source ml), et la couverture passe de 0,149 à 0,262.
+2. **Cause** (mesurée sur 1 000 utilisateurs de validation) : les scores centrés-réduits ont une queue droite très longue. Le 1er candidat est à **26 σ** (médiane, A) / 14 σ (B), le 20e à 13 σ / 10 σ, le 200e à ~4-5 σ, alors que `z` ne varie que d'environ −1,4 à +3,5 (le top 20 de A à λ = 0 est à `z` ≈ 2,8 en moyenne). Il faut donc λ ≳ 3 pour qu'un film moyennement populaire du 200e rang (z ≈ −0,3) passe devant un film du top 20, et bien plus pour atteindre la vraie longue traîne. La réduction se fait sur ~23 000 candidats presque tous proches de 0 : l'écart-type est petit devant l'écart entre les premiers.
+3. **À popularité égale, A domine B** là où les deux courbes existent : vers 26 300-26 500 notes, A (ml, λ = 2) fait 0,14919 contre 0,13293 pour B (λ = 0), soit +12 %. Mais la courbe de A s'arrête à 26 300 : **on ne sait pas encore comment A se comporte plus bas**, faute de λ assez grand.
+4. **`ml_rating_count` bat `tmdb_vote_count`** à popularité égale : B vers 19 000-19 800 notes : ml (λ = 2) 0,11146 contre tmdb (λ = 1,5-1,6) 0,0951-0,0997 ; A vers 26 300 : ml 0,14919 contre tmdb (λ ≈ 1,8) 0,14420. Avec tmdb, la couverture de B **baisse** après λ ≈ 0,8 (0,177 → 0,104) : tout le monde reçoit les mêmes films à très peu de votes TMDB. Le contrôle qualitatif le confirme (B · tmdb · λ = 2, profil 1) : *Sallie Gardner at a Gallop* (1878), le court métrage de fan *Voldemort: Origins of the Heir* (2018), *Power/Rangers* (2015), *Raiders of the Lost Ark: The Adaptation* : des films peu présents sur TMDB, pas des pépites.
+5. **λ < 0** (classiques) : effet faible ; NDCG@20 monte légèrement (A · tmdb −0,5 : +0,5 %, dans l'intervalle de confiance ; B · tmdb −0,5 : +4,1 %).
+6. **EASE** reste au-dessus de toutes les courbes (0,171 à 29 046 notes) : les recommandations les plus précises sont aussi les plus populaires ; le curseur échange de la précision mesurée contre de la nouveauté, comme prévu.
+
+**Contrôle qualitatif** (3 utilisateurs de **test**, les mêmes pour A et B ; détail : `docs/etape-2-curseur-qualitatif.md`)
+- Choix : utilisateurs de test ayant 40 à 400 films en fold-in, les plus proches du 10e / 50e / 90e centile de la popularité médiane de leur fold-in : `userId` 28392 (141 films, médiane 7 466 notes ; polars britanniques, Lynch, *Withnail & I*), 94888 (127 films, 15 107 notes ; action/aventure des années 80-90), 37138 (60 films, 28 468 notes ; grands succès des années 90).
+- Films nouveaux par rapport à λ = 0 (sur 10 ; profils 1 / 2 / 3) :
+
+| | ml · λ = 1 | ml · λ = 2 | tmdb · λ = 1 | tmdb · λ = 2 |
+|---|---|---|---|---|
+| A | 0 / 1 / 1 | 1 / 1 / 1 | 0 / 1 / 1 | 2 / 2 / 2 |
+| B | 3 / 3 / 0 | 5 / 3 / 1 | 4 / 3 / 1 | 7 / 4 / 1 |
+
+- Cohérence : avec B · ml, les films qui remontent collent au goût de l'utilisateur et sont moins évidents : profil 1 → *The Conversation*, *All the President's Men*, *Three Days of the Condor*, *Easy Rider*, *A Fistful of Dollars* (4 000-9 000 notes) à la place de *Dr. Strangelove*, *Life of Brian*, *North by Northwest* ; profil 2 → *Under Siege*, *Star Trek: The Motion Picture*. Ce sont des « moins connus », pas encore des pépites (tous > 4 000 notes). Le profil grand public bouge à peine, quel que soit le modèle. Avec tmdb à λ = 2 : curiosités hors sujet (point 4).
+
+**À trancher par Thibault** (arrêt prévu)
+1. **Source de popularité** : proposition **`ml_rating_count`** (meilleure à popularité égale pour A et B, pas de curiosités TMDB). Limite : figée à 2023 (MovieLens 32M), alors que TMDB est rafraîchi chaque mois.
+2. **Plage de λ et configuration** : sur [−0,5 ; 2,0], seule B donne un curseur perceptible ; A domine B à popularité égale, mais sa courbe s'arrête trop tôt pour conclure. Options (chacune sort de D5 ou du balayage prévu, d'où l'arrêt) :
+   - **(a) étendre le balayage** (même formule, λ jusqu'à ~10, validation, source ml, A et B ; ~15 min) pour comparer A et B sur toute la plage de popularité. *Recommandé avant de choisir.*
+   - (b) changer la réduction de `s_ui` (par ex. écart-type sur les ~500 meilleurs candidats, ou score de rang) pour qu'un même λ ait un effet comparable d'un modèle et d'un utilisateur à l'autre, puis rebalayer.
+   - (c) garder D5 tel quel et choisir B · ml sur [−0,5 ; 2,0].
+
+**Choix faits sans demander (C4)**
+- Métriques de popularité toujours mesurées avec `ml_rating_count` d'entraînement, quelle que soit la source du curseur (comparabilité des courbes).
+- λ intermédiaire du contrôle qualitatif = 1,0 (milieu de [0 ; 2]) ; titres = `tmdb_title`, nombre de notes = total MovieLens.
+- Figure en 2 × 2 : NDCG et Recall vs popularité médiane (axe x zoomé et inversé : à droite = pépite), popularité médiane et couverture vs λ ; `hasard` hors cadre, donné dans le titre.
+- `matplotlib` ajouté aux dépendances de développement (figures hors ligne).
+
+<details>
+<summary>Tableau complet du balayage (validation, 4 × 26 lignes)</summary>
+
+
+**A · `ml_rating_count`**
+
+| λ | NDCG@20 | Recall@20 | pop_mediane@20 | longue_traine@20 | couverture@20 |
+|---|---|---|---|---|---|
+| -0,5 | 0,15119 ± 0,00338 | 0,18733 | 29 109 | 0,0000 | 0,0775 |
+| -0,4 | 0,15126 ± 0,00338 | 0,18754 | 28 997 | 0,0000 | 0,0782 |
+| -0,3 | 0,15121 ± 0,00338 | 0,18747 | 28 887 | 0,0000 | 0,0792 |
+| -0,2 | 0,15102 ± 0,00338 | 0,18725 | 28 773 | 0,0000 | 0,0799 |
+| -0,1 | 0,15103 ± 0,00337 | 0,18734 | 28 666 | 0,0000 | 0,0806 |
+| 0,0 | 0,15106 ± 0,00337 | 0,18749 | 28 564 | 0,0000 | 0,0815 |
+| 0,1 | 0,15098 ± 0,00337 | 0,18738 | 28 455 | 0,0000 | 0,0826 |
+| 0,2 | 0,15084 ± 0,00337 | 0,18715 | 28 343 | 0,0000 | 0,0834 |
+| 0,3 | 0,15075 ± 0,00336 | 0,18714 | 28 238 | 0,0000 | 0,0839 |
+| 0,4 | 0,15069 ± 0,00336 | 0,18713 | 28 119 | 0,0000 | 0,0849 |
+| 0,5 | 0,15069 ± 0,00336 | 0,18714 | 28 013 | 0,0000 | 0,0856 |
+| 0,6 | 0,15066 ± 0,00336 | 0,18721 | 27 901 | 0,0000 | 0,0868 |
+| 0,7 | 0,15055 ± 0,00336 | 0,18703 | 27 786 | 0,0000 | 0,0879 |
+| 0,8 | 0,15048 ± 0,00336 | 0,18693 | 27 670 | 0,0000 | 0,0891 |
+| 0,9 | 0,15041 ± 0,00336 | 0,18684 | 27 555 | 0,0000 | 0,0901 |
+| 1,0 | 0,15029 ± 0,00336 | 0,18670 | 27 449 | 0,0000 | 0,0912 |
+| 1,1 | 0,15010 ± 0,00336 | 0,18636 | 27 335 | 0,0000 | 0,0925 |
+| 1,2 | 0,15000 ± 0,00335 | 0,18622 | 27 221 | 0,0000 | 0,0935 |
+| 1,3 | 0,14976 ± 0,00335 | 0,18590 | 27 111 | 0,0001 | 0,0943 |
+| 1,4 | 0,14971 ± 0,00335 | 0,18595 | 26 998 | 0,0001 | 0,0952 |
+| 1,5 | 0,14966 ± 0,00335 | 0,18593 | 26 886 | 0,0001 | 0,0968 |
+| 1,6 | 0,14963 ± 0,00335 | 0,18592 | 26 771 | 0,0001 | 0,0979 |
+| 1,7 | 0,14955 ± 0,00335 | 0,18582 | 26 655 | 0,0001 | 0,0994 |
+| 1,8 | 0,14942 ± 0,00334 | 0,18578 | 26 541 | 0,0001 | 0,1006 |
+| 1,9 | 0,14928 ± 0,00334 | 0,18556 | 26 432 | 0,0001 | 0,1021 |
+| 2,0 | 0,14919 ± 0,00334 | 0,18548 | 26 316 | 0,0002 | 0,1038 |
+
+**A · `tmdb_vote_count`**
+
+| λ | NDCG@20 | Recall@20 | pop_mediane@20 | longue_traine@20 | couverture@20 |
+|---|---|---|---|---|---|
+| -0,5 | 0,15179 ± 0,00339 | 0,18812 | 29 074 | 0,0000 | 0,0783 |
+| -0,4 | 0,15155 ± 0,00338 | 0,18784 | 28 976 | 0,0000 | 0,0787 |
+| -0,3 | 0,15148 ± 0,00338 | 0,18778 | 28 876 | 0,0000 | 0,0795 |
+| -0,2 | 0,15125 ± 0,00338 | 0,18751 | 28 775 | 0,0000 | 0,0802 |
+| -0,1 | 0,15115 ± 0,00338 | 0,18743 | 28 664 | 0,0000 | 0,0809 |
+| 0,0 | 0,15106 ± 0,00337 | 0,18749 | 28 564 | 0,0000 | 0,0815 |
+| 0,1 | 0,15087 ± 0,00337 | 0,18717 | 28 450 | 0,0000 | 0,0824 |
+| 0,2 | 0,15061 ± 0,00336 | 0,18700 | 28 338 | 0,0000 | 0,0829 |
+| 0,3 | 0,15041 ± 0,00336 | 0,18676 | 28 231 | 0,0000 | 0,0835 |
+| 0,4 | 0,15010 ± 0,00336 | 0,18648 | 28 122 | 0,0000 | 0,0843 |
+| 0,5 | 0,14987 ± 0,00336 | 0,18627 | 28 019 | 0,0000 | 0,0854 |
+| 0,6 | 0,14976 ± 0,00335 | 0,18641 | 27 902 | 0,0000 | 0,0860 |
+| 0,7 | 0,14957 ± 0,00335 | 0,18631 | 27 794 | 0,0000 | 0,0866 |
+| 0,8 | 0,14943 ± 0,00335 | 0,18619 | 27 675 | 0,0000 | 0,0871 |
+| 0,9 | 0,14907 ± 0,00334 | 0,18579 | 27 553 | 0,0000 | 0,0880 |
+| 1,0 | 0,14879 ± 0,00334 | 0,18542 | 27 442 | 0,0000 | 0,0887 |
+| 1,1 | 0,14836 ± 0,00333 | 0,18485 | 27 322 | 0,0000 | 0,0893 |
+| 1,2 | 0,14807 ± 0,00333 | 0,18455 | 27 188 | 0,0000 | 0,0896 |
+| 1,3 | 0,14773 ± 0,00332 | 0,18408 | 27 061 | 0,0001 | 0,0901 |
+| 1,4 | 0,14745 ± 0,00331 | 0,18396 | 26 945 | 0,0003 | 0,0909 |
+| 1,5 | 0,14696 ± 0,00330 | 0,18343 | 26 825 | 0,0007 | 0,0908 |
+| 1,6 | 0,14634 ± 0,00329 | 0,18279 | 26 686 | 0,0021 | 0,0907 |
+| 1,7 | 0,14545 ± 0,00328 | 0,18187 | 26 514 | 0,0052 | 0,0899 |
+| 1,8 | 0,14420 ± 0,00325 | 0,18036 | 26 300 | 0,0107 | 0,0882 |
+| 1,9 | 0,14259 ± 0,00323 | 0,17834 | 26 015 | 0,0207 | 0,0864 |
+| 2,0 | 0,14042 ± 0,00320 | 0,17576 | 25 652 | 0,0362 | 0,0828 |
+
+**B · `ml_rating_count`**
+
+| λ | NDCG@20 | Recall@20 | pop_mediane@20 | longue_traine@20 | couverture@20 |
+|---|---|---|---|---|---|
+| -0,5 | 0,13661 ± 0,00318 | 0,17222 | 29 028 | 0,0002 | 0,1115 |
+| -0,4 | 0,13597 ± 0,00316 | 0,17201 | 28 492 | 0,0002 | 0,1166 |
+| -0,3 | 0,13533 ± 0,00315 | 0,17145 | 27 945 | 0,0003 | 0,1240 |
+| -0,2 | 0,13451 ± 0,00313 | 0,17069 | 27 456 | 0,0004 | 0,1311 |
+| -0,1 | 0,13381 ± 0,00312 | 0,17010 | 26 944 | 0,0006 | 0,1395 |
+| 0,0 | 0,13293 ± 0,00310 | 0,16931 | 26 480 | 0,0009 | 0,1485 |
+| 0,1 | 0,13201 ± 0,00309 | 0,16843 | 26 041 | 0,0012 | 0,1573 |
+| 0,2 | 0,13104 ± 0,00308 | 0,16742 | 25 613 | 0,0015 | 0,1649 |
+| 0,3 | 0,12998 ± 0,00307 | 0,16633 | 25 182 | 0,0019 | 0,1717 |
+| 0,4 | 0,12904 ± 0,00305 | 0,16545 | 24 774 | 0,0024 | 0,1786 |
+| 0,5 | 0,12815 ± 0,00304 | 0,16479 | 24 357 | 0,0028 | 0,1854 |
+| 0,6 | 0,12740 ± 0,00303 | 0,16435 | 23 972 | 0,0034 | 0,1915 |
+| 0,7 | 0,12649 ± 0,00302 | 0,16354 | 23 592 | 0,0040 | 0,1981 |
+| 0,8 | 0,12565 ± 0,00301 | 0,16269 | 23 236 | 0,0046 | 0,2042 |
+| 0,9 | 0,12458 ± 0,00300 | 0,16153 | 22 891 | 0,0054 | 0,2102 |
+| 1,0 | 0,12378 ± 0,00299 | 0,16076 | 22 559 | 0,0062 | 0,2161 |
+| 1,1 | 0,12312 ± 0,00298 | 0,16021 | 22 215 | 0,0071 | 0,2221 |
+| 1,2 | 0,12225 ± 0,00298 | 0,15947 | 21 889 | 0,0081 | 0,2286 |
+| 1,3 | 0,12141 ± 0,00297 | 0,15870 | 21 554 | 0,0092 | 0,2354 |
+| 1,4 | 0,12054 ± 0,00295 | 0,15769 | 21 229 | 0,0103 | 0,2423 |
+| 1,5 | 0,11985 ± 0,00295 | 0,15686 | 20 911 | 0,0119 | 0,2504 |
+| 1,6 | 0,11896 ± 0,00294 | 0,15595 | 20 576 | 0,0142 | 0,2603 |
+| 1,7 | 0,11774 ± 0,00294 | 0,15434 | 20 256 | 0,0182 | 0,2702 |
+| 1,8 | 0,11623 ± 0,00292 | 0,15266 | 19 912 | 0,0258 | 0,2725 |
+| 1,9 | 0,11401 ± 0,00291 | 0,15038 | 19 539 | 0,0392 | 0,2695 |
+| 2,0 | 0,11146 ± 0,00289 | 0,14761 | 19 116 | 0,0584 | 0,2618 |
+
+**B · `tmdb_vote_count`**
+
+| λ | NDCG@20 | Recall@20 | pop_mediane@20 | longue_traine@20 | couverture@20 |
+|---|---|---|---|---|---|
+| -0,5 | 0,13836 ± 0,00321 | 0,17381 | 28 965 | 0,0003 | 0,1163 |
+| -0,4 | 0,13749 ± 0,00318 | 0,17323 | 28 440 | 0,0003 | 0,1214 |
+| -0,3 | 0,13684 ± 0,00318 | 0,17257 | 27 942 | 0,0004 | 0,1280 |
+| -0,2 | 0,13574 ± 0,00316 | 0,17181 | 27 437 | 0,0005 | 0,1341 |
+| -0,1 | 0,13430 ± 0,00312 | 0,17074 | 26 955 | 0,0006 | 0,1408 |
+| 0,0 | 0,13293 ± 0,00310 | 0,16931 | 26 480 | 0,0009 | 0,1485 |
+| 0,1 | 0,13143 ± 0,00308 | 0,16793 | 26 043 | 0,0011 | 0,1548 |
+| 0,2 | 0,13009 ± 0,00307 | 0,16656 | 25 600 | 0,0013 | 0,1601 |
+| 0,3 | 0,12848 ± 0,00305 | 0,16525 | 25 159 | 0,0015 | 0,1642 |
+| 0,4 | 0,12682 ± 0,00302 | 0,16385 | 24 725 | 0,0019 | 0,1680 |
+| 0,5 | 0,12530 ± 0,00301 | 0,16244 | 24 288 | 0,0022 | 0,1708 |
+| 0,6 | 0,12382 ± 0,00299 | 0,16110 | 23 903 | 0,0026 | 0,1737 |
+| 0,7 | 0,12181 ± 0,00296 | 0,15917 | 23 523 | 0,0032 | 0,1750 |
+| 0,8 | 0,12007 ± 0,00294 | 0,15765 | 23 123 | 0,0042 | 0,1769 |
+| 0,9 | 0,11804 ± 0,00292 | 0,15564 | 22 721 | 0,0057 | 0,1767 |
+| 1,0 | 0,11589 ± 0,00289 | 0,15367 | 22 349 | 0,0083 | 0,1756 |
+| 1,1 | 0,11354 ± 0,00287 | 0,15163 | 21 924 | 0,0129 | 0,1726 |
+| 1,2 | 0,11057 ± 0,00284 | 0,14841 | 21 470 | 0,0210 | 0,1661 |
+| 1,3 | 0,10759 ± 0,00282 | 0,14568 | 21 001 | 0,0345 | 0,1583 |
+| 1,4 | 0,10393 ± 0,00279 | 0,14173 | 20 440 | 0,0548 | 0,1502 |
+| 1,5 | 0,09965 ± 0,00277 | 0,13699 | 19 790 | 0,0832 | 0,1422 |
+| 1,6 | 0,09506 ± 0,00275 | 0,13205 | 18 958 | 0,1196 | 0,1352 |
+| 1,7 | 0,09030 ± 0,00272 | 0,12672 | 17 964 | 0,1653 | 0,1281 |
+| 1,8 | 0,08520 ± 0,00269 | 0,12081 | 16 729 | 0,2201 | 0,1204 |
+| 1,9 | 0,07938 ± 0,00265 | 0,11378 | 15 319 | 0,2813 | 0,1128 |
+| 2,0 | 0,07336 ± 0,00261 | 0,10611 | 13 698 | 0,3470 | 0,1040 |
+
+</details>
+
 ### C5
 ### C6
 
