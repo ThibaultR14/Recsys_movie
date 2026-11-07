@@ -17,6 +17,7 @@ Subcommands (from `pipeline/`):
     uv run python slider_variants.py figure       # -> docs/figures/etape2-curseur-variantes.png
     uv run python slider_variants.py test         # A + V3 on test (once) -> results/slider/v3_A_*
     uv run python slider_variants.py test-figure  # -> docs/figures/etape2-curseur-test.png
+    uv run python slider_variants.py popularity-check  # hybrid popularity, validation
     uv run python slider_variants.py annex        # -> docs/etape-2-curseur-qualitatif.md
 """
 
@@ -36,6 +37,7 @@ from datetime import UTC, datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 import numpy as np  # noqa: E402
+import polars as pl  # noqa: E402
 
 import evaluate as ev  # noqa: E402
 import slider  # noqa: E402
@@ -640,6 +642,104 @@ def cmd_test_figure() -> None:
     print(f"-> {path}")
 
 
+# --- Hybrid popularity (MovieLens + TMDB for recent movies): validation check ---
+
+POPULARITY_CHECK_JSON = sw.SLIDER_DIR / "popularity_hybrid_val.json"
+CHECK_TITLES = ("Shang-Chi and the Legend of the Ten Rings", "Black Widow", "No Time to Die")
+YEAR_BANDS = ((0, 1999), (2000, 2009), (2010, 2018), (2019, 2020), (2021, 2022), (2023, 2100))
+
+
+def cmd_popularity_check() -> None:
+    """A + V3 on validation, cap on training counts vs on hybrid training counts (no test)."""
+    import popularity as popm
+
+    catalog = ev.load_catalog()
+    cols = popm.catalog_columns(ev.CATALOG_PARQUET)
+    year = cols["year"]
+    counts = ev.train_counts(catalog)
+    r_train = popm.tmdb_ratio(counts, cols["tmdb_vote_count"], year)
+    hyb_train = popm.hybrid(counts, cols["tmdb_vote_count"], r_train)
+    full_hyb, r_full = popm.production_popularity(ev.CATALOG_PARQUET)
+    full_ml = cols["ml_rating_count"]
+    eval_set = ev.load_eval_set("val", catalog)
+    model = sw.adapter("A", catalog)
+    recent = year >= 2019
+    out = {
+        "split": "val",
+        "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "ratio_full_counts": r_full,
+        "ratio_training_counts": r_train,
+        "reference_years": popm.REFERENCE_YEARS,
+        "metrics_popularity": "training-user ml_rating_count (as in C4), plus hybrid median",
+    }
+    for name, cap_pop in (("ml", counts), ("hybrid", hyb_train)):
+        lists = v3_lists(
+            model, eval_set.foldin, catalog.recommendable, cap_pop, cap_pop, V3_CAPS, TOP_K
+        )
+        rows = []
+        for cap, (ranked, *_rest) in lists.items():
+            metrics = ev.compute_metrics(ranked, eval_set, counts, catalog.recommendable)
+            metrics["regularite_pop@20"] = slider.popularity_iqr(ranked, counts, TOP_K)
+            metrics["pop_mediane_hybride@20"] = float(np.median(hyb_train[ranked], axis=1).mean())
+            rows.append(
+                {
+                    "cap": None if math.isinf(cap) else cap,
+                    "share_recent_2019plus": float(recent[ranked].mean()),
+                    "metrics": metrics,
+                }
+            )
+            print(
+                f"{name:<6} cap {cap:>8} ndcg {metrics['ndcg@20']['mean']:.5f} "
+                f"popmed {metrics['pop_mediane@20']['mean']:>7.0f} "
+                f"recent {recent[ranked].mean():.3f}",
+                flush=True,
+            )
+        out[name] = rows
+    changed = full_hyb > full_ml
+    by_year = []
+    for lo, hi in YEAR_BANDS:
+        sel = (year >= lo) & (year <= hi)
+        by_year.append(
+            {
+                "years": [lo, hi],
+                "n_movies": int(sel.sum()),
+                "n_changed": int((changed & sel).sum()),
+                "n_changed_x2_or_more": int(((full_hyb >= 2 * full_ml) & sel).sum()),
+                "n_leaving_cap_2000": int(((full_ml <= 2000) & (full_hyb > 2000) & sel).sum()),
+                "n_leaving_cap_500": int(((full_ml <= 500) & (full_hyb > 500) & sel).sum()),
+            }
+        )
+    no_year = np.isnan(year)
+    by_year.append(
+        {"years": None, "n_movies": int(no_year.sum()), "n_changed": int((changed & no_year).sum())}
+    )
+    out["changed_by_year_full_counts"] = by_year
+    titles = pl.read_parquet(ev.CATALOG_PARQUET, columns=["item_idx", "tmdb_title"]).sort(
+        "item_idx"
+    )
+    checks = []
+    for t in CHECK_TITLES:
+        idx = np.flatnonzero((titles["tmdb_title"] == t).to_numpy())
+        for i in idx:
+            checks.append(
+                {
+                    "title": t,
+                    "year": None if np.isnan(year[i]) else int(year[i]),
+                    "ml_rating_count": int(full_ml[i]),
+                    "tmdb_vote_count": float(cols["tmdb_vote_count"][i]),
+                    "hybrid": int(full_hyb[i]),
+                    "under_cap_2000_before": bool(full_ml[i] <= 2000),
+                    "under_cap_2000_after": bool(full_hyb[i] <= 2000),
+                }
+            )
+    out["checks"] = checks
+    POPULARITY_CHECK_JSON.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+    print(json.dumps({k: out[k] for k in ("ratio_full_counts", "ratio_training_counts")}))
+    print(json.dumps(by_year, indent=1))
+    print(json.dumps(checks, indent=1, ensure_ascii=False))
+    print(f"-> {POPULARITY_CHECK_JSON}")
+
+
 def main() -> int:
     cmds = {
         "sweep": cmd_sweep,
@@ -649,6 +749,7 @@ def main() -> int:
         "annex": cmd_annex,
         "test": cmd_test,
         "test-figure": cmd_test_figure,
+        "popularity-check": cmd_popularity_check,
     }
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("cmd", choices=list(cmds))

@@ -6,14 +6,17 @@ Subcommands (from `pipeline/`):
     uv run python export.py export      # -> data/processed/export/ + fixtures/foldin_cases.json
     uv run python export.py verify      # re-read the exported files, replay the fold-in cases
 
-`export` writes to the staging folder `data/processed/export/` by default. Copying to
-`web/public/data/` is a separate, explicit step (`export --out web`), done after review (C5 stop).
+`export` writes to the staging folder `data/processed/export/` by default; `export --out web`
+writes the same files to `web/public/data/`. The fold-in fixture (`foldin_cases.json`, raw
+MovieLens ratings of 22 histories) goes to the staging folder or to `web/test-data/`: both are
+ignored by git, and `web/test-data/` is not served (outside `web/public/`).
 
 Files (little-endian):
     embeddings.bin  "PEPE", uint32 version, uint32 n_items, uint32 dims,
                     int8[n_items x dims] (row = item_idx), float32[n_items] scales
     yty.bin         float32[dims x dims], YᵀY computed from the DEQUANTISED vectors
-    popularity.bin  uint32[n_items], complete ml_rating_count (all MovieLens users)
+    popularity.bin  uint32[n_items], hybrid popularity (popularity.py): complete ml_rating_count,
+                    raised with TMDB votes for recent movies
     model-meta.json version, hyperparameters, confidence formula, slider, movie_id per item_idx
 """
 
@@ -41,10 +44,11 @@ import polars as pl  # noqa: E402
 import scipy.sparse as sp  # noqa: E402
 
 import evaluate as ev  # noqa: E402
+import popularity as popm  # noqa: E402
 from config import (  # noqa: E402
     FORBIDDEN_WEB_PREFIXES,
-    PIPELINE_DIR,
     PROCESSED,
+    REPO_ROOT,
     RESULTS_DIR,
     SEED,
     SPLIT_DIR,
@@ -58,7 +62,11 @@ C2_FACTORS = PROCESSED / "models" / "als_f64_r0.05_a1_b1_i30_item_factors.npy"
 FINAL_FACTORS = PROCESSED / "models" / "als_final_f64_r0.05_a1_b1_i30_item_factors.npy"
 FINAL_INFO = PROCESSED / "models" / "als_final_info.json"
 STAGING = PROCESSED / "export"
-FIXTURE = PIPELINE_DIR / "tests" / "fixtures" / "foldin_cases.json"
+FIXTURE_NAME = "foldin_cases.json"
+# The fixture holds raw MovieLens ratings of test users: never versioned (.gitignore), never served.
+# Staging export -> data/processed/export/foldin_cases.json ; web export -> web/test-data/.
+WEB_FIXTURE = REPO_ROOT / "web" / "test-data" / FIXTURE_NAME
+FIXTURE = STAGING / FIXTURE_NAME  # staging copy, used by tests/test_export.py
 SLIDER_POSITIONS = (None, 20_000, 10_000, 5_000, 2_000, 1_000, 500, 200)  # None = ∞
 FIXTURE_POSITIONS = (None, 2_000, 500)
 INT8_CHECK_POSITIONS = (None, 2_000)
@@ -343,19 +351,26 @@ def fixture_cases(
 def file_sizes(folder: Path) -> dict:
     out = {}
     for path in sorted(folder.iterdir()):
+        if path.name in (FIXTURE_NAME, ".gitkeep"):
+            continue
         raw = path.read_bytes()
         out[path.name] = {"bytes": len(raw), "gzip_bytes": len(gzip.compress(raw, compresslevel=9))}
     return out
+
+
+def fixture_path(out_dir: Path) -> Path:
+    return WEB_FIXTURE if out_dir == WEB_DATA else out_dir / FIXTURE_NAME
 
 
 def cmd_export(out_dir: Path) -> None:
     if out_dir == WEB_DATA:
         print("writing to web/public/data/ (explicit request)")
     catalog = ev.load_catalog()
-    cat = pl.read_parquet(ev.CATALOG_PARQUET, columns=["item_idx", "movie_id", "ml_rating_count"])
-    cat = cat.sort("item_idx")
+    cat = pl.read_parquet(ev.CATALOG_PARQUET, columns=["item_idx", "movie_id"]).sort("item_idx")
     movie_ids = cat["movie_id"].to_numpy()
-    popularity = cat["ml_rating_count"].to_numpy().astype(np.uint32)
+    hybrid_pop, ratio = popm.production_popularity(ev.CATALOG_PARQUET)
+    assert hybrid_pop.max() < 2**32
+    popularity = hybrid_pop.astype(np.uint32)
     Y = np.load(FINAL_FACTORS)
     info = json.loads(FINAL_INFO.read_text())
     q, scales = quantize(Y)
@@ -387,8 +402,15 @@ def cmd_export(out_dir: Path) -> None:
         "int8[n_items x dims], float32[n_items] scales; y = int8 * scale (little-endian)",
         "popularity": {
             "file": "popularity.bin",
-            "source": "ml_rating_count",
-            "counts": "complete (all MovieLens users), uint32 per item_idx",
+            "formula": "max(ml_rating_count, round(r * tmdb_vote_count)); missing TMDB votes -> "
+            "ml_rating_count only",
+            "ml_rating_count": "complete (all MovieLens users)",
+            "r": ratio,
+            "r_definition": "median of ml_rating_count / tmdb_vote_count over movies released "
+            f"{popm.REFERENCE_YEARS[0]}-{popm.REFERENCE_YEARS[1]}",
+            "why": "MovieLens stops in 2023: recent movies have few ratings because they are "
+            "recent; the max only ever raises popularity",
+            "dtype": "uint32 per item_idx",
         },
         "slider": {
             "variant": "popularity cap (D5): unseen recommendable movies with popularity <= cap, "
@@ -430,10 +452,16 @@ def cmd_export(out_dir: Path) -> None:
         "top": FIXTURE_TOP,
         "cases": cases,
     }
-    FIXTURE.parent.mkdir(parents=True, exist_ok=True)
-    FIXTURE.write_text(json.dumps(fixture, indent=1) + "\n", newline="\n")
+    fixture_file = fixture_path(out_dir)
+    fixture_file.parent.mkdir(parents=True, exist_ok=True)
+    fixture_file.write_text(json.dumps(fixture, indent=1) + "\n", newline="\n")
     sizes = file_sizes(out_dir)
-    report = {"out_dir": str(out_dir), "sizes": sizes, "fixture_bytes": FIXTURE.stat().st_size}
+    report = {
+        "out_dir": str(out_dir),
+        "sizes": sizes,
+        "fixture": str(fixture_file),
+        "fixture_bytes": fixture_file.stat().st_size,
+    }
     (RESULTS_DIR / "export_report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
@@ -453,7 +481,10 @@ def cmd_verify(out_dir: Path) -> dict:
     assert np.array_equal(yty, expected), "yty.bin != YᵀY of the dequantised vectors"
     pop = read_popularity(out_dir / "popularity.bin")
     assert len(pop) == meta["n_items"] == len(meta["movie_ids"]) == len(Y)
-    fixture = json.loads(FIXTURE.read_text())
+    expected_pop, ratio = popm.production_popularity(ev.CATALOG_PARQUET)
+    assert np.array_equal(pop, expected_pop.astype(np.uint32)), "popularity.bin != hybrid"
+    assert meta["popularity"]["r"] == ratio
+    fixture = json.loads(fixture_path(out_dir).read_text())
     assert fixture["embeddings_sha256"] == sha256_file(out_dir / "embeddings.bin"), "stale fixture"
     rec = np.ones(meta["n_items"], dtype=bool)
     rec[meta["non_recommendable_item_idx"]] = False

@@ -18,6 +18,9 @@ pipeline/data/cache/*
 # Not versioned until GroupLens answers about the MovieLens license.
 web/public/data/*
 !web/public/data/.gitkeep
+# Fold-in test fixtures: raw MovieLens ratings of test users, never versioned nor served.
+web/test-data/
+pipeline/tests/fixtures/foldin_cases.json
 
 # --- Python ------------------------------------------------------------------
 .venv/
