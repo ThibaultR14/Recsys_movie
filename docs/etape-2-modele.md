@@ -424,7 +424,7 @@ B perd 12 % de NDCG@20 à λ = 0 mais couvre 1,8 fois plus de films. Le balayage
 
 ### C3
 
-*7 novembre 2026 — en attente de l'exécution sur Colab.* Code : `pipeline/models/ease.py`, `pipeline/train_ease.py` (`ram`, `search`, `best`), `pipeline/colab_bundle.py`, `pipeline/notebooks/ease_colab.ipynb`, `tests/test_ease.py` (115 tests au total, tous verts). `train_ratings` déplacé de `train.py` vers `evaluate.py` (partagé, et pour ne pas hériter de `OPENBLAS_NUM_THREADS=1`, qui briderait LAPACK).
+*7 novembre 2026 — exécuté sur Colab (2e lancement, après le correctif de l'incident n° 1), résultats ci-dessous.* Code : `pipeline/models/ease.py`, `pipeline/train_ease.py` (`ram`, `search`, `best`), `pipeline/colab_bundle.py`, `pipeline/notebooks/ease_colab.ipynb`, `tests/test_ease.py` (115 tests au total, tous verts). `train_ratings` déplacé de `train.py` vers `evaluate.py` (partagé, et pour ne pas hériter de `OPENBLAS_NUM_THREADS=1`, qui briderait LAPACK).
 
 **RAM** (`train_ease.py ram`, 7 novembre 2026, 09 h 11) : 15,7 Gio au total, **2,28 Gio disponibles** (1,1 à 2,6 Gio selon le moment) ; besoin estimé **5,92 Gio** (G en float32 + une matrice de travail float64, 23 019² × 12 octets), plus les données (~1 Gio). → **Insuffisant : calcul sur Google Colab** (environnement CPU standard, ~12 Gio).
 
@@ -449,10 +449,46 @@ Correctif :
 - Notebook : `OPENBLAS_NUM_THREADS=1 python -X faulthandler` dans les cellules `search` et `best` (filet de sécurité + trace en cas de nouveau plantage) ; `threadpoolctl==3.8.0` installé après `polars` ; durée estimée ~3,5 min par configuration, ~1 h au total ; pas d'archive si `results/` est vide ; consigne en tête : supprimer `results/` et `ease_results.zip` de `Mon Drive/pepite/` avant un nouveau paquet.
 - `ease_bundle.zip` régénéré depuis le commit du correctif (voir `bundle_info.json`).
 
+**Exécution Colab n° 2** (7 novembre 2026, 12 h 05 – 13 h 06 UTC, paquet du commit `8d0d7e2`) : les 10 configurations de validation et l'évaluation test sont allées au bout, sans plantage. Empreintes SHA-256 des 6 fichiers du découpage identiques à celles des résultats ALS et aux fichiers locaux. G : 88 s (β = 1), 84 s (β = 0) ; inversion + B : 220-236 s par λ ; évaluation : 77-105 s. RAM disponible au moment de la mesure : 5,15 Gio (`enough: false` selon l'estimation prudente de 5,92 Gio), mais le calcul a tenu. Résultats rangés dans `data/processed/results/ease/*_val.json` et `results/ease_b1_l10000_test.json` (non versionnés).
+
+**Validation** (10 000 utilisateurs, 9 907 avec au moins un film pertinent)
+
+| β | λ_ease | NDCG@20 | Recall@20 | pop_mediane@20 | longue_traine@20 | couverture@20 |
+|---|---|---|---|---|---|---|
+| 1 | 100 | 0,16743 ± 0,00347 | 0,20422 | 26 259 | 0,00407 | 0,1719 |
+| 1 | 300 | 0,16921 ± 0,00351 | 0,20605 | 26 420 | 0,00335 | 0,1654 |
+| 1 | 1 000 | 0,17044 ± 0,00353 | 0,20736 | 26 846 | 0,00218 | 0,1530 |
+| 1 | 3 000 | 0,17096 ± 0,00355 | 0,20798 | 27 595 | 0,00121 | 0,1358 |
+| **1** | **10 000** | **0,17113 ± 0,00357** | **0,20858** | 29 046 | 0,00052 | 0,1148 |
+| 0 | 100 | 0,15062 ± 0,00329 | 0,18841 | 25 877 | 0,00376 | 0,1719 |
+| 0 | 300 | 0,15206 ± 0,00331 | 0,19009 | 26 213 | 0,00266 | 0,1611 |
+| 0 | 1 000 | 0,15379 ± 0,00336 | 0,19174 | 26 922 | 0,00140 | 0,1449 |
+| 0 | 3 000 | 0,15505 ± 0,00339 | 0,19279 | 28 053 | 0,00066 | 0,1242 |
+| 0 | 10 000 | 0,15525 ± 0,00343 | 0,19247 | 30 177 | 0,00032 | 0,1032 |
+
+- Retenue (meilleur NDCG@20) : **β = 1, λ_ease = 10 000**. Elle est **au bord de la grille**, mais la courbe est plate : +0,1 % de 3 000 à 10 000 (+0,00017, vingt fois moins que l'intervalle de confiance), tandis que la couverture baisse (0,136 → 0,115) et la popularité monte. Un λ plus grand ne changerait pas la conclusion ; non testé (il faudrait un nouveau passage Colab).
+- Le signal D2 (β = 1) bat le binaire de **+10,2 %** de NDCG@20 à λ égal, sur toute la grille : cohérent avec ALS.
+
+**Test** (une seule évaluation par modèle, 10 000 utilisateurs, 9 927 avec au moins un film pertinent)
+
+| Modèle | NDCG@20 | Recall@20 | pop_mediane@20 | longue_traine@20 | couverture@20 |
+|---|---|---|---|---|---|
+| **EASE** `β 1, λ 10 000` | **0,17154 ± 0,00354** | **0,20949 ± 0,00440** | 28 984 ± 219 | 0,00044 ± 0,00020 | 0,1141 |
+| ALS A `64, reg 0,05, alpha 1, β 1, 30 it.` | 0,15215 ± 0,00334 | 0,18946 ± 0,00427 | 28 524 ± 205 | 0,00000 | 0,0811 |
+| `populaire` | 0,08413 ± 0,00263 | 0,09913 ± 0,00309 | 58 983 ± 132 | 0,00000 | 0,0104 |
+| `hasard` | 0,00098 ± 0,00019 | 0,00110 ± 0,00020 | 129 ± 2 | 0,80311 | 0,9999 |
+
+**Écart relatif ALS / EASE** (NDCG@20)
+- **ALS A (retenue en C2), test : −11,3 %** (Recall@20 : −9,6 %) ; validation : −11,7 %. Sous le seuil de 20 % → **critère atteint, pas d'arrêt obligatoire pour A.** EASE est aussi meilleur en couverture (×1,4) à popularité médiane comparable.
+- **ALS B (candidate « alpha élevé » pour C4), validation : −22,3 %** (0,13293 vs 0,17113 ; pas d'évaluation test, prévue seulement si B est choisie en C4). B dépasse donc le seuil à λ = 0, ce qui était attendu (−12 % vs A, choisie pour la variété et le curseur). Pistes, **non lancées** : plus de facteurs pour B (128, `reg 0,1`) ; `alpha` intermédiaire (3 ou 5) à `β = 1` ; `β = 3` avec `alpha 10`. Le vrai juge reste la courbe précision ↔ popularité de C4.
+- EASE n'est jamais exporté (D7) : il ne sert que de repère.
+
 **Choix faits sans demander (C3)**
 - G stocké en float32 (erreur relative ~10⁻⁷ sur B, vérifiée par test) pour tenir en RAM ; tout le reste en float64.
 - Variante « β retenu » = β = 1 (A et B ont β = 1).
 - Le choix de λ_ease et de la variante est automatique (meilleur `NDCG@20` de validation) : pas de décision humaine prévue par D7.
+- λ_ease = 10 000 au bord de la grille gardé tel quel (plateau, gain < 0,1 %) : pas de 2e passage Colab.
+- Seuil des 20 % appliqué à la configuration retenue en C2 (A) ; l'écart de B est rapporté à part.
 
 ### C4
 ### C5
