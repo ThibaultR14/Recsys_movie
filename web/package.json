@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "match-report": "tsx scripts/match-report.ts"
   },
   "dependencies": {
     "fflate": "^0.8.3",

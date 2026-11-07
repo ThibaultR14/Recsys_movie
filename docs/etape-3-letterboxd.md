@@ -309,3 +309,59 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
   - catalogue réel : 5 films connus en `exact`, et le test de vitesse.
 
 ### E6
+
+*7 novembre 2026 — mesure sur l'export de Thibault ; **arrêt de fin d'étape** (vérification manuelle des correspondances par Thibault, puis exports des volontaires).* Code : `web/scripts/match-report.ts` (`npm run match-report -- <export> --name <label>` → `web/test-data/reports/<label>.json`), `pipeline/match_diagnostics.py` (classe les films non reconnus ; `--show` affiche les titres, pour l'export de Thibault seulement). Rapports, diagnostic et fichier de vérification dans `web/test-data/reports/` (ignoré par git). **Aucun titre de l'export n'est cité ici** (dépôt public) : les listes ont été montrées à Thibault dans le compte rendu.
+
+**Export de Thibault** (225 films vus, tous notés ; aucun avertissement de l'adaptateur)
+
+| Statut | Films | Part |
+|---|---|---|
+| `exact` | 188 | 83,6 % |
+| `probable_variant` | 0 | 0 % |
+| `probable_fuzzy` | 2 | 0,9 % |
+| `ambiguous` | 0 | 0 % |
+| `not_found` | 35 | 15,6 % |
+
+- Temps : construction du `Matcher` 361 ms (une fois), correspondance des 225 films 16 ms.
+- **Diagnostic des 37 films non reconnus ou flous** (`match_diagnostics.py`, recherche par titre + année ±1 dans tout MovieLens 32M, puis dans les datasets IMDb hors ligne) :
+
+| Catégorie | `not_found` | `probable_fuzzy` |
+|---|---|---|
+| sortis en 2024-2026 (après MovieLens 32M) | 25 | 0 |
+| dans MovieLens, sous le seuil de 20 notes (sortis en 2023 : 1 à 10 notes) | 5 | 0 |
+| absents de MovieLens (2 films de 2023, 3 séries) | 5 | 0 |
+| absents de MovieLens : séries | — | 2 |
+| **dans le catalogue (échec de correspondance)** | **0** | **0** |
+
+- **Taux de correspondance sur les films présents dans le catalogue : 188 / 188 = 100 %** (critère ≥ 98 %) ; **échecs : 0** (critère ≤ 1 %). Taux brut : 188 / 225 = 83,6 % ; les 37 autres sont hors catalogue (« trou » des films récents accepté au MVP, séries).
+- **Précision des `exact`** :
+  - contrôle automatique : pour 187 films, l'écart d'année est de 0 (1 an pour le dernier). Le titre affiché est identique pour 184, ne diffère que par le tiret pour 3 (« Star Wars: Episode I – … » contre « - »), et pour 1 cas le titre TMDB du catalogue est un autre titre du même film (même `tmdb_id` 81 et même `imdb_id`).
+  - **Vérification manuelle par Thibault en attente** : 100 correspondances tirées au hasard (graine 42) dans `web/test-data/reports/thibault_verification.csv`.
+- **Précision des `probable_fuzzy` : 0 / 2 correctes.** Les deux sont des **séries** absentes du catalogue, rattachées à des films au titre proche : un documentaire sur la série, et un film d'horreur au mot commun. **Taux d'erreur 100 % > 2 % : `probable_fuzzy` n'est pas utilisé par l'étape 4** ; il servira seulement à proposer des candidats dans l'écran « films non reconnus » de l'étape 5. Échantillon minuscule (2 cas), mais l'erreur est structurelle : les exports Letterboxd contiennent des séries, et le flou trouve toujours un film voisin.
+- `probable_variant` : aucun cas dans cet export ; précision non mesurable ici (à mesurer sur les exports des volontaires).
+- **Défaut de données repéré** (à traiter à l'étape 5, affichage) : pour *Nausicaä de la vallée du vent* (TMDB 81), le `tmdb_title` du catalogue est « Warriors of the Wind », le titre de l'ancien montage américain. La correspondance est juste (titre MovieLens), mais c'est ce titre qui s'afficherait.
+
+**Letterboxd 10M** (page Hugging Face lue le 7 novembre 2026, **rien téléchargé**) :
+- `titouann/letterboxd-10m-movies-ratings-2025`, auteur Titouan Mokrani, licence CC-BY-NC-SA 4.0 (« research, education and personal projects ») ; 10,46 M de notes de 6 519 utilisateurs populaires, collectées en décembre 2025 ; « Original data belongs to Letterboxd and its community contributors ».
+- La méthode de collecte n'est pas décrite (ni API, ni autorisation de Letterboxd) : c'est très probablement un scraping des profils publics.
+- Colonnes : `user`, `movie_id` (identifiant Letterboxd), `title` (en pratique le slug Letterboxd, ex. « zootopia-2 »), `rating` : **ni identifiant TMDB/IMDb, ni année**.
+- Il ne donnerait donc **pas de vérité terrain** pour la précision, seulement des slugs à faire correspondre (ce qui demanderait d'autres règles que nos titres).
+- **Recommandation : ne pas l'utiliser pour l'étape 3.** Décision de Thibault.
+
+**Critères** (état à l'arrêt)
+
+| Critère | Résultat |
+|---|---|
+| Normalisation Python ≡ TypeScript | ✅ 78/78 cas partagés, 33 252/33 252 titres du catalogue |
+| Catalogue identique après la v2 | ✅ (octet pour octet) |
+| `catalog.json` / `title-index.json` | ✅ 1,12 Mo / 0,37 Mo gzip ; aucun champ `imdbds_` |
+| Total `web/public/data/` | ✅ 3,06 Mo gzip (≤ 5 Mo) |
+| Percentiles TypeScript | ✅ identiques aux 22 cas de test du fold-in |
+| Films reconnus parmi ceux du catalogue | ✅ 100 % (188/188) |
+| Échecs de correspondance | ✅ 0 |
+| Précision `exact` | ⏳ contrôle automatique cohérent sur 188/188 ; vérification manuelle de 100 cas en attente |
+| Précision `probable_variant` | — aucun cas dans cet export |
+| Précision `probable_fuzzy` | ❌ 0/2 → non utilisé par l'étape 4 (prévu par D5, pas un échec de l'étape) |
+| Volontaires | ⏳ aucun export pour l'instant |
+| Performance | ✅ 101 ms pour 3 000 entrées ; 16 ms pour l'export réel |
+| Confidentialité | ✅ test `fetch` ; exports, rapports et fichier de vérification ignorés par git |

@@ -1,7 +1,8 @@
 /**
  * Adapter entries -> matched catalogue films -> user history for the fold-in (step 4).
- * Statuses used for recommendations: exact and probable_variant (D5); probable_fuzzy only if its
- * measured error rate is <= 2 % (decided in E6).
+ * Statuses used for recommendations: exact and probable_variant (D5). probable_fuzzy is NOT used:
+ * 0/2 correct on Thibault's export (TV series matched to look-alike films), above the 2 % error
+ * limit (E6); it only feeds the "films non reconnus" screen (step 5).
  */
 import { dedupeLatest, percentiles } from '../adapters/normalizeRatings';
 import type { HistoryEntry } from '../adapters/types';
