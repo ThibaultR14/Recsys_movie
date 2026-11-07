@@ -310,7 +310,7 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
 
 ### E6
 
-*7 novembre 2026 — mesure sur l'export de Thibault ; **arrêt de fin d'étape** (vérification manuelle des correspondances par Thibault, puis exports des volontaires).* Code : `web/scripts/match-report.ts` (`npm run match-report -- <export> --name <label>` → `web/test-data/reports/<label>.json`), `pipeline/match_diagnostics.py` (classe les films non reconnus ; `--show` affiche les titres, pour l'export de Thibault seulement). Rapports, diagnostic et fichier de vérification dans `web/test-data/reports/` (ignoré par git). **Aucun titre de l'export n'est cité ici** (dépôt public) : les listes ont été montrées à Thibault dans le compte rendu.
+*7 novembre 2026 — mesure sur l'export de Thibault. **Étape relue et validée par Thibault le 7 novembre 2026** (exports des volontaires : plus tard, non bloquant pour l'étape 4).* Code : `web/scripts/match-report.ts` (`npm run match-report -- <export> --name <label>` → `web/test-data/reports/<label>.json`), `pipeline/match_diagnostics.py` (classe les films non reconnus ; `--show` affiche les titres, pour l'export de Thibault seulement). Rapports, diagnostic et fichier de vérification dans `web/test-data/reports/` (ignoré par git). **Aucun titre de l'export n'est cité ici** (dépôt public) : les listes ont été montrées à Thibault dans le compte rendu.
 
 **Export de Thibault** (225 films vus, tous notés ; aucun avertissement de l'adaptateur)
 
@@ -336,8 +336,8 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
 - **Taux de correspondance sur les films présents dans le catalogue : 188 / 188 = 100 %** (critère ≥ 98 %) ; **échecs : 0** (critère ≤ 1 %). Taux brut : 188 / 225 = 83,6 % ; les 37 autres sont hors catalogue (« trou » des films récents accepté au MVP, séries).
 - **Précision des `exact`** :
   - contrôle automatique : pour 187 films, l'écart d'année est de 0 (1 an pour le dernier). Le titre affiché est identique pour 184, ne diffère que par le tiret pour 3 (« Star Wars: Episode I – … » contre « - »), et pour 1 cas le titre TMDB du catalogue est un autre titre du même film (même `tmdb_id` 81 et même `imdb_id`).
-  - **Vérification manuelle par Thibault en attente** : 100 correspondances tirées au hasard (graine 42) dans `web/test-data/reports/thibault_verification.csv`.
-- **Précision des `probable_fuzzy` : 0 / 2 correctes.** Les deux sont des **séries** absentes du catalogue, rattachées à des films au titre proche : un documentaire sur la série, et un film d'horreur au mot commun. **Taux d'erreur 100 % > 2 % : `probable_fuzzy` n'est pas utilisé par l'étape 4** ; il servira seulement à proposer des candidats dans l'écran « films non reconnus » de l'étape 5. Échantillon minuscule (2 cas), mais l'erreur est structurelle : les exports Letterboxd contiennent des séries, et le flou trouve toujours un film voisin.
+  - **Vérification manuelle par Thibault : 100 / 100 correctes** (100 correspondances tirées au hasard, graine 42 ; `web/test-data/reports/thibault_verification_rempli.csv`, non versionné). **Précision `exact` : 100 %** (critère : au plus 1 % d'erreurs).
+- **Précision des `probable_fuzzy` : 0 / 2 correctes** (confirmé par Thibault). Les deux sont des **séries** absentes du catalogue, rattachées à des films au titre proche : un documentaire sur la série, et un film d'horreur au mot commun. **Taux d'erreur 100 % > 2 % : `probable_fuzzy` n'est pas utilisé par l'étape 4** ; il servira seulement à proposer des candidats dans l'écran « films non reconnus » de l'étape 5. Échantillon minuscule (2 cas), mais l'erreur est structurelle : les exports Letterboxd contiennent des séries, et le flou trouve toujours un film voisin.
 - `probable_variant` : aucun cas dans cet export ; précision non mesurable ici (à mesurer sur les exports des volontaires).
 - **Défaut de données repéré** (à traiter à l'étape 5, affichage) : pour *Nausicaä de la vallée du vent* (TMDB 81), le `tmdb_title` du catalogue est « Warriors of the Wind », le titre de l'ancien montage américain. La correspondance est juste (titre MovieLens), mais c'est ce titre qui s'afficherait.
 
@@ -346,7 +346,7 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
 - La méthode de collecte n'est pas décrite (ni API, ni autorisation de Letterboxd) : c'est très probablement un scraping des profils publics.
 - Colonnes : `user`, `movie_id` (identifiant Letterboxd), `title` (en pratique le slug Letterboxd, ex. « zootopia-2 »), `rating` : **ni identifiant TMDB/IMDb, ni année**.
 - Il ne donnerait donc **pas de vérité terrain** pour la précision, seulement des slugs à faire correspondre (ce qui demanderait d'autres règles que nos titres).
-- **Recommandation : ne pas l'utiliser pour l'étape 3.** Décision de Thibault.
+- **Décision de Thibault (7 novembre 2026) : on ne l'utilise pas.** La collecte est probablement un scraping, contraire à nos règles, et le dataset ne fournit pas de vérité terrain.
 
 **Critères** (état à l'arrêt)
 
@@ -359,9 +359,22 @@ Le rapport distingue le taux brut (tous les films de l'export) et le taux sur le
 | Percentiles TypeScript | ✅ identiques aux 22 cas de test du fold-in |
 | Films reconnus parmi ceux du catalogue | ✅ 100 % (188/188) |
 | Échecs de correspondance | ✅ 0 |
-| Précision `exact` | ⏳ contrôle automatique cohérent sur 188/188 ; vérification manuelle de 100 cas en attente |
+| Précision `exact` | ✅ 100/100 vérifiées à la main par Thibault (et contrôle automatique cohérent sur 188/188) |
 | Précision `probable_variant` | — aucun cas dans cet export |
 | Précision `probable_fuzzy` | ❌ 0/2 → non utilisé par l'étape 4 (prévu par D5, pas un échec de l'étape) |
-| Volontaires | ⏳ aucun export pour l'instant |
+| Volontaires | ⏳ plus tard, non bloquant pour l'étape 4 |
 | Performance | ✅ 101 ms pour 3 000 entrées ; 16 ms pour l'export réel |
 | Confidentialité | ✅ test `fetch` ; exports, rapports et fichier de vérification ignorés par git |
+
+---
+
+## 6. À reporter
+
+**Étape 5 (interface)**
+- **Anciens titres américains** : pour *Nausicaä de la vallée du vent* (TMDB 81), le `tmdb_title` du catalogue est « Warriors of the Wind », le titre de l'ancien montage américain. Vérifier s'il y a d'autres cas de ce genre dans le catalogue (titres TMDB anglais anciens ou de remontage) avant d'afficher les titres.
+- **Films trop récents** : 11 % de l'export de Thibault (25 / 225) sont sortis en 2024-2026, après MovieLens 32M. Prévoir un message d'interface (« ces films sont trop récents pour nous, on ne peut pas encore s'en servir »), en plus des films de 2023 sous le seuil.
+- Écran « films non reconnus » : y proposer les candidats `probable_fuzzy` et `ambiguous` (le flou n'est jamais utilisé automatiquement), et signaler les séries.
+
+**Plus tard**
+- Exports des volontaires : mesurer les mêmes taux, notamment la précision de `probable_variant` (aucun cas dans l'export de Thibault). Taux seulement, fichiers supprimés après la mesure.
+
