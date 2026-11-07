@@ -91,7 +91,10 @@ Candidats pour un utilisateur : films `recommendable = true` qui ne sont pas dan
 **Règle.** À la position `plafond`, les candidats sont les films recommandables, hors films déjà vus, **avec au plus `plafond` notes MovieLens** ; ils sont classés **par le score du modèle** (`x_u · y_i`), sans autre re-pondération.
 
 - Positions du curseur, de gauche à droite : **∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200**. L'extrémité gauche (∞) est l'ordre naturel du modèle. Pas de position « classiques » (pas de bonus aux films populaires).
-- Popularité = **`ml_rating_count`**. `tmdb_vote_count` est abandonné : à fort curseur, il faisait remonter des films de fans et des curiosités peu présentes sur TMDB. Les comptes MovieLens s'arrêtent en 2023, comme le catalogue et le modèle.
+- Popularité = **`ml_rating_count`, corrigée pour les films récents** (décision du 7 novembre 2026, après C5) :
+  **`popularité = max(ml_rating_count, arrondi(r × tmdb_vote_count))`**, avec **r = médiane de `ml_rating_count / tmdb_vote_count` sur les films sortis de 2010 à 2018** (r = 0,2846 sur les comptes complets, 0,2576 sur les comptes d'entraînement pour l'évaluation) ; `tmdb_vote_count` manquant → `ml_rating_count` seul (`pipeline/popularity.py`).
+  - Pourquoi : MovieLens 32M s'arrête en 2023, les films récents ont peu de notes **parce qu'ils sont récents** (rapport médian MovieLens / TMDB : 0,43 en 2010, 0,07 en 2023), et des superproductions (*Shang-Chi*, *Black Widow*, *No Time to Die*) passaient sous le plafond 2 000.
+  - Le `max` ne peut que **rendre un film plus populaire** : il retire les superproductions récentes des plafonds bas sans faire passer du bruit TMDB pour des pépites (contrairement à `tmdb_vote_count` seul, abandonné en C4 : films de fans, curiosités). TMDB est autorisé (aucune colonne des datasets IMDb).
 - **Comptes utilisés** : l'évaluation (validation, test) utilise les comptes des **seuls utilisateurs d'entraînement** (pas de fuite, D3). **En production, le plafond porte sur les comptes complets** (`popularity.bin`, tous les utilisateurs), qui sont **~10 % plus élevés** : à une position donnée, le site propose donc un peu moins de films que l'évaluation (les films juste sous le plafond en entraînement peuvent le dépasser en comptes complets). L'écart est accepté.
 - **Pas de transition douce au MVP** : un film à 2 001 notes disparaît à la position 2 000. Une pénalité progressive près du plafond reste une piste pour plus tard.
 
@@ -141,8 +144,8 @@ Candidats pour un utilisateur : films `recommendable = true` qui ne sont pas dan
   - `embeddings.bin` : en-tête (magie `PEPE`, version, `n_items`, `dims`, little-endian), puis vecteurs int8 `n_items × dims`, puis échelles float32 `n_items` ;
   - `yty.bin` : float32 `dims × dims` ;
   - `model-meta.json` : version, date, `dims`, `regularization`, `alpha`, `β`, formule de confiance, source de popularité choisie, liste des `movie_id` dans l'ordre de `item_idx`, version des données (hash du manifeste) ;
-  - `popularity.bin` : `ml_rating_count` **complets** (tous les utilisateurs, uint32), dans l'ordre de `item_idx` ; c'est sur eux que porte le plafond du curseur (D5).
-- **Cas de test du fold-in** : `pipeline/tests/fixtures/foldin_cases.json` (versionné) : 20 historiques de test (films, percentiles), vecteur attendu et top 10 attendus aux positions ∞, 2 000 et 500 du curseur (plafond sur les comptes complets de `popularity.bin`). Calculés avec les vecteurs **déquantifiés**. Ils serviront à tester le code TypeScript à l'étape 4.
+  - `popularity.bin` : popularité **hybride** (D5) sur les `ml_rating_count` **complets** (tous les utilisateurs) : `max(ml_rating_count, arrondi(r × tmdb_vote_count))`, uint32, dans l'ordre de `item_idx` ; c'est sur elle que porte le plafond du curseur. La formule et r sont décrits dans `model-meta.json`.
+- **Cas de test du fold-in** : `foldin_cases.json`, **jamais versionné** (notes MovieLens brutes) : écrit par `export.py` dans le dossier d'export (`data/processed/export/`) ou dans `web/test-data/` (ignoré par git, hors de `web/public/`, donc jamais servi) ; les tests qui l'utilisent sont sautés s'il est absent. 20 historiques de test (films, percentiles), vecteur attendu et top 10 attendus aux positions ∞, 2 000 et 500 du curseur (plafond sur les comptes complets de `popularity.bin`). Calculés avec les vecteurs **déquantifiés**. Ils serviront à tester le code TypeScript à l'étape 4.
 - `catalog.json` et `title-index.json` ne sont **pas** produits ici (étapes 3-4).
 
 ### D9. Seuil ≥ 10 (optionnel)
@@ -220,7 +223,7 @@ Candidats pour un utilisateur : films `recommendable = true` qui ne sont pas dan
 
 **Objectif** : les fichiers que le navigateur chargera.
 
-**Fichiers** : `pipeline/export.py`, `pipeline/tests/fixtures/foldin_cases.json`, tests.
+**Fichiers** : `pipeline/export.py`, `pipeline/popularity.py`, tests ; `foldin_cases.json` généré dans le dossier d'export (non versionné).
 
 **Critères** :
 - Modèle final réentraîné sur tous les utilisateurs avec la configuration retenue.
@@ -1062,7 +1065,7 @@ Code : `pipeline/slider_variants.py` (`test`, `test-figure`). Résultats : `data
 
 ### C5
 
-*7 novembre 2026 — export prêt dans le dossier intermédiaire, **arrêt obligatoire pour relecture**. Rien n'a été écrit dans `web/public/data/`.* Code : `pipeline/export.py` (`train`, `int8-check`, `export`, `verify`), garde-fou `FORBIDDEN_WEB_PREFIXES = ("imdbds_",)` dans `config.py`, `tests/test_export.py`, fixture versionnée `pipeline/tests/fixtures/foldin_cases.json` (129 tests au total, tous verts).
+*7 novembre 2026 — export prêt dans le dossier intermédiaire, **arrêt obligatoire pour relecture**. Rien n'a été écrit dans `web/public/data/`.* Code : `pipeline/export.py` (`train`, `int8-check`, `export`, `verify`), garde-fou `FORBIDDEN_WEB_PREFIXES = ("imdbds_",)` dans `config.py`, `tests/test_export.py`, fixture `foldin_cases.json` (129 tests au total, tous verts). *Mise à jour après relecture : voir « C5 — corrections après relecture » (popularité hybride, fixture hors du dépôt).*
 
 **Modèle final** (`export.py train`) : configuration A (`factors 64, reg 0,05, alpha 1, β 1, 30 it.`, graine 42), réentraînée sur **tous les utilisateurs** : 200 948 utilisateurs, 23 019 films, 31 662 542 notes, 178 s. Aucun vecteur de film nul. Vecteurs : `data/processed/models/als_final_f64_r0.05_a1_b1_i30_item_factors.npy`, informations (empreintes SHA-256 du catalogue et des notes) dans `als_final_info.json` (non versionnés).
 - Contrôle de cohérence (pas une évaluation : le modèle final a vu les utilisateurs de test) : sur les 22 cas de test du fold-in, top 10 du modèle final vs modèle de C2 : 84 % de films en commun à la position ∞, 75 % à 2 000, 68 % à 500. Le modèle reste le même dans ses grandes lignes ; les écarts viennent des ~10 % d'utilisateurs en plus.
@@ -1111,6 +1114,59 @@ Code : `pipeline/slider_variants.py` (`test`, `test-figure`). Résultats : `data
 - `model-meta.json` compact (sans indentation) pour la taille ; ajout de `non_recommendable_item_idx` et du curseur.
 - Cas synthétiques ajoutés aux 20 cas réels pour couvrir les cas limites du calcul des percentiles.
 - Version des données = empreintes SHA-256 du catalogue, des notes et du manifeste du découpage, plus l'empreinte de `embeddings.bin`.
+
+### C5 — corrections après relecture (7 novembre 2026)
+
+**Relecture de Thibault** : export, format et `model-meta.json` validés. Deux corrections avant l'écriture dans `web/public/data/` : popularité hybride pour les films récents, et fixture hors du dépôt public.
+
+**1. Popularité hybride** (D5, D8 ; `pipeline/popularity.py`, `tests/test_popularity.py`)
+- `popularité = max(ml_rating_count, arrondi(r × tmdb_vote_count))`, r = médiane de `ml_rating_count / tmdb_vote_count` sur les films sortis de 2010 à 2018 (6 115 films avec les deux comptes) : **r = 0,2846** (comptes complets, production) ; **0,2576** sur les comptes d'entraînement (évaluation). La valeur attendue « ~0,43 » était le rapport des seuls films de 2010 : il baisse ensuite d'année en année (0,29 en 2014), d'où une médiane 2010-2018 plus basse.
+- Appliquée à `popularity.bin` (comptes complets), au curseur, à `model-meta.json` (formule, r, période de référence, raison) et aux cas de test du fold-in.
+
+**Films dont la popularité change** (comptes complets, par année de sortie)
+
+| Sortie | films | popularité relevée | dont × 2 ou plus | sortent du plafond 2 000 | sortent du plafond 500 |
+|---|---|---|---|---|---|
+| avant 2000 | 9 653 | 858 | 160 | 0 | 3 |
+| 2000-2009 | 5 309 | 641 | 188 | 1 | 7 |
+| 2010-2018 | 6 128 | 3 028 | 1 075 | 31 | 163 |
+| 2019-2020 | 1 045 | 764 | 455 | 18 | 78 |
+| 2021-2022 | 744 | 650 | 435 | 26 | 101 |
+| 2023 et après | 137 | 132 | 118 | 6 | 39 |
+| **total** (+ 3 films sans année, inchangés) | **23 016** | **6 073** | **2 431** | **82** | **391** |
+
+- Par construction (r est une médiane), environ la moitié des films de 2010-2018 voient leur popularité relevée, mais modérément : seuls 31 d'entre eux sortent du plafond 2 000. L'effet est le plus fort sur les films récents (89 % des films de 2021-2022, 96 % de ceux de 2023 et après). Les films anciens sont peu touchés (9 % avant 2000, aucun ne sort du plafond 2 000).
+
+**Contrôles demandés**
+- *Shang-Chi and the Legend of the Ten Rings* (2021) : 1 853 notes MovieLens, 10 914 votes TMDB → popularité 3 106 : **n'est plus sous le plafond 2 000** ✅
+- *Black Widow* (1987) : 347 notes MovieLens, 242 votes TMDB → popularité 347 : reste sous le plafond 2 000 (homonyme ancien, inchangé)
+- *Black Widow* (1954) : 24 notes MovieLens, 56 votes TMDB → popularité 24 : reste sous le plafond 2 000 (homonyme ancien, inchangé)
+- *Black Widow* (2021) : 1 609 notes MovieLens, 11 788 votes TMDB → popularité 3 354 : **n'est plus sous le plafond 2 000** ✅
+- *No Time to Die* (2021) : 1 689 notes MovieLens, 7 538 votes TMDB → popularité 2 145 : **n'est plus sous le plafond 2 000** ✅
+
+**Validation, A + plafond, ancienne → nouvelle popularité** (pas de nouvelle évaluation test ; plafond sur les comptes d'entraînement, hybrides ou non ; métriques de popularité sur les comptes d'entraînement MovieLens, comme en C4)
+
+| Position | NDCG@20 avant → après (± IC) | Recall@20 avant → après | pop_mediane@20 (entr.) avant → après | couverture@20 avant → après | films sortis ≥ 2019 dans les listes avant → après |
+|---|---|---|---|---|---|
+| ∞ | 0,15106 → 0,15106 (± 0,00337) | 0,18749 → 0,18749 | 28 564 → 28 564 | 0,0815 → 0,0815 | 0,3 % → 0,3 % |
+| 20 000 | 0,10203 → 0,10203 (± 0,00275) | 0,11957 → 0,11957 | 13 509 → 13 509 | 0,0794 → 0,0794 | 1,0 % → 1,0 % |
+| 10 000 | 0,06996 → 0,06996 (± 0,00223) | 0,07958 → 0,07958 | 7 464 → 7 464 | 0,0763 → 0,0763 | 2,0 % → 2,0 % |
+| 5 000 | 0,04688 → 0,04683 (± 0,00181) | 0,05077 → 0,05072 | 3 940 → 3 937 | 0,0789 → 0,0788 | 3,6 % → 3,5 % |
+| 2 000 | 0,02581 → 0,02538 (± 0,00129) | 0,02697 → 0,02652 | 1 624 → 1 619 | 0,0903 → 0,0897 | 4,1 % → 3,3 % |
+| 1 000 | 0,01394 → 0,01329 (± 0,00094) | 0,01360 → 0,01303 | 823 → 814 | 0,0971 → 0,0952 | 4,4 % → 3,0 % |
+| 500 | 0,00768 → 0,00729 (± 0,00069) | 0,00713 → 0,00675 | 415 → 410 | 0,1058 → 0,1035 | 5,7 % → 3,1 % |
+| 200 | 0,00325 → 0,00298 (± 0,00045) | 0,00317 → 0,00291 | 172 → 170 | 0,1157 → 0,1080 | 7,1 % → 4,0 % |
+
+- Positions ∞ à 10 000 : listes inchangées (à 10 000, une différence négligeable). Aux plafonds bas, la part de films sortis en 2019 ou après **baisse de 20 % au plafond 2 000 et de 30 à 46 % en dessous** (2 000 : 4,1 % → 3,3 % ; 1 000 : 4,4 % → 3,0 % ; 500 : 5,7 % → 3,1 % ; 200 : 7,1 % → 4,0 %). Les films récents qui restent ont aussi peu de votes TMDB : ce sont de vrais films peu vus (cas `test_01`, plafond 2 000 : *Bo Burnham: Inside*, *The Menu* restent ; *Shang-Chi*, *Black Widow*, *No Time to Die*, *Spider-Man: Across the Spider-Verse* sont sortis). Dans les 20 cas réels du fold-in : 5 % → 2 % de films sortis en 2019 ou après au plafond 2 000, 5 % → 1,5 % au plafond 500.
+- NDCG@20 et Recall@20 baissent très légèrement aux plafonds bas (−0,0003 à −0,0007), dans les intervalles de confiance : les films récents retirés étaient, par nature, populaires dans le held-out récent. Couverture et régularité quasi inchangées.
+- Bizarrerie de données vue en passant : *Hamilton* est daté de 2025 dans le catalogue (date TMDB de la ressortie) ; sans effet ici.
+- Fichier : `results/slider/popularity_hybrid_val.json` (`uv run python slider_variants.py popularity-check`).
+
+**2. Fixture hors du dépôt**
+- `export.py` écrit `foldin_cases.json` dans le dossier d'export intermédiaire (`data/processed/export/`) et, avec `--out web`, dans **`web/test-data/`** (pas dans `web/public/data/` : tout ce qui est sous `web/public/` est servi par le site, et la fixture contient des notes MovieLens brutes). Les deux emplacements sont ignorés par git (`.gitignore` : `web/test-data/`, et `pipeline/tests/fixtures/foldin_cases.json` par sécurité). `tests/test_export.py` saute les tests de la fixture si elle est absente.
+- **Purge de l'historique** (validée par Thibault) : `git filter-repo --invert-paths --path pipeline/tests/fixtures/foldin_cases.json` sur les 27 commits ; sauvegarde complète (`git bundle`) prise avant, hors du dépôt. Vérifications : **aucun commit** ne contient le fichier (`git log --all` et `git ls-tree` sur chaque commit) ; **arbres identiques** commit par commit hors fixture, mêmes messages, auteurs et dates (comparaison de `git ls-tree -r` avant / après) ; puis `git push --force-with-lease` sur `main` (le dépôt distant était bien à l'ancienne tête attendue). Les identifiants des commits depuis `d6bd721` (C5) ont changé ; tout clone existant doit être recloné ou réaligné (`git fetch && git reset --hard origin/main`). GitHub peut garder l'ancien commit accessible par son identifiant exact pendant un temps (cache) ; le support GitHub peut le purger si besoin.
+
+**Export** (dossier intermédiaire, puis `web/public/data/`) : `popularity.bin` 92 076 octets (42 297 en gzip), `model-meta.json` 139 603 (57 999) ; `embeddings.bin` et `yty.bin` inchangés. `verify` : relecture identique, popularité = hybride recalculée, **22 vecteurs identiques et 66 listes top 10 identiques** depuis les fichiers exportés. 132 tests verts.
 
 ### C6
 
