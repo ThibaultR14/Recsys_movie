@@ -56,6 +56,8 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 
 ## Ordre de construction
 
+**Étape en cours : 5, voir docs/etape-5-interface.md**
+
 1. ✅ Pipeline de données : téléchargement MovieLens + IMDb, catalogue, correspondances d'ids (MovieLens ↔ IMDb ↔ TMDB via `links.csv`). Fait : 23 019 films (seuil 20 → 23 350, − 1 exclu à la main, − 315 séries/épisodes, − 15 fusions) ; TMDB : tmdb_id 99,96 %, titres/années 99,8 %, réalisateurs et affiches 99,7 % ; 51 films `recommendable = false`.
 2. ✅ Modèle ALS + évaluation hors ligne, avec et sans curseur. Fait (`docs/etape-2-modele.md`) : ALS 64 facteurs, NDCG@20 test **0,152** (EASE 0,172, −11 % ; populaire 0,084) ; curseur = plafond de popularité (8 positions) ; popularité hybride MovieLens/TMDB ; export int8 dans `web/public/data/` : `embeddings.bin` 1,57 Mo, `yty.bin`, `popularity.bin`, `model-meta.json` (1,57 Mo gzip au total) ; perte int8 < 0,08 % ; 22 cas de test du fold-in pour l'étape 4.
 3. ✅ Adaptateur Letterboxd + correspondance des titres. Fait (`docs/etape-3-letterboxd.md`) : `catalog.json` (1,12 Mo gzip) et `title-index.json` (0,37 Mo), total `web/public/data/` 3,06 Mo gzip ; sur l'export de Thibault, 188/188 films du catalogue reconnus (précision vérifiée à la main 100/100), les 37 autres hors catalogue (après 2023, séries) ; 3 000 entrées en ~100 ms.
