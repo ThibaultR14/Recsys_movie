@@ -23,7 +23,7 @@ export function Layout({ children, width = 'narrow', onBack }: LayoutProps) {
         <span className="flex items-baseline gap-3">
           <a
             href="#"
-            className="text-[22px] font-bold text-ink no-underline hover:text-pen"
+            className="inline-flex min-h-11 items-center text-[22px] font-bold text-ink no-underline hover:text-pen"
             onClick={onBack}
           >
             pépite

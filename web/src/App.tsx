@@ -31,6 +31,13 @@ function currentHash(): string {
   return typeof window === 'undefined' ? '' : window.location.hash;
 }
 
+/** Performance marks read by the Playwright timing test (nothing stored, nothing sent). */
+function mark(name: string): void {
+  if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+    performance.mark(name);
+  }
+}
+
 let defaultClient: RecoClient | null = null;
 function getDefaultClient(): RecoClient {
   defaultClient ??= new RecoClient();
@@ -60,7 +67,10 @@ export function App({ client: injected }: { client?: RecoApi }) {
 
   useEffect(() => {
     initOnce(client).then(
-      () => setReady(true),
+      () => {
+        mark('pepite:model-ready');
+        setReady(true);
+      },
       () => setError(MESSAGES.engineDown),
     );
   }, [client]);
@@ -93,7 +103,9 @@ export function App({ client: injected }: { client?: RecoApi }) {
         return;
       }
       setStatus('on lit ton fichier…');
+      mark('pepite:import-start');
       const { summary, unrecognized } = await client.importExport(upload.input);
+      mark('pepite:import-end');
       if (summary.nEntries === 0) {
         setError(MESSAGES.notExport);
         return;

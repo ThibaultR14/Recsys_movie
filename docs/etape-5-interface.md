@@ -444,6 +444,31 @@ Fait le 8 novembre 2026. Tous les critères sont atteints. La liste des « spect
   - Le test de temps du matcher (étape 3 : 3 000 entrées ≤ 300 ms) échouait dans la suite complète (1,5 s), à cause des nouveaux fichiers de test qui chargent le vrai moteur en parallèle. Seul, il passe. Il tourne maintenant dans un projet Vitest `timed`, après les autres (`sequence.groupOrder`), avec le même seuil.
 
 ### G5
+
+Fait le 8 novembre 2026. Tous les critères sont atteints.
+
+- **Outils** : `@playwright/test` 1.65 (Chromium seul), `@axe-core/playwright` ; `web/playwright.config.ts` lance `npm run build` puis `vite preview` (port 4173), un seul worker pour des temps fiables. Commande : `npm run e2e`. Tests dans `web/e2e/` ; sorties dans `web/test-data/playwright/` et `web/test-data/screenshots/` (ignorés).
+- **Marques de performance** dans `App` (`pepite:model-ready`, `pepite:import-start`, `pepite:import-end`) : `performance.mark` seulement, rien de stocké ni d'envoyé.
+- **4 tests, tous verts** :
+  1. **parcours complet** avec l'export d'exemple : accueil → analyse (66 lus, 61 reconnus, *Milk* confirmé → 62) → résultats (départ au cran 2 000, 8 cartes, profil) → curseur sur 3 crans **au clavier** (→, →, Début ; un premier film différent à chaque cran, phrase du titre juste, rien d'affiché à ∞) → « encore des films » (16 cartes) → lien Letterboxd de la carte (`href`, `target`, `rel`) → « à propos » ;
+  2. **zone de dépôt** : atteinte au clavier (4ᵉ tabulation), CSV IMDb → « les exports imdb arrivent bientôt. », puis le ZIP d'exemple déposé comme un vrai fichier ;
+  3. **téléphone** (375 × 812, tactile) : pas de défilement horizontal sur les trois écrans, « c'est là » sous la zone de dépôt, une seule colonne de cartes, toutes les zones tactiles ≥ 44 px (boutons, liens, curseur, cases ; le test a trouvé le logo à 33 px, corrigé) ;
+  4. **temps** (voir ci-dessous).
+- **Réseau** : toutes les requêtes sont interceptées ; seules passent l'origine locale et `image.tmdb.org`. Résultat : **aucune requête bloquée** (donc aucune vers Google ni ailleurs), des requêtes d'affiches vers `image.tmdb.org`.
+- **Stockage** après le parcours : `localStorage` 0, `sessionStorage` 0, IndexedDB 0 base, aucun cookie.
+- **Accessibilité** : axe-core sur l'accueil, l'analyse, les résultats et « à propos » : **0 violation « serious » ou « critical »**.
+- **Temps** (Chromium sans interface, machine de dev, contexte neuf donc cache vide, serveur local ; deux exécutions) :
+
+  | Mesure | Seuil | Mesuré |
+  |---|---|---|
+  | modèle prêt (depuis la navigation) | ≤ 2 s | 774 ms ; 870 ms |
+  | analyse de l'export d'exemple (import dans le worker, aller-retour) | ≤ 300 ms | 11 ms ; 14 ms |
+  | changement de cran jusqu'à l'affichage (7 crans, 2 images après le changement du DOM) | ≤ 50 ms | 34 ms au pire ; 40 ms au pire |
+
+  Le changement de cran est sous le seuil mais sans grande marge : il est dominé par le rendu de la grille et des images (le calcul est déjà fait).
+- **Captures** (export d'exemple seulement) : `web/test-data/screenshots/` : `1-accueil`, `2-analyse`, `3-resultats`, `4-a-propos` (bureau) et `1-accueil-telephone`, `2-analyse-telephone`, `3-resultats-telephone`. Relues : conformes à la maquette.
+- **Qualité** : Vitest 186/186, Playwright 4/4, `tsc` (qui couvre maintenant `e2e/` et `playwright.config.ts`), ESLint, Prettier, build verts.
+
 ### G6
 
 ---
