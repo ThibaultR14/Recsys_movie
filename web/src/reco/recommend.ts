@@ -12,6 +12,8 @@ export interface PositionResult {
   scores: number[];
   /** Mean score of the first RELATIVE_TOP films / the same at ∞ (drift from the user's taste). */
   relativeScore: number;
+  /** score of each shown film / the same base (step 6b: rows « loin de tes goûts »). */
+  relativeScores: number[];
 }
 
 export const RELATIVE_TOP = 20;
@@ -73,6 +75,7 @@ export function topByPosition(
       items: shown,
       scores: shown.map((i) => scores[i]!),
       relativeScore: base > 0 ? meanTop(items) / base : 0,
+      relativeScores: shown.map((i) => (base > 0 ? scores[i]! / base : 0)),
     };
   });
 }

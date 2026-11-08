@@ -6,7 +6,7 @@
  */
 import { existsSync } from 'node:fs';
 import type { ImportResult, InitResult, RecommendResult } from '../src/reco/workerCore';
-import { citationPicks } from '../src/components/cardRules';
+import { citationPicks, hasFarRow } from '../src/components/cardRules';
 import { FAR_FROM_TASTE } from '../src/pages/resultsText';
 import { exportInput, localHandler } from './local';
 
@@ -54,7 +54,12 @@ async function main() {
   console.log('\n── explications, 8 premières cartes par cran (comptes seulement) ──');
   for (const pos of reco.positions) {
     const first = pos.films.slice(0, 8);
-    const far = pos.relativeScore < FAR_FROM_TASTE;
+    // same rule as the results page (step 6b, Q4 revised)
+    const farRows = hasFarRow(
+      pos.films.slice(0, 8).map((f) => f.relativeScore ?? 1),
+      FAR_FROM_TASTE,
+    );
+    const far = !farRows && pos.relativeScore < FAR_FROM_TASTE;
     // same diversity rule as the grid (step 6b, R6, option A)
     const picks = citationPicks(first.map((f) => (far ? undefined : f.because?.items)));
     const cited = first.flatMap((f, i) => picks[i]!.map((k) => f.because!.titles[k]!));
@@ -67,7 +72,8 @@ async function main() {
       `${pos.cap === null ? '∞' : pos.cap} : ${counts.size} films cités distincts, ` +
         `le plus cité sur ${most}/8 cartes, ${one} carte(s) avec un seul film, ` +
         `${none} carte(s) sans explication` +
-        `${far ? ' (cran « loin de tes goûts » : explications masquées)' : ''}`,
+        `${far ? ' (cran « loin de tes goûts » : explications masquées)' : ''}` +
+        `${farRows ? ' (rangée « loin de tes goûts » : note au-dessus de la grille, explications gardées)' : ''}`,
     );
   }
 
@@ -75,7 +81,12 @@ async function main() {
   console.log('\n── cartes sans explication : pourquoi (16 premières cartes par cran) ──');
   for (const pos of reco.positions) {
     const shown = pos.films.slice(0, 16);
-    const far = pos.relativeScore < FAR_FROM_TASTE;
+    // same rule as the results page (step 6b, Q4 revised)
+    const farRows = hasFarRow(
+      pos.films.slice(0, 8).map((f) => f.relativeScore ?? 1),
+      FAR_FROM_TASTE,
+    );
+    const far = !farRows && pos.relativeScore < FAR_FROM_TASTE;
     const picks = citationPicks(shown.map((f) => (far ? undefined : f.because?.items)));
     const why = { expliquée: 0, série: 0, loin: 0, 'cosinus ≤ 0': 0, plafond: 0 };
     shown.forEach((f, i) => {

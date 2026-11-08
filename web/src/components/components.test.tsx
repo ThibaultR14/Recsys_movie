@@ -19,6 +19,7 @@ import {
   byline,
   cardRotation,
   citationPicks,
+  hasFarRow,
   pepiteStamps,
   ratingLine,
   tapeRotation,
@@ -441,4 +442,16 @@ it('the grid applies the diversity rule to the cards', () => {
     "(parce que t'as aimé « C »)",
     "(parce que t'as aimé « C »)", // C was cited once only
   ]);
+});
+
+describe('rows far from the taste (step 6b, Q4 revised)', () => {
+  const t = 0.04;
+  it('at least half of a row of 8 below the threshold', () => {
+    expect(hasFarRow([0.1, 0.1, 0.1, 0.1, 0.03, 0.03, 0.03, 0.03], t)).toBe(true); // 4 / 8
+    expect(hasFarRow([0.1, 0.1, 0.1, 0.1, 0.1, 0.03, 0.03, 0.03], t)).toBe(false); // 3 / 8
+    expect(hasFarRow([...Array(8).fill(0.1), 0.03, 0.1], t)).toBe(true); // last row: 1 / 2
+    expect(hasFarRow([...Array(8).fill(0.1), 0.03, 0.1, 0.1], t)).toBe(false); // 1 / 3
+    expect(hasFarRow([], t)).toBe(false);
+    expect(hasFarRow([0.04], t)).toBe(false); // strictly below
+  });
 });

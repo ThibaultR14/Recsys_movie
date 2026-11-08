@@ -79,6 +79,8 @@ export interface ConfirmResult {
 
 export interface RecommendedFilm extends FilmCard {
   score: number;
+  /** score / mean score of the first 20 films at ∞ (step 6b: rows far from the user's taste). */
+  relativeScore?: number;
   /** Title of a seen film of the same series (same main title, a director in common). */
   seriesOf?: string;
   /**
@@ -191,7 +193,11 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
       cap: p.cap,
       relativeScore: p.relativeScore,
       films: p.items.map((item, k) => {
-        const film: RecommendedFilm = { ...filmCard(engine, item), score: p.scores[k]! };
+        const film: RecommendedFilm = {
+          ...filmCard(engine, item),
+          score: p.scores[k]!,
+          relativeScore: p.relativeScores[k]!,
+        };
         const s = series.get(item);
         if (s) film.seriesOf = s;
         const w = why.get(item);

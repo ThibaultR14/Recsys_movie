@@ -1,6 +1,6 @@
 # Étape 6b — Retouches de l'interface
 
-> Version 0.3 (8 novembre 2026) : sous-étape R9 ajoutée après l'essai de Thibault. Version 0.2 : Mini-étape insérée entre l'étape 6 (adaptateur IMDb) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026**, avec ses réponses aux questions de la section 7 (v0.2) : cartes sombres un cran plus claires que le fond, scotch gardé (D7) ; sombre par défaut même si le système est en clair (D7) ; l'annotation de série remplace l'explication, pas d'explication sur les cartes « loin de tes goûts », repli « parce que t'as vu » pour un historique sans notes (D6) ; « qui on est » → « à propos », pied de page inchangé (D1, D2) ; adresse de contact décidée en R8 (D3).
+> Version 0.4 (8 novembre 2026) : **étape close** ; Q4 révisée (« loin de tes goûts » par rangée, R10). Version 0.3 : sous-étape R9 ajoutée après l'essai de Thibault. Version 0.2 : Mini-étape insérée entre l'étape 6 (adaptateur IMDb) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026**, avec ses réponses aux questions de la section 7 (v0.2) : cartes sombres un cran plus claires que le fond, scotch gardé (D7) ; sombre par défaut même si le système est en clair (D7) ; l'annotation de série remplace l'explication, pas d'explication sur les cartes « loin de tes goûts », repli « parce que t'as vu » pour un historique sans notes (D6) ; « qui on est » → « à propos », pied de page inchangé (D1, D2) ; adresse de contact décidée en R8 (D3).
 > Décisions de départ données par Thibault le 8 novembre 2026 (D1-D7). Les **textes de l'interface** viennent de Claude Web : le code prévoit des emplacements (D8), remplis en R7.
 
 ---
@@ -120,7 +120,7 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - **Temps** : ≤ +100 ms sur `recommend` pour 3 000 films (`reco-bench`), changement de cran toujours **≤ 50 ms** (Playwright). Estimation : 384 × ~900 films aimés × 64 ≈ 22 M multiplications, soit quelques dizaines de ms.
 - **Affichage** : annotation Caveat stylo bleu sous la ligne de note, comme l'annotation de série. Titres de plus de 32 caractères coupés avec « … » (titre complet dans le texte pour lecteur d'écran). **Pas de pourcentage de correspondance.**
 - **Annotation de série** : elle **remplace** l'explication sur la carte (Q3).
-- **Cartes « loin de tes goûts »** (score relatif < 0,04) : **pas d'explication** (Q4).
+- **Cartes « loin de tes goûts »** : *v0.2* pas d'explication quand le score relatif du cran est < 0,04 (Q4). **v0.4 (Q4 révisée)** : « loin de tes goûts » par rangée (Q4 révisée, 8 novembre 2026) : score relatif **par carte** (score / moyenne des 20 premiers à ∞) ; si au moins la moitié d'une rangée de 8 affichée est sous 0,04, une seule annotation au-dessus de la grille, « (à ce cran, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites) », et les explications restent ; sinon, règle de l'étape 5 inchangée (score relatif du cran < 0,04 : note sous le curseur, explications masquées). Code : `hasFarRow` (`web/src/components/cardRules.ts`), `FAR_ROWS_NOTE` (`web/src/pages/resultsText.ts`).
 - **Mesure informative en R6** (terminal seulement, export de Thibault) : nombre de films distincts cités sur les 8 premières cartes de chaque cran, part des cartes sans explication. Si un même film est cité sur presque toutes les cartes, **arrêt** pour décider d'une règle de diversité (hors des décisions écrites).
 - Alternative non retenue au MVP : l'explication exacte de l'ALS (contribution de chaque film de l'historique au score, via la matrice du fold-in), plus fidèle mais moins intuitive. Notée en §6.
 
@@ -356,14 +356,25 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - **Adresse de contact** : donnée par Thibault après R9, en place dans `CONTACT_EMAIL` (`web/src/content/contact.ts`).
 - **Reste pour clore** : l'essai sur un vrai téléphone dans les deux thèmes (Thibault).
 
+### R10 — « Loin de tes goûts » par rangée, clôture (8 novembre 2026)
+
+- **Décision de Thibault (Q4 révisée)** : « loin de tes goûts » par rangée (Q4 révisée, 8 novembre 2026) : score relatif **par carte** (score / moyenne des 20 premiers à ∞) ; si au moins la moitié d'une rangée de 8 affichée est sous 0,04, une seule annotation au-dessus de la grille, « (à ce cran, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites) », et les explications restent ; sinon, règle de l'étape 5 inchangée (score relatif du cran < 0,04 : note sous le curseur, explications masquées).
+- **Écart de départ** : il n'existait pas de marque par carte ; l'indicateur de l'étape 5 portait sur tout le cran. Le score relatif par carte est donc nouveau : `PositionResult.relativeScores` (`recommend.ts`) → `RecommendedFilm.relativeScore` (worker) ; même base que le score relatif du cran.
+- Tests : `hasFarRow` (4/8 oui, 3/8 non, dernière rangée courte, égalité au seuil), résultats (note au-dessus de la grille, ancienne note absente, explications gardées ; moins de la moitié → règle de l'étape 5), vrais fichiers (score relatif par carte = score / moyenne des 20 premiers à ∞, à 10⁻⁹). Vitest **258**, Playwright **11**, `typecheck`, `lint`, `format:check` verts ; changement de cran : médiane 33 ms.
+- Effet (`reco-report`, comptes seulement) : sur l'export de Thibault, le cran 200 (score relatif 0,020) devient une rangée « loin de tes goûts » : note au-dessus de la grille et **16/16 cartes expliquées** (avant : 0/16) ; l'exemple n'a aucune rangée « loin ».
+- **Adresse de contact** : `thibault.rabbe@outlook.fr` (confirmée par Thibault).
+- **Clôture** : étape 6b close le 8 novembre 2026. ⚠️ Réserve : l'essai sur un vrai téléphone n'a pas été confirmé par écrit (la ligne du message de clôture est restée à remplir) : à refaire au début de l'étape 7.
+
 ---
 
 ## 6. À reporter
 
+- **Essai sur un vrai téléphone** (deux thèmes, mise en page élargie de R9, note « loin de tes goûts » par rangée) : non confirmé à la clôture, à faire au début de l'étape 7.
+
 - **Explication exacte de l'ALS** (contribution de chaque film de l'historique au score) : plus fidèle que le cosinus, à comparer avec la fiche film (étape 8).
 - **Règle de diversité des films cités** (éviter le même film sur toutes les cartes), si la mesure de R6 le demande sans justifier un arrêt.
 - **Suivre le thème du système** (`prefers-color-scheme`) quand rien n'est choisi : écarté (Q2, sombre par défaut même si le système est en clair).
-- **Explications aux crans « loin de tes goûts »** : masquées par Q4 ; sur l'export de Thibault, tout le cran 200 l'est (R9). À rediscuter avec les volontaires.
+- **Seuil « loin de tes goûts » par rangée** (0,04, moitié de la rangée) : à recaler avec les volontaires (Q4 révisée, R10).
 - **Décomposition du score de l'ALS** (Hu, Koren, Volinsky 2008) : non nécessaire au diagnostic de R9 (aucune carte sans voisin à cosinus > 0) ; reste une option pour la fiche film.
 - **Seuils des explications** (percentile ≥ 0,7, cosinus > 0) : à recaler avec les retours des volontaires (étape 7) (Q4).
 - **Formulaire de contact relié à un service** (envoi sans application de mail) : demanderait un service tiers ou un Worker ; à rediscuter avec « forme du retour des volontaires » (étape 7).
@@ -376,5 +387,6 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 2. **Q2 — Sombre même si le système est en clair** : oui. → D7.
 3. **Q3 — Film d'une série déjà vue** : l'annotation de série remplace l'explication. → D6.
 4. **Q4 — Seuils** : percentile ≥ 0,7 et cosinus > 0 au départ (à recaler avec les volontaires, §6) ; **pas d'explication sur les cartes « loin de tes goûts »** ; un seul film au-dessus du seuil → « parce que t'as aimé X » ; aucun → rien ; historique sans notes → repli sur tous les films vus, « parce que t'as vu X et Y ». → D6.
+   **Révisée le 8 novembre 2026 (après R9)** : « loin de tes goûts » par rangée (Q4 révisée, 8 novembre 2026) : score relatif **par carte** (score / moyenne des 20 premiers à ∞) ; si au moins la moitié d'une rangée de 8 affichée est sous 0,04, une seule annotation au-dessus de la grille, « (à ce cran, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites) », et les explications restent ; sinon, règle de l'étape 5 inchangée (score relatif du cran < 0,04 : note sous le curseur, explications masquées). → D6, R10.
 5. **Q5 — Libellés** : « qui on est » devient « à propos » ; pied de page inchangé. → D1, D2.
 6. **Q6 — Adresse de contact** : décidée en R8 (adresse dédiée probable) ; l'emplacement reste. → D3.

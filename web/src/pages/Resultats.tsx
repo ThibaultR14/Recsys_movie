@@ -3,10 +3,10 @@ import { FilmGrid } from '../components/FilmGrid';
 import { HandNote } from '../components/HandNote';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Slider } from '../components/Slider';
-import { isDocumentary } from '../components/cardRules';
+import { hasFarRow, isDocumentary } from '../components/cardRules';
 import { capLabel } from '../components/sliderText';
 import type { RecommendResult } from '../reco/workerCore';
-import { FAR_FROM_TASTE, profileNote, titlePhrase } from './resultsText';
+import { FAR_FROM_TASTE, FAR_ROWS_NOTE, profileNote, titlePhrase } from './resultsText';
 import { PAGE, initialView, type ResultsView } from './resultsView';
 
 interface ResultatsProps {
@@ -42,7 +42,14 @@ export function Resultats({ nEntries, reco, view: controlled, onViewChange }: Re
     [shown],
   );
   const profile = profileNote(reco.profileDirectors);
-  const far = position.relativeScore < FAR_FROM_TASTE;
+  // « loin de tes goûts » (step 6b, Q4 revised): when at least half of a displayed row of 8 is
+  // below the threshold, one note above the grid and the explanations stay; otherwise the
+  // position-level rule of step 5 (note under the slider, explanations hidden).
+  const farRows = hasFarRow(
+    shown.map((f) => f.relativeScore ?? 1),
+    FAR_FROM_TASTE,
+  );
+  const far = !farRows && position.relativeScore < FAR_FROM_TASTE;
 
   return (
     <div className="flex flex-col gap-14 pt-6">
@@ -86,6 +93,11 @@ export function Resultats({ nEntries, reco, view: controlled, onViewChange }: Re
         {`${shown.length} films${position.cap === null ? '' : `, ${capLabel(position.cap)}`}`}
       </p>
 
+      {farRows && (
+        <HandNote as="p" rotate={-1.5} size={22}>
+          {FAR_ROWS_NOTE}
+        </HandNote>
+      )}
       {shown.length > 0 ? (
         <FilmGrid films={shown} seriesOf={series} explain={!far} />
       ) : (

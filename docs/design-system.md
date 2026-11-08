@@ -169,7 +169,7 @@ Mentions obligatoires (ne pas reformuler) :
 |---|---|---|
 | Accueil | ✅ fait (C) | Titre, zone de dépôt, promesses, lien exemple |
 | Analyse du fichier | ⏳ à refaire en style C | « on a reconnu 412 de tes films », liste des titres ambigus à corriger |
-| Recommandations | ✅ fait (C) | Titre, annotation de profil, curseur, grille de cartes |
+| Recommandations | ✅ fait (C ; étape 6b : annotation « (à ce cran, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites) » au-dessus de la grille quand la moitié d'une rangée est loin) | Titre, annotation de profil, curseur, grille de cartes |
 | Fiche film | ⏳ à refaire en style C | Grande affiche, résumé, « pourquoi ce film », lien Letterboxd, « je l'ai déjà vu » |
 | Comment ça marche | ✅ fait (étape 6b) | Le principe, tes notes, le curseur, les données, on garde rien, limites, inspirations |
 | À propos | ✅ fait (étape 6b) | « je » (étudiant, sans école), pourquoi ce site, crédits TMDB / MovieLens |

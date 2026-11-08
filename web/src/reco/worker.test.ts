@@ -100,6 +100,10 @@ describe.skipIf(!ready)('worker protocol on the real files', () => {
       for (const f of p.films) {
         expect(seenTitles.has(f.title)).toBe(false);
         if (p.cap !== null) expect(f.popularity).toBeLessThanOrEqual(p.cap);
+        expect(f.relativeScore).toBeCloseTo(
+          f.score / (reco.positions[0]!.films.slice(0, 20).reduce((a, g) => a + g.score, 0) / 20),
+          9,
+        );
         // public rating (step 6b, D5): present, and never above the notch ceiling
         expect(f.publicRating).toBeDefined();
         expect(f.publicRating!.count).toBeLessThanOrEqual(f.popularity);

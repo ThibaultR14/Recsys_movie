@@ -98,8 +98,9 @@
 - Contact : adresse en texte + « copier », formulaire qui ouvre un `mailto:` pré-rempli ; aucun service tiers — rien de nouveau sur le réseau — `é6b` D3.
 - Aide des exports : carrousel à onglets, schémas SVG au trait, aucune capture ni logo de marque — `é6b` D4.
 - Note du public sur les cartes : moyenne MovieLens sur 5 + nombre de notes (`catalog.json` v2, +55 Ko gzip) — `é6b` D5.
-- **« (parce que t'as aimé X et Y) »** (explications avancées de l'étape 8) : cosinus des vecteurs, films notés de percentile ≥ 0,7, repli « vu » sans aucune note ; pas sur une carte de série ni aux crans « loin de tes goûts » ; **2 cartes au plus par film cité et par rangée de 8** — sinon un même film était cité sur 7-8 cartes sur 8 — `é6b` D6, R6.
+- **« (parce que t'as aimé X et Y) »** (explications avancées de l'étape 8) : cosinus des vecteurs, films notés de percentile ≥ 0,7, repli « vu » sans aucune note ; pas sur une carte de série ; **2 cartes au plus par film cité et par rangée de 8** — sinon un même film était cité sur 7-8 cartes sur 8 — `é6b` D6, R6.
 - R9 : tampon « ✱ pépite » en haut à droite de l'affiche ; 20 voisins candidats pour les explications (le plafond de diversité n'en laisse plus aucune vide) ; aide des exports ouverte par défaut sous la zone de dépôt ; conteneur unique de 1 200 px aligné à gauche, paragraphes à ~65 caractères ; liens externes dans les textes (`{a:…}`, nouvel onglet) — `é6b` R9.
+- **« Loin de tes goûts » par rangée** (Q4 révisée) : score relatif par carte ; si au moins la moitié d'une rangée de 8 est sous 0,04, une seule annotation au-dessus de la grille, « (à ce cran, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites) », et les explications restent ; sinon, règle de l'étape 5 (cran < 0,04 : note sous le curseur, explications masquées) — masquer les explications vidait tout le cran 200 d'un vrai export — `é6b` D6, R10.
 - Changement de cran : 50 ms **sur la médiane** de 21 mesures, pire cas journalisé seulement — les pointes viennent du rendu des affiches sur une machine chargée — `é6b` R6.
 
 ## Confidentialité

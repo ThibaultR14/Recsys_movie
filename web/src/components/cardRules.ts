@@ -27,6 +27,19 @@ export function pepiteStamps(popularities: readonly number[]): Set<number> {
   return out;
 }
 
+/**
+ * « loin de tes goûts » by rows (step 6b, Q4 revised): true when, in at least one block of 8
+ * displayed cards, at least half of the cards have a relative score below `threshold`.
+ */
+export function hasFarRow(relativeScores: readonly number[], threshold: number): boolean {
+  for (let start = 0; start < relativeScores.length; start += STAMP_BLOCK) {
+    const row = relativeScores.slice(start, start + STAMP_BLOCK);
+    const far = row.filter((r) => r < threshold).length;
+    if (far * 2 >= row.length) return true;
+  }
+  return false;
+}
+
 /** At most this many cards of a block of 8 cite the same history film (step 6b, R6, option A). */
 export const MAX_CITATIONS_PER_BLOCK = 2;
 const CITED_PER_CARD = 2;

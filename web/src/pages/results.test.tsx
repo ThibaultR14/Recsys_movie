@@ -7,7 +7,7 @@ import { APropos } from './APropos';
 import { CommentCaMarche } from './CommentCaMarche';
 import { isSectionHash, pageOfHash } from './pages';
 import { Resultats } from './Resultats';
-import { numberWord, profileNote, titlePhrase } from './resultsText';
+import { FAR_ROWS_NOTE, numberWord, profileNote, titlePhrase } from './resultsText';
 
 const POSITIONS = [null, 20000, 10000, 5000, 2000, 1000, 500, 200];
 
@@ -148,6 +148,36 @@ describe('Resultats', () => {
     moveTo(1000); // 0.09
     expect(cards()[2]).toHaveTextContent(why);
     moveTo(500); // 0.039: far
+    expect(screen.queryByText(/parce que t'as/)).not.toBeInTheDocument();
+  });
+
+  it('a row half far from the taste: one note above the grid, explanations kept (Q4 revised)', () => {
+    const r = reco();
+    // at 500 (relative score 0.039): half of the first row below 0.04
+    const p500 = r.positions[POSITIONS.indexOf(500)]!;
+    p500.films = p500.films.map((f, i) => ({ ...f, relativeScore: i % 2 ? 0.03 : 0.05 }));
+    render(<Resultats nEntries={66} reco={r} />);
+    moveTo(500);
+    const note = screen.getByText(FAR_ROWS_NOTE);
+    // above the grid, and the position-level note is gone
+    const grid = screen.getByRole('list', { name: 'films recommandés' });
+    expect(note.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      screen.queryByText("(là, on s'éloigne pas mal de tes goûts habituels)"),
+    ).not.toBeInTheDocument();
+    expect(cards()[2]).toHaveTextContent("(parce que t'as aimé « Stalker » et « Paris, Texas »)");
+  });
+
+  it('fewer than half of a row far: the position rule of step 5 stays', () => {
+    const r = reco();
+    const p500 = r.positions[POSITIONS.indexOf(500)]!;
+    p500.films = p500.films.map((f, i) => ({ ...f, relativeScore: i < 3 ? 0.03 : 0.05 }));
+    render(<Resultats nEntries={66} reco={r} />);
+    moveTo(500); // position 0.039 < 0.04, 3 / 8 far cards
+    expect(screen.queryByText(FAR_ROWS_NOTE)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("(là, on s'éloigne pas mal de tes goûts habituels)"),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/parce que t'as/)).not.toBeInTheDocument();
   });
 

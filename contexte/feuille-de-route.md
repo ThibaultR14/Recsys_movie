@@ -1,13 +1,11 @@
 # Feuille de route
 
-> Mise à jour le 8 novembre 2026, à l'arrêt de R8 de l'étape 6b. Ordre des étapes : `docs/stack-technique.md` §8.
-> Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md` (§6 = « À reporter » ou questions ouvertes).
+> Mise à jour le 8 novembre 2026, à la clôture de l'étape 6b. Ordre des étapes : `docs/stack-technique.md` §8.
+> Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : fin de l'étape 6b (retouches de l'interface)
+## Prochaine étape à lancer : 7, mise en ligne et volontaires
 
-Spec `docs/etape-6b-retouches.md` v0.2 validée le 8 novembre 2026. R0-R7 faits (thème sombre, pages par ancre, contact, aide des exports, note du public, explications avec règle de diversité, textes de Claude Web), puis **R9** après l'essai de Thibault (tampon en haut de l'affiche, 20 voisins pour les explications, aide ouverte sous la zone de dépôt, site élargi à 1 200 px, textes avec liens). Menus Letterboxd confirmés. Adresse de contact en place. **Reste** : l'essai sur un vrai téléphone dans les deux thèmes, puis la relecture.
-
-## Ensuite : 7, mise en ligne et volontaires
+L'étape 6b (retouches de l'interface) est close le 8 novembre 2026 (`docs/etape-6b-retouches.md` v0.4) : thème sombre, pages par ancre, contact, aide des exports, note du public, explications, site élargi, « loin de tes goûts » par rangée. **À faire en premier** : l'essai sur un vrai téléphone, non confirmé à la clôture.
 
 L'étape 6 (adaptateur IMDb) est close et relue le 8 novembre 2026 (`é6`). L'étape 7 reste **bloquée par la réponse de GroupLens** pour la mise en ligne ; les tests avec des volontaires peuvent se préparer en local.
 
@@ -49,6 +47,9 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 - Ids inventés `tt99000001`-`tt99000005` de `imdb-exemple.csv` : à revérifier de temps en temps, IMDb pourrait les attribuer un jour (`é6` §6).
 
 ### Étape 7 (mise en ligne, volontaires)
+
+- **Essai sur un vrai téléphone** de la version 6b (deux thèmes, mise en page élargie, annotation « loin de tes goûts » par rangée) : non confirmé à la clôture (`é6b` §6).
+- **Seuil « loin de tes goûts » par rangée** (0,04, moitié d'une rangée de 8) : à recaler avec les volontaires (`é6b` R10).
 
 - **Seuil « loin de tes goûts »** (0,04) : le recaler d'après la distribution des scores relatifs par cran et le ressenti des volontaires (`é5` §6).
 - **Tampon « ✱ pépite »** : il est visible à ∞ mais presque jamais aux crans bas, parce que le plafond resserre les popularités. Il faudra peut-être un seuil plus doux, par exemple deux tiers de la médiane (`é5` §6, G6).

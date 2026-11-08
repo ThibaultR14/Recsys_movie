@@ -3,6 +3,10 @@
 /** Relative score below which « (là, on s'éloigne pas mal de tes goûts habituels) » shows (D5). */
 export const FAR_FROM_TASTE = 0.04;
 
+/** Above the grid when at least half of a row of 8 is below FAR_FROM_TASTE (step 6b, Q4 revised). */
+export const FAR_ROWS_NOTE =
+  "(à ce cran, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites)";
+
 const UNITS = [
   'zéro',
   'un',
