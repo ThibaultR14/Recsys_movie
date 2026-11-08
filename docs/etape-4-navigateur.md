@@ -192,3 +192,70 @@ La construction du `Matcher` est le poste le plus lourd. Elle se fait une fois, 
 - 125 tests Vitest, `tsc`, ESLint et Prettier verts.
 
 Les temps dans un vrai navigateur (téléphone compris) seront mesurés à l'étape 5 ; le bouton « tester le moteur » de la page provisoire en donne déjà le chargement.
+
+---
+
+## 6. Diagnostic : biais des films récents (8 novembre 2026, après la relecture de l'étape 4)
+
+Demandé par Thibault : dans son top 20 aux plafonds 2 000 et 500, des films de 2019-2022 assez connus passent pour des pépites. La popularité hybride (`max(ml, round(0,285 × tmdb))`) ne les corrige pas assez. **Diagnostic seulement : `popularity.bin` n'est pas modifié** sans l'accord de Thibault. Script : `pipeline/recency_diagnostics.py` (`years`, `validation`, `user <rapport>`). La commande `user` refait le calcul du site et retrouve exactement les listes de `reco-report` ; elle n'affiche les titres que dans le terminal.
+
+**Rapport médian `ml_rating_count / tmdb_vote_count` par année de sortie** (catalogue complet)
+
+| Année | Films | % du catalogue | r médian | r_ref / r |
+|---|---|---|---|---|
+| 2005 | 477 | 2,07 % | 0,766 | 0,37 |
+| 2008 | 651 | 2,83 % | 0,570 | 0,50 |
+| 2010 | 596 | 2,59 % | 0,431 | 0,66 |
+| 2012 | 601 | 2,61 % | 0,363 | 0,78 |
+| 2013 | 641 | 2,78 % | 0,315 | 0,90 |
+| 2014 | 748 | 3,25 % | 0,291 | 0,98 |
+| 2015 | 762 | 3,31 % | 0,263 | 1,08 |
+| 2016 | 715 | 3,11 % | 0,243 | 1,17 |
+| 2017 | 735 | 3,19 % | 0,204 | 1,39 |
+| 2018 | 720 | 3,13 % | 0,183 | 1,56 |
+| 2019 | 606 | 2,63 % | 0,169 | 1,68 |
+| 2020 | 439 | 1,91 % | 0,157 | 1,81 |
+| 2021 | 417 | 1,81 % | 0,133 | 2,14 |
+| 2022 | 327 | 1,42 % | 0,106 | 2,68 |
+| 2023 | 136 | 0,59 % | 0,066 | 4,30 |
+
+- Le rapport baisse **en continu depuis 2000** (2,21 en 2000), pas seulement après 2018 : les utilisateurs de MovieLens notent surtout des films de leur époque, et TMDB est plus actif sur les films récents. `r_ref` = 0,285 (médiane 2010-2018) correspond aux films de 2014.
+- Films 2017-2023 : 3 380, **14,7 % du catalogue** ; 2019-2023 : 1 925 (8,4 %).
+
+**Variantes étudiées** (toutes ≥ la popularité actuelle : aucune ne rend un film plus confidentiel ; vérifié sur les 23 019 films)
+- `year_2019` : pour les films sortis à partir de 2019, `ml × r_ref / r_année` (suggestion de Thibault), puis le max avec la popularité actuelle.
+- `year_all` : la même correction pour toutes les années où `r_année < r_ref` (2015 → 2023 ; facteurs de 1,07 à 4,3).
+- `tmdb_recent` : films ≥ 2019, `max(ml, round(r_mature × tmdb))` avec `r_mature` = médiane 2005-2012 (0,515), au lieu de 0,285.
+
+| Variante | Films relevés | Sortent du plafond 2 000 | Sortent du plafond 500 |
+|---|---|---|---|
+| `year_2019` | 956 (2019-2023) | 34 | 76 |
+| `year_all` | 2 411 (2015-2023) | 60 | 106 |
+| `tmdb_recent` | 1 816 (2019-2023) | 89 | 240 |
+
+**Effet sur les listes de Thibault** (nombre de films sortis en 2017 ou après dans le top 20 ; détail montré à Thibault, pas ici)
+
+| Variante | Plafond 2 000 | Plafond 500 |
+|---|---|---|
+| actuelle | 11 / 20 | 13 / 20 |
+| `year_2019` | 9 / 20 (8 films récents remplacés) | 3 / 20 |
+| `year_all` | 7 / 20 (10 remplacés) | 3 / 20 |
+| `tmdb_recent` | 11 / 20 (4 remplacés) | 6 / 20 |
+
+**Validation** (10 000 utilisateurs, modèle A, comptes d'entraînement, r recalculés sur ces comptes : r_ref = 0,258)
+
+| Variante | Plafond | NDCG@20 | Recall@20 | pop. médiane | couverture | films ≥ 2017 dans les listes |
+|---|---|---|---|---|---|---|
+| actuelle | 2 000 | 0,02538 | 0,02652 | 1 619 | 0,0897 | 6,1 % |
+| `year_2019` | 2 000 | 0,02472 | 0,02599 | 1 618 | 0,0895 | 4,5 % |
+| `year_all` | 2 000 | 0,02437 | 0,02556 | 1 597 | 0,0893 | 2,7 % |
+| `tmdb_recent` | 2 000 | 0,02488 | 0,02618 | 1 618 | 0,0890 | 5,1 % |
+| actuelle | 500 | 0,00729 | 0,00675 | 410 | 0,1035 | 5,7 % |
+| `year_2019` | 500 | 0,00709 | 0,00655 | 411 | 0,1029 | 3,7 % |
+| `year_all` | 500 | 0,00676 | 0,00630 | 406 | 0,1035 | 1,7 % |
+| `tmdb_recent` | 500 | 0,00712 | 0,00659 | 411 | 0,1019 | 4,2 % |
+
+- Les baisses de NDCG (−1,9 % à −4 % au plafond 2 000, −2,3 % à −7 % à 500) restent dans les intervalles de confiance (± 0,0013 et ± 0,0007). Elles sont attendues : le held-out des utilisateurs MovieLens contient ces films récents populaires, et ce NDCG pénalise justement ce qu'on veut retirer (biais du NDCG, D5 de l'étape 2).
+- Les utilisateurs MovieLens ont peu de films récents dans leurs listes (≈ 6 %). Le biais pèse beaucoup plus sur un profil Letterboxd récent comme celui de Thibault (55-65 % de films ≥ 2017 aux plafonds 2 000 et 500).
+
+**Décision attendue de Thibault** (aucun changement appliqué).
