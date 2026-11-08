@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { DropZone } from '../components/DropZone';
+import { ExportHelp } from '../components/ExportHelp';
 import { NoList } from '../components/NoList';
 import { Underline } from '../components/Underline';
 
@@ -60,16 +61,8 @@ export function Accueil({ onFile, onExample, status, error, busy = false }: Accu
           je sais pas où trouver mon export
         </button>
       </div>
-      <div id={helpId} hidden={!help} className="max-w-[620px] text-[15px] leading-relaxed">
-        <p className="m-0">
-          sur letterboxd : réglages → import & export → exporter tes données. tu reçois un .zip :
-          glisse-le ici tel quel, pas besoin de l'ouvrir.
-        </p>
-        <p className="m-0 mt-3">
-          sur imdb : ton profil → évaluations → actions → exporter. le fichier se prépare sur une
-          page à part : attends quelques minutes, recharge, puis télécharge le .csv et glisse-le
-          ici.
-        </p>
+      <div id={helpId} hidden={!help} className="max-w-[620px]">
+        {help && <ExportHelp />}
       </div>
     </div>
   );

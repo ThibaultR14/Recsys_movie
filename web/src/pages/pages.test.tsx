@@ -219,17 +219,14 @@ describe('App (fake worker)', () => {
     expect(screen.getByLabelText(/glisse ton fichier ici/)).toBeInTheDocument();
   });
 
-  it('« je sais pas où trouver mon export » unfolds a short help', async () => {
+  it('« je sais pas où trouver mon export » unfolds the export help', async () => {
     render(<App client={fakeClient()} />);
     const btn = screen.getByRole('button', { name: 'je sais pas où trouver mon export' });
     expect(btn).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByText(/réglages → import & export → exporter tes données/)).not.toBeVisible();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
     await userEvent.click(btn);
     expect(btn).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText(/réglages → import & export → exporter tes données/)).toBeVisible();
-    expect(
-      screen.getByText(/ton profil → évaluations → actions → exporter. le fichier se prépare/),
-    ).toBeVisible();
+    expect(screen.getByRole('tablist', { name: 'où trouver ton export' })).toBeVisible();
   });
 });
 

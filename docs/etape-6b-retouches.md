@@ -267,6 +267,13 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - Vitest (5) : encodage (accents, `&`, `?`, `#`, retours à la ligne en `%0D%0A`, 2 000 caractères), copie et repli, champs obligatoires, aucun `fetch`. Playwright : copie relue dans le presse-papiers, envoi du formulaire sans aucune requête hors du site, rien de stocké ; axe 0 dans les deux thèmes.
 - Adresse : toujours `[ADRESSE À CONFIRMER]` (décision en R8).
 
+### R4 — Aide des exports (8 novembre 2026)
+
+- `web/src/components/ExportHelp.tsx` : onglets ARIA (« letterboxd », « imdb » ; flèches, Début / Fin, tabindex itinérant), 3 et 4 étapes, « étape n sur m » + texte dans une zone `aria-live="polite"`, « ← précédent » / « suivant → » désactivés aux extrémités, chaque onglet garde son étape ; aucune animation. Affiché sous « je sais pas où trouver mon export » (bouton dépliant gardé).
+- `web/src/components/help/illustrations.tsx` : 7 schémas au trait (fenêtre, lignes simulées, boucle et flèche au stylo, fichier, zone de dépôt en pointillés), jetons `ink` / `pen` / `surface` seulement, `aria-hidden`. **Aucun mot dans les dessins** sauf `.zip`, `.csv` et « … » : les noms de menus sont dans le texte de l'étape (langue de l'utilisateur, vérifiée en R7). **8 130 octets** pour les 7 (832 à 1 875 chacun ; plafonds 3 000 et 25 000).
+- Les deux paragraphes d'aide de l'étape 6 sont remplacés par les emplacements `aide.*` (ils restent dans l'historique git, utiles à Claude Web).
+- Vitest (3) : clavier des onglets, étapes et extrémités, budget et contenu des SVG (ni couleur en dur, ni image, ni mot). Playwright (téléphone) : aide ouverte sans défilement horizontal, axe 0 dans les deux thèmes, onglet IMDb jusqu'à l'étape 4.
+
 ---
 
 ## 6. À reporter
