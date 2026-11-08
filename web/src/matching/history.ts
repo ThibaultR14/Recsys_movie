@@ -3,6 +3,7 @@
  * Statuses used for recommendations: exact and probable_variant (D5). probable_fuzzy is NOT used:
  * 0/2 correct on Thibault's export (TV series matched to look-alike films), above the 2 % error
  * limit (E6); it only feeds the "films non reconnus" screen (step 5).
+ * Step 5 (D4): `confirmed` = a candidate chosen by the user on the analysis screen, used too.
  */
 import { dedupeLatest, percentiles } from '../adapters/normalizeRatings';
 import type { HistoryEntry } from '../adapters/types';
@@ -22,7 +23,11 @@ export interface UserFilm {
   status: MatchStatus;
 }
 
-export const RECOMMENDATION_STATUSES: readonly MatchStatus[] = ['exact', 'probable_variant'];
+export const RECOMMENDATION_STATUSES: readonly MatchStatus[] = [
+  'exact',
+  'probable_variant',
+  'confirmed',
+];
 
 export function matchHistory(matcher: Matcher, entries: readonly HistoryEntry[]): MatchedEntry[] {
   return entries.map((entry) => ({ entry, result: matcher.match(entry.title, entry.year) }));

@@ -4,10 +4,12 @@
  *   const reco = new RecoClient();
  *   await reco.init();
  *   const { summary, unrecognized } = await reco.importExport({ kind: 'zip', bytes });
+ *   await reco.confirm({ [unrecognized[0].index]: unrecognized[0].candidates[0].item });
  *   const { positions } = await reco.recommend({ n: 50 });
  */
-import type { ExportInput } from './engine';
+import type { Choices, ExportInput } from './engine';
 import type {
+  ConfirmResult,
   ImportResult,
   InitResult,
   RecoRequest,
@@ -60,6 +62,11 @@ export class RecoClient {
   importExport(input: ExportInput): Promise<ImportResult> {
     const transfer = input.kind === 'zip' ? [input.bytes.buffer as ArrayBuffer] : [];
     return this.send({ type: 'import', input }, transfer);
+  }
+
+  /** Choices of the analysis screen (entry index -> item or null); replaces earlier choices. */
+  confirm(choices: Choices): Promise<ConfirmResult> {
+    return this.send({ type: 'confirm', choices });
   }
 
   recommend(options: { n?: number; caps?: (number | null)[] } = {}): Promise<RecommendResult> {

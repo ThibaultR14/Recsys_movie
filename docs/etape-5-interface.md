@@ -366,6 +366,49 @@ Fait le 8 novembre 2026. Tous les critères sont atteints.
   - le clavier sur le curseur et les mesures réelles se feront dans Playwright (G5).
 
 ### G3
+
+Fait le 8 novembre 2026. Tous les critères sont atteints.
+
+- **Moteur** (toujours un seul moteur, `reco.test.ts` vert) :
+  - nouveau statut `confirmed` (`match.ts`), ajouté à `RECOMMENDATION_STATUSES` ;
+  - `engine.applyChoices(matched, choices)` : un candidat choisi devient `confirmed` et entre dans le fold-in ; « aucun de ceux-là » (`null`) ou l'absence de choix laisse l'entrée telle quelle, avec ses exclusions ;
+  - seules les entrées `ambiguous` et `probable_fuzzy` acceptent un choix, et le film doit être un de leurs candidats (sinon erreur) ;
+  - un `ambiguous` confirmé n'exclut plus que le film choisi.
+- **Worker** :
+  - message `confirm` (`RecoClient.confirm(choices)`, renvoie les comptes et `nHistoryFilms`) ;
+  - les choix s'appliquent toujours à l'import d'origine, donc un nouvel envoi remplace les précédents ;
+  - `unrecognized[]` porte l'`index` de l'entrée.
+- **Pages** :
+  - `App` : machine à états `accueil` → `analyse` → `resultats`, `init` dès l'arrivée (une seule fois, même avec StrictMode), aucun stockage ;
+  - `Accueil` : textes de la maquette, aide dépliable (vrai bouton avec `aria-expanded`) ;
+  - `Analyse` : sections décrites ci-dessous ;
+  - `Resultats` : version minimale (curseur et 8 cartes), complétée en G4.
+- **Écran d'analyse** :
+  - titre « on a lu tes N films. on en a reconnu M. », où M suit les choix en direct ;
+  - « à vérifier » : un `<fieldset>` par entrée, boutons radio avec miniature (w92), titre et « réalisateur, année », plus « aucun de ceux-là » ; rien n'est coché ;
+  - « trop récents » (≥ 2024) et « pas dans notre catalogue » : listes dépliables (`<details>`), avec le singulier quand N = 1 ;
+  - un `probable_fuzzy` sans candidat passe dans « pas dans notre catalogue ».
+- **Lecture du fichier** (`readUpload.ts`) :
+  - `.zip` → octets ; `.csv` → texte ;
+  - CSV IMDb (colonnes `Const` + `Your Rating` ou `Title Type`, BOM toléré) → « les exports imdb arrivent bientôt. » ;
+  - watchlist → message dédié ;
+  - autre extension, ZIP illisible ou export sans entrée → « hmm, ça ressemble pas à un export letterboxd. » ;
+  - aucun film reconnu et rien à vérifier → « on n'a reconnu aucun de tes films… », et on reste sur l'accueil.
+- **Export d'exemple** : `web/public/exemple/letterboxd-exemple.zip` (2,8 Ko), généré par `npm run make-example` (`scripts/make-example.ts`, données en clair dans le script).
+  - 66 films connus, notes inventées ;
+  - 61 `exact`, 1 `ambiguous` (*Milk*, 2008 : le film de Gus Van Sant et un film turc de 2009), 1 `probable_fuzzy` (« Dr. Strangelove », forme courte du titre complet), 2 sortis en 2024 (*Anora*, *The Substance*), 1 série (*Chernobyl*) ;
+  - 3 films vus sans note.
+- **Tests** : Vitest 168/168 (+ 19) ; `tsc`, ESLint, Prettier et le build verts.
+  - `confirm.test.ts` : `applyChoices` (pur) et, sur les vrais fichiers avec l'export d'exemple, la vérification exigée par G3.
+    - Sans choix, aucun candidat de *Milk* ni de « Dr. Strangelove » n'est recommandé, à aucune des 8 positions (48 films chacune).
+    - Après confirmation de *Milk* : historique + 1, scores du fold-in modifiés, *Milk* n'est plus recommandé (vu), et les candidats de « Dr. Strangelove » (« aucun de ceux-là ») restent exclus.
+  - `pages.test.ts(x)` :
+    - `readUpload`, regroupements et phrases ;
+    - `Analyse` : rien de coché, choix envoyés par index ;
+    - `App` avec un faux worker : dépôt par clic et par glisser-déposer, attente « on prépare nos fiches… », CSV IMDb, fichier illisible, aucun film reconnu, aide ;
+    - `App` sur les vrais fichiers : exemple → analyse (66 lus, 61 reconnus) → confirmation → 8 cartes.
+- **Vérifié dans Edge sans interface** : accueil fidèle à la maquette en bureau. La vue téléphone à 375 px n'est pas mesurable ainsi (largeur de fenêtre minimale d'Edge) : elle sera vérifiée avec Playwright en G5.
+
 ### G4
 ### G5
 ### G6

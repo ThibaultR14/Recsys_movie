@@ -14,8 +14,10 @@ import Fuse from 'fuse.js';
 import { normalizeTitle } from './normalize';
 import type { Posting, TitleIndex } from './titleIndex';
 
+/** `confirmed` is never produced by the matcher: the user picked the film among the candidates
+ * of an ambiguous or probable_fuzzy entry (step 5, D4). */
 export type MatchStatus =
-  'exact' | 'probable_variant' | 'probable_fuzzy' | 'ambiguous' | 'not_found';
+  'exact' | 'probable_variant' | 'probable_fuzzy' | 'ambiguous' | 'not_found' | 'confirmed';
 
 export interface Candidate {
   item: number;

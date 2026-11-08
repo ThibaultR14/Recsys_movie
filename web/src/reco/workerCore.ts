@@ -6,9 +6,12 @@
 import { RECOMMENDATION_STATUSES, type MatchedEntry } from '../matching/history';
 import type { MatchStatus } from '../matching/match';
 import {
+  applyChoices,
   importExport,
   loadEngine,
   recommend,
+  summarize,
+  type Choices,
   type Engine,
   type ExportInput,
   type ImportSummary,
@@ -18,10 +21,11 @@ import type { FetchFn } from './modelFiles';
 export type RecoRequest =
   | { id: number; type: 'init' }
   | { id: number; type: 'import'; input: ExportInput }
+  | { id: number; type: 'confirm'; choices: Choices }
   | { id: number; type: 'recommend'; n?: number; caps?: (number | null)[] };
 
 export type RecoResponse =
-  | { id: number; ok: true; result: InitResult | ImportResult | RecommendResult }
+  | { id: number; ok: true; result: InitResult | ImportResult | ConfirmResult | RecommendResult }
   | { id: number; ok: false; error: string };
 
 export interface InitResult {
@@ -45,6 +49,8 @@ export interface FilmCard {
 }
 
 export interface Unrecognized {
+  /** Index of the entry in the import, the key of `confirm` choices. */
+  index: number;
   title: string;
   year: number | null;
   status: MatchStatus;
@@ -55,6 +61,12 @@ export interface ImportResult {
   summary: ImportSummary;
   /** Entries not used for the recommendations (step 5: "films non reconnus" screen). */
   unrecognized: Unrecognized[];
+}
+
+/** Counts after the user's choices (`confirmed` included). */
+export interface ConfirmResult {
+  counts: ImportSummary['counts'];
+  nHistoryFilms: number;
 }
 
 export interface RecommendResult {
@@ -69,7 +81,11 @@ export interface RecommendResult {
 
 export interface WorkerState {
   engine?: Engine;
+  /** Entries as matched at import (choices are always applied to these). */
+  imported?: MatchedEntry[];
+  /** Entries used for the recommendations (imported + the user's choices). */
   matched?: MatchedEntry[];
+  summary?: ImportSummary;
 }
 
 export function filmCard(engine: Engine, item: number): FilmCard {
@@ -96,10 +112,14 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
   if (!engine) throw new Error('modèle pas encore chargé');
   if (req.type === 'import') {
     const { matched, summary } = importExport(engine, req.input);
+    state.imported = matched;
     state.matched = matched;
+    state.summary = summary;
     const unrecognized = matched
-      .filter((m) => !RECOMMENDATION_STATUSES.includes(m.result.status))
-      .map((m) => ({
+      .map((m, index) => ({ m, index }))
+      .filter(({ m }) => !RECOMMENDATION_STATUSES.includes(m.result.status))
+      .map(({ m, index }) => ({
+        index,
         title: m.entry.title,
         year: m.entry.year ?? null,
         status: m.result.status,
@@ -107,7 +127,17 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
       }));
     return { summary, unrecognized } satisfies ImportResult;
   }
-  if (!state.matched) throw new Error('aucun historique importé');
+  if (!state.matched || !state.imported || !state.summary) {
+    throw new Error('aucun historique importé');
+  }
+  if (req.type === 'confirm') {
+    state.matched = applyChoices(state.imported, req.choices);
+    const s = summarize(
+      { entries: [], warnings: state.summary.warnings, filesRead: state.summary.filesRead },
+      state.matched,
+    );
+    return { counts: s.counts, nHistoryFilms: s.nHistoryFilms } satisfies ConfirmResult;
+  }
   const res = recommend(engine, state.matched, { n: req.n, caps: req.caps });
   return {
     nHistory: res.history.length,

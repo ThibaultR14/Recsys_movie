@@ -92,6 +92,7 @@ export function summarize(adapter: AdapterResult, matched: readonly MatchedEntry
     probable_fuzzy: 0,
     ambiguous: 0,
     not_found: 0,
+    confirmed: 0,
   };
   for (const m of matched) counts[m.result.status]++;
   return {
@@ -107,6 +108,34 @@ export function importExport(engine: Engine, input: ExportInput) {
   const adapter = readExport(input);
   const matched = matchHistory(engine.matcher, adapter.entries);
   return { matched, summary: summarize(adapter, matched) };
+}
+
+/** Entry index -> chosen catalogue item, or null for « aucun de ceux-là » (step 5, D4). */
+export type Choices = Record<number, number | null>;
+
+/** Statuses the user can resolve on the analysis screen. */
+export const CHOOSABLE_STATUSES: readonly MatchStatus[] = ['ambiguous', 'probable_fuzzy'];
+
+/**
+ * Applies the user's choices to the matched entries as imported (never to already confirmed ones):
+ * a chosen candidate becomes `confirmed` (it enters the fold-in); null or no choice leaves the
+ * entry as it is, with its exclusions. Throws on an index or item that is not a candidate.
+ */
+export function applyChoices(matched: readonly MatchedEntry[], choices: Choices): MatchedEntry[] {
+  const out = matched.slice();
+  for (const [key, item] of Object.entries(choices)) {
+    const i = Number(key);
+    const m = matched[i];
+    if (!m || !CHOOSABLE_STATUSES.includes(m.result.status)) {
+      throw new Error(`choix impossible pour l'entrée ${key}`);
+    }
+    if (item === null) continue;
+    if (!m.result.candidates.some((c) => c.item === item)) {
+      throw new Error(`le film ${item} n'est pas un candidat de l'entrée ${key}`);
+    }
+    out[i] = { entry: m.entry, result: { ...m.result, status: 'confirmed', item } };
+  }
+  return out;
 }
 
 /**
@@ -136,14 +165,14 @@ export interface Recommendations {
   nExcluded: number;
 }
 
-/** Fold-in on exact + probable_variant, scores, exclusions, slider positions. */
+/** Fold-in on exact + probable_variant + confirmed, scores, exclusions, slider positions. */
 export function recommend(
   engine: Engine,
   matched: readonly MatchedEntry[],
   options: { n?: number; caps?: readonly (number | null)[] } = {},
 ): Recommendations {
   const { model } = engine;
-  const history = toUserHistory(matched); // exact + probable_variant only
+  const history = toUserHistory(matched); // exact + probable_variant + confirmed
   const x = foldIn(
     model,
     history.map((h) => h.item),
