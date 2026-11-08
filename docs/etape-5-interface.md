@@ -471,10 +471,34 @@ Fait le 8 novembre 2026. Tous les critères sont atteints.
 
 ### G6
 
+Contrôle fait le 8 novembre 2026. **Arrêt obligatoire : relecture de Thibault en cours.**
+
+- **Export de Thibault dans la vraie interface** (`vite preview` sur le build, Chromium piloté par un script non versionné dans `web/test-data/` ; ZIP refait avec `ratings.csv`, `watched.csv` et `diary.csv` seulement, jamais `profile.csv`). Taux et comptes seulement, aucun titre :
+  - 225 entrées lues, **188 reconnues**, comme à l'étape 3 ;
+  - 2 entrées « à vérifier » : deux séries rapprochées d'un film par le flou. Rien n'est coché, et « aucun de ceux-là » les règle : c'est le cas qui justifie de ne jamais prendre le flou automatiquement ;
+  - 25 sorties après 2023 et 10 hors catalogue (séries, 2023 sous le seuil, absents de MovieLens) ;
+  - annotation de profil affichée (3 réalisateurs) ;
+  - annotation « même série que » vue une fois au cran 500 ;
+  - pas d'indicateur « loin de tes goûts » au cran 500, cohérent avec le score relatif mesuré à l'étape 4 (0,05 > 0,04) ;
+  - **tampon « ✱ pépite » : 0 carte** parmi les 8 premières aux crans 2 000 et ∞ (voir la décision ci-dessous) ;
+  - bureau et téléphone (375 px) : pas de défilement horizontal, aucune requête hors de l'origine locale et de `image.tmdb.org` ;
+  - temps : modèle prêt en 924 ms (bureau) et 595 ms (téléphone), analyse en 30 et 19 ms ;
+  - captures dans `web/test-data/screenshots/thibault/` (ignoré), montrées à Thibault seulement.
+- **Lien Letterboxd** : `https://letterboxd.com/tmdb/<tmdb_id>/` vérifié sur 3 films du catalogue. TMDB 1398, 81 et 670 redirigent (1 redirection, code 200) vers `/film/stalker/`, `/film/nausicaa-of-the-valley-of-the-wind/` et `/film/oldboy/`. Critère tenu.
+- **Test sur un vrai téléphone** (`npm run dev -- --host`) : à faire à la main par Thibault ; résultat à noter ici.
+- **Décisions demandées à Thibault** :
+  1. mention « spectacle » : recommandation de ne pas l'afficher (61 % de précision sur les 56 plus populaires, voir G4) et de la reporter à l'enrichissement TMDB ;
+  2. tampon « ✱ pépite » : avec la règle ajustée (popularité ≤ 1 000 et plafond > 1 000), il n'apparaît presque jamais. Aux crans ∞ à 2 000, les premiers films sont tous au-dessus de 1 000. 0 carte tamponnée sur les 8 premières au cran 2 000, avec l'export d'exemple comme avec celui de Thibault. À garder tel quel, ou à revoir (par exemple : tamponner au cran courant les films sous le plafond suivant) ;
+  3. relecture visuelle des captures.
+- Après la relecture : mise à jour de `CLAUDE.md` et de `stack-technique.md`, avec le diff montré avant le commit.
+
 ---
 
 ## 6. À reporter
 
 *(Y noter ce qui est vu pendant l'étape et relève d'une étape suivante.)*
 
+- **Tampon « ✱ pépite »** (D6) : presque jamais visible avec la règle ajustée (voir G6, décision 2).
+- **Mention « spectacle »** : heuristique sur les titres trop imprécise (61 %) ; à refaire avec les genres ou mots-clés TMDB (enrichissement du pipeline).
+- **Changement de cran** : 34 à 40 ms au pire pour un seuil de 50 ms, dominé par le rendu. À surveiller si les cartes s'enrichissent.
 - **Seuil de l'indicateur « loin de tes goûts »** (D5, 0,04) : à recalibrer avec les exports des volontaires (étape 7), d'après la distribution des scores relatifs par position et le ressenti (liste cohérente ou non).
