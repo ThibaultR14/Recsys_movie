@@ -15,7 +15,7 @@ import { Slider } from './Slider';
 import { ThemeToggle } from './ThemeToggle';
 import { THEME_KEY } from '../theme';
 import { Underline } from './Underline';
-import { byline, cardRotation, pepiteStamps, tapeRotation } from './cardRules';
+import { byline, cardRotation, pepiteStamps, ratingLine, tapeRotation } from './cardRules';
 import { capLabel } from './sliderText';
 
 const POSITIONS = [null, 20000, 10000, 5000, 2000, 1000, 500, 200];
@@ -351,5 +351,24 @@ describe('ThemeToggle', () => {
     await userEvent.click(screen.getByRole('button', { name: 'passer en sombre' }));
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(localStorage.length).toBe(0);
+  });
+});
+
+describe('public rating (step 6b, D5)', () => {
+  it('« ★ 3,9 · 1 240 notes », spoken without the star', () => {
+    expect(ratingLine(39, 1240).visible).toBe('3,9 · 1 240 notes');
+    expect(ratingLine(40, 20).visible).toBe('4,0 · 20 notes');
+    expect(ratingLine(9, 102929).spoken).toBe('note moyenne 0,9 sur 5, 102 929 notes');
+  });
+
+  it('on the card, under the byline; absent without data', () => {
+    const { rerender } = render(
+      <FilmCard film={film({ publicRating: { mean10: 39, count: 1240 } })} />,
+    );
+    const line = screen.getByTestId('public-rating');
+    expect(within(line).getByText('★ 3,9 · 1 240 notes')).toHaveAttribute('aria-hidden', 'true');
+    expect(within(line).getByText('note moyenne 3,9 sur 5, 1 240 notes')).toHaveClass('sr-only');
+    rerender(<FilmCard film={film()} />);
+    expect(screen.queryByTestId('public-rating')).not.toBeInTheDocument();
   });
 });

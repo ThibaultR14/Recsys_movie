@@ -29,6 +29,8 @@ def frame():
             "tmdb_directors": [["Bryan Singer"], [], ["Jean-Pierre Jeunet"]],
             "poster_path": ["/a.jpg", None, "/b.jpg"],
             "ml_genres": [["Crime", "Thriller"], ["(no genres listed)"], ["Comedy", "Romance"]],
+            "ml_mean_rating": [4.284, 3.85, 3.849],
+            "ml_rating_count": [102929, 20, 1240],
         },
         schema_overrides={"year": pl.Int32, "ml_year": pl.Int32, "tmdb_id": pl.Int64},
     )
@@ -44,6 +46,13 @@ def test_catalog_json_columns_and_sparse_fields():
     assert c["imdb_id_aliases"] == {"1": ["tt9999999"]}
     assert c["genre_names"] == ["Comedy", "Crime", "Romance", "Thriller"]
     assert c["genres"] == [[1, 3], [], [0, 2]]
+    assert c["v"] == 2
+    assert c["ml_mean"] == [43, 39, 38]  # x 10, half up
+    assert c["ml_count"] == [102929, 20, 1240]
+
+
+def test_mean_x10_rounding():
+    assert [sc.mean_x10(x) for x in (0.86, 3.05, 3.149, 4.95, None)] == [9, 31, 31, 50, None]
 
 
 def test_title_index_keys_sources_and_ml_year():

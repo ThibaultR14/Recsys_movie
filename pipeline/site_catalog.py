@@ -10,9 +10,14 @@ title-index.json: keys = normalised titles (titles.py, v2), sorted and unique; p
 Manual display titles (`title` action of `manual_overrides.csv`, step 5 D7) replace the shown
 title in catalog.json and add their key to title-index.json as source 0 (the TMDB title keeps its
 key too). The model and catalog.parquet are untouched.
+
+catalog.json v2 (step 6b, D5): `ml_mean` (MovieLens mean rating x 10, int) and `ml_count`
+(number of MovieLens ratings) for the « ★ 3,9 · 1 240 notes » line of the cards.
 """
 
 from __future__ import annotations
+
+import math
 
 import polars as pl
 
@@ -34,7 +39,17 @@ CATALOG_COLUMNS = [
     "tmdb_directors",
     "poster_path",
     "ml_genres",
+    "ml_mean_rating",
+    "ml_rating_count",
 ]
+
+CATALOG_JSON_VERSION = 2  # v2 (step 6b, D5): ml_mean, ml_count
+
+
+def mean_x10(mean: float | None) -> int | None:
+    """MovieLens mean rating (out of 5) x 10, rounded half up: 3.85 -> 39, shown as « 3,9 »."""
+    # round(…, 6) first: 3.05 * 10 is 30.499999999999996 in binary floating point
+    return None if mean is None else math.floor(round(mean * 10, 6) + 0.5)
 
 
 def load_catalog_frame(path) -> pl.DataFrame:
@@ -68,7 +83,7 @@ def build_catalog_json(cat: pl.DataFrame, manual_titles: dict[int, str] | None =
         manual.get(i) or display_title(r["tmdb_title"], r["ml_title"]) for i, r in enumerate(rows)
     ]
     return {
-        "v": 1,
+        "v": CATALOG_JSON_VERSION,
         "n": len(rows),
         "title": titles,
         "original_title": {
@@ -86,6 +101,9 @@ def build_catalog_json(cat: pl.DataFrame, manual_titles: dict[int, str] | None =
         "poster_path": [r["poster_path"] for r in rows],
         "genres": [sorted(gid[g] for g in (r["ml_genres"] or []) if g != NO_GENRE) for r in rows],
         "genre_names": genre_names,
+        # Public rating on the cards (step 6b, D5): aggregates only, never a raw rating.
+        "ml_mean": [mean_x10(r["ml_mean_rating"]) for r in rows],
+        "ml_count": [r["ml_rating_count"] for r in rows],
     }
 
 

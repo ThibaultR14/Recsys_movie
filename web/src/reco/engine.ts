@@ -30,6 +30,9 @@ export interface CatalogFile {
   poster_path: (string | null)[];
   genres: number[][];
   genre_names: string[];
+  /** v2 (step 6b, D5): MovieLens mean rating x 10 and number of ratings. */
+  ml_mean?: (number | null)[];
+  ml_count?: (number | null)[];
 }
 
 export interface Engine {

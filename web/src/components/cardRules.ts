@@ -54,6 +54,18 @@ export function isDocumentary(genres: readonly string[]): boolean {
   return genres.includes('Documentary');
 }
 
+const FR_NUMBER = new Intl.NumberFormat('fr-FR');
+
+/** « ★ 3,9 · 1 240 notes » (step 6b, D5): MovieLens mean out of 5, one decimal, and the count. */
+export function ratingLine(mean10: number, count: number): { visible: string; spoken: string } {
+  const mean = `${Math.floor(mean10 / 10)},${mean10 % 10}`;
+  const n = FR_NUMBER.format(count);
+  return {
+    visible: `${mean} · ${n} notes`,
+    spoken: `note moyenne ${mean} sur 5, ${n} notes`,
+  };
+}
+
 /** « réalisateur, année »: up to two directors joined with « et ». */
 export function byline(directors: readonly string[], year: number | null): string {
   const who = directors.slice(0, 2).join(' et ');

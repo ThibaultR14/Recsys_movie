@@ -274,6 +274,14 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - Les deux paragraphes d'aide de l'étape 6 sont remplacés par les emplacements `aide.*` (ils restent dans l'historique git, utiles à Claude Web).
 - Vitest (3) : clavier des onglets, étapes et extrémités, budget et contenu des SVG (ni couleur en dur, ni image, ni mot). Playwright (téléphone) : aide ouverte sans défilement horizontal, axe 0 dans les deux thèmes, onglet IMDb jusqu'à l'étape 4.
 
+### R5 — Note du public (8 novembre 2026)
+
+- `site_catalog.py` : `catalog.json` **v2**, `ml_mean` (moyenne MovieLens × 10, arrondie au plus proche, 0,5 vers le haut, après `round(…, 6)` pour éviter 3,05 × 10 = 30,4999…) et `ml_count` ; `export.py catalog-verify` contrôle la version, les longueurs et les bornes (5 ≤ `ml_mean` ≤ 50, `ml_count` ≥ 1). `pytest` 232 verts, `ruff` propre. Pas de réentraînement (ordre `item_idx` inchangé).
+- **Taille** : `catalog.json` 2 699 074 octets, **1 172 359 gzip** (+55 105, +4,9 %, plafond +60 Ko) ; total `web/public/data/` **3 115 774 octets gzip**.
+- Site : `FilmCard.publicRating` (`mean10`, `count`) lu dans le worker ; ligne « ★ 3,9 · 1 240 notes » (encre pâle 13 px, `Intl.NumberFormat('fr-FR')`, espace fine insécable), « ★ … » `aria-hidden`, texte lu : « note moyenne 3,9 sur 5, 1 240 notes ». Champs facultatifs dans `CatalogFile` : un ancien `catalog.json` (v1) donne des cartes sans la ligne.
+- Tests : format, carte avec et sans note (Vitest) ; sur les vrais fichiers, chaque film recommandé a sa note et **`ml_count` ≤ popularité ≤ plafond du cran** (worker) ; Playwright : 8 lignes de note sur les 8 premières cartes.
+- **Temps du curseur** : la mesure Playwright compte jusqu'à deux images après la mise à jour (plancher ≈ 33 ms) ; elle donne maintenant aussi le temps jusqu'au DOM (`notchDomMs` : **3 à 8 ms**). Sur une machine chargée, des pointes isolées à 50–69 ms sont apparues (rendu des affiches, pas React) ; en alternant 2 × 5 mesures avec et sans R5 : 34–46 ms avec, 34–50 ms sans. **Pas d'effet de la note du public** ; seuil de 50 ms gardé.
+
 ---
 
 ## 6. À reporter

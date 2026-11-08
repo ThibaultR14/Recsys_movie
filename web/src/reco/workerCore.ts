@@ -47,6 +47,8 @@ export interface FilmCard {
   tmdbId: number | null;
   /** MovieLens genre names (e.g. "Documentary"). */
   genres: string[];
+  /** Public rating (step 6b, D5): MovieLens mean x 10 (39 = 3,9 / 5) and number of ratings. */
+  publicRating?: { mean10: number; count: number };
 }
 
 export interface Unrecognized {
@@ -112,7 +114,14 @@ export function filmCard(engine: Engine, item: number): FilmCard {
     popularity: engine.model.popularity[item] ?? 0,
     tmdbId: c.tmdb_id[item] ?? null,
     genres: (c.genres[item] ?? []).map((g) => c.genre_names[g] ?? ''),
+    ...publicRating(c, item),
   };
+}
+
+function publicRating(c: Engine['catalog'], item: number): Pick<FilmCard, 'publicRating'> {
+  const mean10 = c.ml_mean?.[item];
+  const count = c.ml_count?.[item];
+  return mean10 != null && count != null ? { publicRating: { mean10, count } } : {};
 }
 
 async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {

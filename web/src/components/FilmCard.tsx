@@ -3,6 +3,7 @@ import { HandNote } from './HandNote';
 import {
   POSTER_BASE,
   byline,
+  ratingLine,
   cardRotation,
   isDocumentary,
   letterboxdUrl,
@@ -15,6 +16,16 @@ interface FilmCardProps {
   stamp?: boolean;
   /** Title of a seen film of the same series, for « (même série que « X », que t'as vu) ». */
   seriesOf?: string;
+}
+
+function PublicRating({ mean10, count }: { mean10: number; count: number }) {
+  const { visible, spoken } = ratingLine(mean10, count);
+  return (
+    <span className="text-[13px] text-muted" data-testid="public-rating">
+      <span aria-hidden="true">★ {visible}</span>
+      <span className="sr-only">{spoken}</span>
+    </span>
+  );
 }
 
 const CARD_CLASS =
@@ -46,6 +57,7 @@ export function FilmCard({ film, stamp = false, seriesOf }: FilmCardProps) {
       <span className="flex flex-col gap-0.5">
         <span className="text-[16px] leading-tight font-bold">{film.title}</span>
         <span className="text-[13px] text-muted">{byline(film.directors, film.year)}</span>
+        {film.publicRating && <PublicRating {...film.publicRating} />}
         {isDocumentary(film.genres) && (
           <span className="text-[13px] text-muted italic">documentaire</span>
         )}

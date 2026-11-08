@@ -594,8 +594,12 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
     n = cat_json["n"]
     meta = json.loads((out_dir / "model-meta.json").read_text())
     assert n == meta["n_items"]
-    for col in ("title", "year", "tmdb_id", "imdb_id", "directors", "poster_path", "genres"):
+    cols = ("title", "year", "tmdb_id", "imdb_id", "directors", "poster_path", "genres")
+    for col in (*cols, "ml_mean", "ml_count"):
         assert len(cat_json[col]) == n, col
+    assert cat_json["v"] == sc.CATALOG_JSON_VERSION
+    assert all(isinstance(m, int) and 5 <= m <= 50 for m in cat_json["ml_mean"]), "ml_mean"
+    assert all(isinstance(c, int) and c >= 1 for c in cat_json["ml_count"]), "ml_count"
     assert index["keys"] == sorted(set(index["keys"])) and len(index["keys"]) == len(index["post"])
     where: dict[int, dict[str, int]] = {}
     for key, post in zip(index["keys"], index["post"], strict=True):

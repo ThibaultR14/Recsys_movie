@@ -44,6 +44,8 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   const slider = page.getByRole('slider', { name: 'plutôt connu ou plutôt pépite ?' });
   await expect(slider).toHaveValue('4');
   await expect(cards(page)).toHaveCount(8);
+  await expect(page.getByTestId('public-rating')).toHaveCount(8);
+  await expect(page.getByTestId('public-rating').first()).toContainText(/^★ d,d · [ds]+ notes/);
   await expect(
     page.getByText("(t'aimes bien andrei tarkovsky, wim wenders et wong kar-wai, non ?)"),
   ).toBeVisible();
@@ -356,24 +358,28 @@ test('timings: model ready, analysis of the example, slider notch to display', a
     const input = document.querySelector<HTMLInputElement>('input[type=range]')!;
     const firstCard = () => document.querySelector('[data-testid=film-card]')?.textContent;
     const out: number[] = [];
+    const dom: number[] = [];
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
     for (const value of ['5', '6', '7', '3', '1', '0', '4']) {
       const before = firstCard();
       const t0 = performance.now();
       setter.call(input, value);
       input.dispatchEvent(new Event('input', { bubbles: true }));
-      while (firstCard() === before) await new Promise((r) => requestAnimationFrame(r));
+      while (firstCard() === before) await new Promise((r) => setTimeout(r, 0));
+      dom.push(performance.now() - t0);
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       out.push(performance.now() - t0);
     }
-    return out;
+    return { out, dom };
   });
 
   const report = {
     modelReadyMs: Math.round(modelReady),
     analysisMs: Math.round(analysis),
-    notchMs: notch.map((x) => Math.round(x)),
-    notchMaxMs: Math.round(Math.max(...notch)),
+    notchMs: notch.out.map((x) => Math.round(x)),
+    notchMaxMs: Math.round(Math.max(...notch.out)),
+    // time until the new cards are in the DOM (React), before the two frames of the paint
+    notchDomMs: notch.dom.map((x) => Math.round(x)),
   };
   console.log(JSON.stringify(report));
   test.info().annotations.push({ type: 'timings', description: JSON.stringify(report) });
