@@ -16,7 +16,8 @@
     "match-report": "tsx scripts/match-report.ts",
     "reco-report": "tsx scripts/reco-report.ts",
     "reco-bench": "tsx scripts/reco-bench.ts",
-    "make-example": "tsx scripts/make-example.ts"
+    "make-example": "tsx scripts/make-example.ts",
+    "spectacles": "tsx scripts/spectacles.ts"
   },
   "dependencies": {
     "@fontsource/caveat": "^5.3.0",

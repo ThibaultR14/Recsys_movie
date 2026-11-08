@@ -410,6 +410,39 @@ Fait le 8 novembre 2026. Tous les critères sont atteints.
 - **Vérifié dans Edge sans interface** : accueil fidèle à la maquette en bureau. La vue téléphone à 375 px n'est pas mesurable ainsi (largeur de fenêtre minimale d'Edge) : elle sera vérifiée avec Playwright en G5.
 
 ### G4
+
+Fait le 8 novembre 2026. Tous les critères sont atteints. La liste des « spectacles » est prête pour G6.
+
+- **Résultats** (`Resultats.tsx`) : les 8 positions viennent d'**un seul** `recommend({ n: 48 })`, appelé après l'analyse. Le curseur, le filtre et « encore des films » ne font que changer la liste affichée, sans nouveau calcul (le test `App` vérifie un seul appel).
+  - Départ au cran 2 000.
+  - Phrase du titre selon le cran (∞ / 20 000 / 10 000 → classiques ; 5 000 / 2 000 → mélange ; 1 000 / 500 / 200 → « voilà huit films… »). Le nombre suit les cartes affichées, en toutes lettres (« seize », « quarante-huit »), au singulier pour 1.
+  - Indicateur « loin de tes goûts » sous le curseur si le score relatif est < 0,04.
+  - Case « sans les documentaires » : filtre côté client de la liste déjà calculée.
+  - « encore des films » : + 8 cartes, jusqu'à 48 ; le bouton disparaît ensuite.
+  - Note sur les films récents sous la grille, annotation « dis-nous si on s'est planté, ça nous aide ».
+  - Région `aria-live` masquée : « 8 films, moins de 2 000 notes ».
+- **Annotations calculées dans le worker** (`reco/annotations.ts`, fonctions pures, sans effet sur les scores ; `RecommendResult` reçoit `profileDirectors` et `films[].seriesOf`) :
+  - **profil** : réalisateurs les plus fréquents parmi les films du fold-in **notés** au-dessus de la médiane (percentile > 0,5). Égalités départagées par la somme des percentiles, puis par le nom ; 3 au plus ; masqué s'il en reste moins de 2.
+    - Précision ajoutée : un réalisateur doit avoir **au moins 2 films** aimés, car « t'aimes bien X » sur un seul film sonne faux.
+    - Noms complets en minuscules (« andrei tarkovsky, wim wenders et wong kar-wai ») : couper au nom de famille se tromperait sur les noms asiatiques (*Wong Kar-wai*, *Bong Joon-ho*).
+  - **même série** : même titre principal (avant « : » ou « - », normalisé `titles-v2`) et au moins un réalisateur en commun avec un film de l'historique.
+- **« à propos »** (`APropos.tsx`), ouverte par `#a-propos` (« qui on est ») ou `#comment-ca-marche` par-dessus l'écran en cours, qui est gardé : le logo ramène aux résultats.
+  - Contenu : qui on est, comment ça marche, on garde rien (dont la phrase sur les affiches de TMDB), ce qu'on sait pas faire, « compatible avec les exports Letterboxd et IMDb. » (avec « (pour imdb, ça arrive bientôt) »).
+  - Mentions : logo TMDB officiel (`web/public/tmdb-logo.svg`, fichier d'origine non modifié, téléchargé depuis themoviedb.org, sans script) + phrase TMDB exacte ; citation MovieLens exacte ; « pépite n'est ni soutenu ni approuvé par l'université du minnesota, grouplens ou tmdb. ».
+- **Sur l'export d'exemple** (vrais fichiers, *Milk* confirmé, 62 films dans l'historique) :
+  - profil : Tarkovsky, Wenders, Wong Kar-wai ;
+  - *Kill Bill: Vol. 2* annoté « même série que *Kill Bill: Vol. 1* » ;
+  - *Nausicaä of the Valley of the Wind* affiché avec le titre corrigé (G1) ;
+  - scores relatifs : 1 / 0,70 / 0,55 / 0,39 / 0,27 / 0,18 / 0,11 / 0,049 de ∞ à 200, donc pas d'indicateur « loin de tes goûts » pour cet exemple ;
+  - au cran 2 000, aucune des 8 premières cartes n'a de tampon : leur popularité est entre 1 000 et 2 000.
+- **« Spectacles »** (D6, à trancher en G6) : `src/reco/spectacle.ts` (pas encore utilisé par l'interface), `npm run spectacles`, liste complète dans `docs/figures/etape-5-spectacles.md`.
+  - 931 titres de la forme « Prénom Nom: … », dont **246** avec le seul genre « Comedy ».
+  - Relecture à la main des 56 plus populaires : **34 vrais spectacles, 22 non (61 %)**. Les erreurs sont des suites ou des films à personnage (*Ace Ventura: Pet Detective*, *Robin Hood: Men in Tights*, *Deuce Bigalow: Male Gigolo*, *Alan Partridge: Alpha Papa*, *Borat Subsequent Moviefilm*…), et elles occupent 7 des 8 premières places.
+  - La règle ne peut pas distinguer un nom de personnage d'un nom d'humoriste. Recommandation pour G6 : ne pas afficher la mention, et la reporter à l'enrichissement TMDB (genres ou mots-clés « stand-up »).
+- **Tests** : Vitest 186/186 (+ 18 : textes, annotations, `Resultats`, « à propos », route) ; `tsc`, ESLint, Prettier et le build verts.
+  - `pages.test.ts` renommé en `helpers.test.ts` : avec le même nom que `pages.test.tsx`, tsc ne vérifiait pas le fichier `.tsx`.
+  - Le test de temps du matcher (étape 3 : 3 000 entrées ≤ 300 ms) échouait dans la suite complète (1,5 s), à cause des nouveaux fichiers de test qui chargent le vrai moteur en parallèle. Seul, il passe. Il tourne maintenant dans un projet Vitest `timed`, après les autres (`sequence.groupOrder`), avec le même seuil.
+
 ### G5
 ### G6
 

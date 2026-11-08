@@ -5,6 +5,7 @@
  */
 import { RECOMMENDATION_STATUSES, type MatchedEntry } from '../matching/history';
 import type { MatchStatus } from '../matching/match';
+import { profileDirectors, seriesOf } from './annotations';
 import {
   applyChoices,
   importExport,
@@ -69,13 +70,21 @@ export interface ConfirmResult {
   nHistoryFilms: number;
 }
 
+export interface RecommendedFilm extends FilmCard {
+  score: number;
+  /** Title of a seen film of the same series (same main title, a director in common). */
+  seriesOf?: string;
+}
+
 export interface RecommendResult {
   nHistory: number;
   nExcluded: number;
+  /** Up to 3 directors for « (t'aimes bien X, Y et Z, non ?) »; empty = annotation hidden. */
+  profileDirectors: string[];
   positions: {
     cap: number | null;
     relativeScore: number;
-    films: (FilmCard & { score: number })[];
+    films: RecommendedFilm[];
   }[];
 }
 
@@ -139,13 +148,24 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     return { counts: s.counts, nHistoryFilms: s.nHistoryFilms } satisfies ConfirmResult;
   }
   const res = recommend(engine, state.matched, { n: req.n, caps: req.caps });
+  const series = seriesOf(
+    [...new Set(res.positions.flatMap((p) => p.items))],
+    res.history,
+    engine.catalog,
+  );
   return {
     nHistory: res.history.length,
     nExcluded: res.nExcluded,
+    profileDirectors: profileDirectors(res.history, engine.catalog),
     positions: res.positions.map((p) => ({
       cap: p.cap,
       relativeScore: p.relativeScore,
-      films: p.items.map((item, k) => ({ ...filmCard(engine, item), score: p.scores[k]! })),
+      films: p.items.map((item, k) => {
+        const film: RecommendedFilm = { ...filmCard(engine, item), score: p.scores[k]! };
+        const s = series.get(item);
+        if (s) film.seriesOf = s;
+        return film;
+      }),
     })),
   } satisfies RecommendResult;
 }

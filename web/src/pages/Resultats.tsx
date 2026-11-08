@@ -1,30 +1,106 @@
-import { useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { FilmGrid } from '../components/FilmGrid';
+import { HandNote } from '../components/HandNote';
+import { PrimaryButton } from '../components/PrimaryButton';
 import { Slider } from '../components/Slider';
+import { isDocumentary } from '../components/cardRules';
+import { capLabel } from '../components/sliderText';
 import type { RecommendResult } from '../reco/workerCore';
+import { FAR_FROM_TASTE, profileNote, titlePhrase } from './resultsText';
 
+/** Starting notch (mid-right, like the mockup at 70 %). */
 export const START_CAP = 2000;
-const PAGE = 8;
+export const PAGE = 8;
 
 interface ResultatsProps {
   nEntries: number;
+  /** All 8 positions, computed once after the analysis: moving the slider recomputes nothing. */
   reco: RecommendResult;
 }
 
-/** Screen 3: recommendations and the slider (completed in G4). */
+/** Screen 3: recommendations, the slider and the annotations (mockup C, D5). */
 export function Resultats({ nEntries, reco }: ResultatsProps) {
-  const caps = reco.positions.map((p) => p.cap);
+  const caps = useMemo(() => reco.positions.map((p) => p.cap), [reco]);
   const [index, setIndex] = useState(() => Math.max(0, caps.indexOf(START_CAP)));
-  const position = reco.positions[index];
+  const [visible, setVisible] = useState(PAGE);
+  const [noDocs, setNoDocs] = useState(false);
+  const docsId = useId();
+
+  const position = reco.positions[index] ?? reco.positions[0]!;
+  const films = useMemo(
+    () => (noDocs ? position.films.filter((f) => !isDocumentary(f.genres)) : position.films),
+    [position, noDocs],
+  );
+  const shown = films.slice(0, visible);
+  const series = useMemo(
+    () => new Map(shown.flatMap((f) => (f.seriesOf ? [[f.item, f.seriesOf] as const] : []))),
+    [shown],
+  );
+  const profile = profileNote(reco.profileDirectors);
+  const far = position.relativeScore < FAR_FROM_TASTE;
+
   return (
     <div className="flex flex-col gap-14 pt-6">
       <div className="flex max-w-[760px] flex-col gap-7">
-        <h1 className="m-0 text-[clamp(26px,3.4vw,38px)] leading-[1.35] font-normal">
-          on a lu tes {nEntries} films.
-        </h1>
-        <Slider positions={caps} index={index} onChange={setIndex} />
+        <div className="flex flex-col gap-2.5">
+          <h1 className="m-0 text-[clamp(26px,3.4vw,38px)] leading-[1.35] font-normal">
+            on a lu tes {nEntries} films.
+            <br />
+            {titlePhrase(position.cap, shown.length)}
+          </h1>
+          {profile && (
+            <HandNote as="p" rotate={-1.5} size={24}>
+              {profile}
+            </HandNote>
+          )}
+        </div>
+        <div className="flex flex-col gap-3">
+          <Slider positions={caps} index={index} onChange={(i) => setIndex(i)} />
+          {far && (
+            <HandNote as="p" rotate={-2} size={22}>
+              (là, on s'éloigne pas mal de tes goûts habituels)
+            </HandNote>
+          )}
+          <label
+            htmlFor={docsId}
+            className="flex min-h-11 w-fit cursor-pointer items-center gap-3 text-[15px]"
+          >
+            <input
+              id={docsId}
+              type="checkbox"
+              checked={noDocs}
+              onChange={(e) => setNoDocs(e.target.checked)}
+              className="size-5 accent-pen"
+            />
+            sans les documentaires
+          </label>
+        </div>
       </div>
-      {position && <FilmGrid films={position.films.slice(0, PAGE)} cap={position.cap} />}
+
+      <p className="sr-only" aria-live="polite">
+        {`${shown.length} films${position.cap === null ? '' : `, ${capLabel(position.cap)}`}`}
+      </p>
+
+      {shown.length > 0 ? (
+        <FilmGrid films={shown} cap={position.cap} seriesOf={series} />
+      ) : (
+        <p className="m-0 text-[16px]">plus rien à ce cran-là : essaie un peu plus à gauche.</p>
+      )}
+
+      <p className="m-0 text-[14px] text-muted">
+        on connaît moins bien les films sortis après 2023, désolé.
+      </p>
+
+      <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-4">
+        {visible < films.length && (
+          <PrimaryButton onClick={() => setVisible((v) => v + PAGE)}>
+            encore des films
+          </PrimaryButton>
+        )}
+        <HandNote size={22} rotate={0}>
+          dis-nous si on s'est planté, ça nous aide
+        </HandNote>
+      </div>
     </div>
   );
 }

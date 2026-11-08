@@ -73,6 +73,7 @@ function recoResult(): RecommendResult {
   return {
     nHistory: 7,
     nExcluded: 9,
+    profileDirectors: ['Andrei Tarkovsky', 'Wong Kar-wai'],
     positions: POSITIONS.map((cap) => ({
       cap,
       relativeScore: 0.5,
@@ -242,7 +243,9 @@ function inProcessClient(): RecoApi {
     async (url) => new Response(readFileSync(DATA + url.replace('/data/', ''))),
   );
   let id = 0;
-  const call = async <T,>(req: Omit<RecoRequest, 'id'>): Promise<T> => {
+  const call = async <T,>(
+    req: { type: RecoRequest['type'] } & Record<string, unknown>,
+  ): Promise<T> => {
     const r = await handle({ ...req, id: ++id } as RecoRequest);
     if (!r.ok) throw new Error(r.error);
     return r.result as T;

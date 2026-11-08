@@ -1,7 +1,9 @@
 // Screen state machine (step 5, D2): accueil -> analyse -> resultats. Nothing is stored: a reload
 // brings back the home screen. The model loads in the Web Worker as soon as the page opens.
+// « à propos » opens with #a-propos or #comment-ca-marche, over the current screen (kept).
 import { useEffect, useState } from 'react';
-import { Layout } from './components/Layout';
+import { ABOUT_HASH, HOW_HASH, Layout } from './components/Layout';
+import { APropos } from './pages/APropos';
 import { Accueil } from './pages/Accueil';
 import { Analyse } from './pages/Analyse';
 import { Resultats } from './pages/Resultats';
@@ -22,6 +24,12 @@ type Screen =
   | { name: 'accueil' }
   | { name: 'analyse'; summary: ImportSummary; unrecognized: Unrecognized[] }
   | { name: 'resultats'; nEntries: number; reco: RecommendResult };
+
+const ABOUT_HASHES = new Set([ABOUT_HASH, HOW_HASH]);
+
+function currentHash(): string {
+  return typeof window === 'undefined' ? '' : window.location.hash;
+}
 
 let defaultClient: RecoClient | null = null;
 function getDefaultClient(): RecoClient {
@@ -47,6 +55,8 @@ export function App({ client: injected }: { client?: RecoApi }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>();
   const [error, setError] = useState<string>();
+  const [hash, setHash] = useState(currentHash);
+  const about = ABOUT_HASHES.has(hash);
 
   useEffect(() => {
     initOnce(client).then(
@@ -56,8 +66,15 @@ export function App({ client: injected }: { client?: RecoApi }) {
   }, [client]);
 
   useEffect(() => {
-    window.scrollTo?.(0, 0);
-  }, [screen.name]);
+    const onHash = () => setHash(currentHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  useEffect(() => {
+    if (about) document.getElementById(hash.slice(1))?.scrollIntoView?.();
+    else window.scrollTo?.(0, 0);
+  }, [screen.name, about, hash]);
 
   const startImport = async (read: () => Promise<UploadResult>) => {
     setError(undefined);
@@ -126,6 +143,13 @@ export function App({ client: injected }: { client?: RecoApi }) {
     setScreen({ name: 'accueil' });
   };
 
+  if (about) {
+    return (
+      <Layout>
+        <APropos />
+      </Layout>
+    );
+  }
   if (screen.name === 'analyse') {
     return (
       <Layout onBack={backHome}>
