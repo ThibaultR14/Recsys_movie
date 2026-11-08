@@ -57,7 +57,7 @@ describe('Contact', () => {
 
     await userEvent.click(send);
     expect(screen.getByRole('alert')).toHaveTextContent(CONTACT.erreurSujet);
-    await userEvent.click(within(subjects).getByRole('radio', { name: 'bug' }));
+    await userEvent.click(within(subjects).getByRole('radio', { name: 'un bug' }));
     await userEvent.click(send);
     expect(screen.getByRole('alert')).toHaveTextContent(CONTACT.erreurMessage);
     const box = screen.getByRole('textbox', { name: CONTACT.messageLabel });
@@ -66,7 +66,7 @@ describe('Contact', () => {
     expect(screen.getByText(`16 / ${MESSAGE_MAX}`)).toBeInTheDocument();
     await userEvent.click(send);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(navigate).toHaveBeenCalledWith(mailtoHref(CONTACT_EMAIL, 'bug', 'le curseur saute'));
+    expect(navigate).toHaveBeenCalledWith(mailtoHref(CONTACT_EMAIL, 'un bug', 'le curseur saute'));
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

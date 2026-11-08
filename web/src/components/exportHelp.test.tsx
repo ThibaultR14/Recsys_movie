@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { EXPORT_HELP as T } from '../content/exportHelp';
+import { plainText, textParts } from '../content/richText';
 import { ExportHelp } from './ExportHelp';
 import * as drawings from './help/illustrations';
 
@@ -36,18 +37,21 @@ describe('ExportHelp (step 6b, D4)', () => {
     expect(step()).toHaveTextContent('étape 1 sur 3');
     expect(step().parentElement).toHaveAttribute('aria-live', 'polite');
     expect(prev).toBeDisabled();
-    expect(screen.getByText(T.letterboxd.etapes[0]!)).toBeInTheDocument();
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveTextContent(plainText(T.letterboxd.etapes[0]!));
+    // the sites' real English labels are marked lang="en" (R7)
+    expect(within(panel).getByText('settings')).toHaveAttribute('lang', 'en');
     await userEvent.click(next);
     await userEvent.click(next);
     expect(step()).toHaveTextContent('étape 3 sur 3');
     expect(next).toBeDisabled();
-    expect(screen.getByText(T.letterboxd.etapes[2]!)).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel')).toHaveTextContent(plainText(T.letterboxd.etapes[2]!));
 
     await userEvent.click(screen.getByRole('tab', { name: 'imdb' }));
     expect(step()).toHaveTextContent('étape 1 sur 4');
     for (let i = 0; i < 3; i++) await userEvent.click(next);
     expect(step()).toHaveTextContent('étape 4 sur 4');
-    expect(screen.getByText(T.imdb.etapes[3]!)).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel')).toHaveTextContent(plainText(T.imdb.etapes[3]!));
     // each tab keeps its step
     await userEvent.click(screen.getByRole('tab', { name: 'letterboxd' }));
     expect(step()).toHaveTextContent('étape 3 sur 3');
@@ -69,5 +73,20 @@ describe('ExportHelp (step 6b, D4)', () => {
       `SVG de l'aide : ${total} octets (${sizes.map(([k, n]) => `${k} ${n}`).join(', ')})`,
     );
     expect(total).toBeLessThanOrEqual(25_000);
+  });
+});
+
+describe('richText', () => {
+  it('splits the {en:…} marks, plainText removes them', () => {
+    const t = 'va dans « {en:data} », puis « {en:export your data} ».';
+    expect(textParts(t)).toEqual([
+      { text: 'va dans « ', en: false },
+      { text: 'data', en: true },
+      { text: ' », puis « ', en: false },
+      { text: 'export your data', en: true },
+      { text: ' ».', en: false },
+    ]);
+    expect(plainText(t)).toBe('va dans « data », puis « export your data ».');
+    expect(textParts('rien')).toEqual([{ text: 'rien', en: false }]);
   });
 });

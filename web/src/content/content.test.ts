@@ -9,7 +9,7 @@ import { isPending, pending } from './pending';
 import * as theme from './theme';
 
 /** Becomes true in R7 (docs/etape-6b-retouches.md, D8): no placeholder may remain. */
-const BLOCKING = false;
+const BLOCKING = true;
 
 function strings(value: unknown): string[] {
   if (typeof value === 'string') return [value];

@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { EXPORT_HELP as T } from '../content/exportHelp';
+import { RichText } from './RichText';
 import {
   DropCsv,
   DropZip,
@@ -95,7 +96,9 @@ export function ExportHelp() {
           <p className="m-0 text-[14px] text-muted">
             étape {step + 1} sur {texts.length}
           </p>
-          <p className="m-0 text-[15px] leading-relaxed">{texts[step]}</p>
+          <p className="m-0 text-[15px] leading-relaxed">
+            <RichText text={texts[step]!} />
+          </p>
         </div>
         <div className="flex gap-6">
           <button type="button" disabled={step === 0} onClick={() => go(-1)} className={linkClass}>

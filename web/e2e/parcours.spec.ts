@@ -225,7 +225,7 @@ test('contact: copy, form -> mailto:, no request, nothing stored', async ({
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(address);
 
   // the mailto: opens the mail application (none in the test browser): the page stays
-  await page.getByRole('radio', { name: 'film mal reconnu' }).check();
+  await page.getByRole('radio', { name: 'un film mal reconnu' }).check();
   await page.getByRole('textbox').fill('« Ran » (1985) pas reconnu');
   await page.getByRole('form', { name: 'écrire un mail' }).getByRole('button').click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('contact.');

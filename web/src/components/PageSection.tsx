@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { RichText } from './RichText';
 
 /** A titled section of a text page (« comment ça marche », « à propos », « contact »). */
 export function PageSection({
@@ -33,7 +34,7 @@ export function Paragraphs({ items }: { items: readonly string[] }) {
     <>
       {items.map((p) => (
         <p key={p} className="m-0">
-          {p}
+          <RichText text={p} />
         </p>
       ))}
     </>

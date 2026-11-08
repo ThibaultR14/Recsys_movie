@@ -304,6 +304,14 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - Mesure après la règle (8 premières cartes de chaque cran) : le film le plus cité l'est sur **2 cartes au plus à tous les crans**, sur les deux exports. Export de Thibault : 15 / 12 / 11 / 8 / **5** / 7 / 7 films cités distincts de ∞ à 500 ; au cran 2 000, 2 cartes avec un seul film et **2 sans explication** (candidats épuisés), 2 et 1 sans explication à 1 000 et 500. Export d'exemple : 6 à 10 films distincts par cran, 0 à 2 cartes avec un seul film, 1 carte sans explication au cran 200.
 - Test du curseur : 3 passages sur 7 changements de cran (21 mesures), critère sur la médiane ; 3 exécutions : médiane **33 ms**, pire cas 36 à 54 ms (journalisé).
 
+### R7 — Textes de Claude Web (8 novembre 2026)
+
+- Textes reçus de Thibault (rédigés avec Claude Web) et intégrés dans `web/src/content/`, une entrée par paragraphe ou élément de liste : `apropos.*` (2 + 3 paragraphes, « je », sans école), `ccm.*` (4 + 3 + 4 + 4 paragraphes, 5 + 5 éléments de liste, 4 paragraphes d'inspirations ; « on garde rien » cite l'exception du thème clair et le `mailto:`), `contact.*` (sujets « un bug », « un film mal reconnu », « une idée », « autre chose » ; erreur « écris-moi un petit message. »), `aide.*` (3 + 4 étapes). Navigation, bouton de thème et format des explications validés tels quels.
+- **Libellés anglais des autres sites** (« settings », « data », « export your data », « letterboxd recommendations ») : marqués `{en:…}` dans le contenu, rendus en `<span lang="en">` par `RichText` (`web/src/content/richText.ts`, testé).
+- `content.test.ts` : **bloquant**, 0 `pending` restant.
+- Noms de menus : **IMDb vérifié par Thibault** (chemin du texte) ; **Letterboxd : la ligne de confirmation du message de Thibault est restée à remplir** (« [OK tel quel / ou corrige ici] ») : à confirmer en R8.
+- Vitest 251 verts, Playwright 8 verts (axe 0 dans les deux thèmes sur les trois pages avec leurs vrais textes ; logo TMDB lisible sur fond sombre, vérifié sur capture).
+
 ---
 
 ## 6. À reporter
