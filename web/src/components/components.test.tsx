@@ -15,7 +15,14 @@ import { Slider } from './Slider';
 import { ThemeToggle } from './ThemeToggle';
 import { THEME_KEY } from '../theme';
 import { Underline } from './Underline';
-import { byline, cardRotation, pepiteStamps, ratingLine, tapeRotation } from './cardRules';
+import {
+  byline,
+  cardRotation,
+  citationPicks,
+  pepiteStamps,
+  ratingLine,
+  tapeRotation,
+} from './cardRules';
 import { capLabel } from './sliderText';
 
 const POSITIONS = [null, 20000, 10000, 5000, 2000, 1000, 500, 200];
@@ -405,4 +412,33 @@ describe("« parce que t'as aimé » on a card (step 6b, D6)", () => {
     expect(screen.queryByText(/parce que/)).not.toBeInTheDocument();
     expect(screen.getByText(/même série que/)).toBeInTheDocument();
   });
+});
+
+describe('citation diversity (step 6b, R6, option A)', () => {
+  it('a history film is cited on 2 cards of a block of 8 at most; then the next closest', () => {
+    const all = Array.from({ length: 8 }, () => [1, 2, 3, 4]);
+    expect(citationPicks(all)).toEqual([[0, 1], [0, 1], [2, 3], [2, 3], [], [], [], []]);
+  });
+
+  it('one title, or none, when the candidates run out; a new block starts afresh', () => {
+    const cands = [[1, 2], [1], [1, 2], [2, 1], undefined, [], ...Array(2).fill([7]), [1, 2]];
+    expect(citationPicks(cands)).toEqual([[0, 1], [0], [1], [], [], [], [0], [0], [0, 1]]);
+  });
+});
+
+it('the grid applies the diversity rule to the cards', () => {
+  const films = Array.from({ length: 4 }, (_, i) => ({
+    ...film({ item: i, tmdbId: null }),
+    because: { kind: 'liked' as const, items: [7, 8, 9], titles: ['A', 'B', 'C'] },
+  }));
+  render(<FilmGrid films={films} />);
+  const why = screen
+    .getAllByText(/^\(parce que/, { selector: '[aria-hidden]' })
+    .map((e) => e.textContent);
+  expect(why).toEqual([
+    "(parce que t'as aimé « A » et « B »)",
+    "(parce que t'as aimé « A » et « B »)",
+    "(parce que t'as aimé « C »)",
+    "(parce que t'as aimé « C »)", // C was cited once only
+  ]);
 });

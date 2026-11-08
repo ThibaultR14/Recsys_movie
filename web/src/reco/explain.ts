@@ -13,10 +13,12 @@ export const LIKED_PERCENTILE = 0.7;
 /** A history film is cited only if its cosine with the recommended film is above this. */
 export const MIN_COSINE = 0;
 export const MAX_CITED = 2;
+/** Candidates kept per film for the diversity rule of the grid (R6, option A). */
+export const CANDIDATES = 5;
 
 export interface Explanation {
   kind: 'liked' | 'seen';
-  /** History item indices, closest first (1 or 2). */
+  /** History item indices, closest first (up to `maxCited`). */
   items: number[];
 }
 

@@ -1,7 +1,7 @@
 import type { FilmCard as FilmData, RecommendedFilm } from '../reco/workerCore';
 import { useMemo } from 'react';
 import { FilmCard } from './FilmCard';
-import { pepiteStamps } from './cardRules';
+import { citationPicks, pepiteStamps } from './cardRules';
 
 interface FilmGridProps {
   films: (FilmData & Pick<RecommendedFilm, 'because'>)[];
@@ -14,6 +14,10 @@ interface FilmGridProps {
 /** Results grid: auto-fill columns of at least 220 px, wide gaps for the tilted cards. */
 export function FilmGrid({ films, seriesOf, explain = true }: FilmGridProps) {
   const stamps = useMemo(() => pepiteStamps(films.map((f) => f.popularity)), [films]);
+  const picks = useMemo(
+    () => citationPicks(films.map((f) => (explain ? f.because?.items : undefined))),
+    [films, explain],
+  );
   return (
     <ul
       aria-label="films recommandés"
@@ -25,7 +29,11 @@ export function FilmGrid({ films, seriesOf, explain = true }: FilmGridProps) {
             film={f}
             stamp={stamps.has(i)}
             seriesOf={seriesOf?.get(f.item)}
-            because={explain ? f.because : undefined}
+            because={
+              f.because && picks[i]!.length > 0
+                ? { kind: f.because.kind, titles: picks[i]!.map((k) => f.because!.titles[k]!) }
+                : undefined
+            }
           />
         </li>
       ))}

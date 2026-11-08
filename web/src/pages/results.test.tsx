@@ -25,7 +25,13 @@ function films(cap: number | null, n = 48): RecommendedFilm[] {
     score: 1 - i / 100,
     ...(i === 1 ? { seriesOf: 'Kill Bill: Vol. 1' } : {}),
     ...(i === 2
-      ? { because: { kind: 'liked' as const, titles: ['Stalker', 'Paris, Texas'] } }
+      ? {
+          because: {
+            kind: 'liked' as const,
+            items: [900, 901],
+            titles: ['Stalker', 'Paris, Texas'],
+          },
+        }
       : {}),
   }));
 }

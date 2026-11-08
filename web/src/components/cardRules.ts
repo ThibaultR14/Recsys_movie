@@ -27,6 +27,33 @@ export function pepiteStamps(popularities: readonly number[]): Set<number> {
   return out;
 }
 
+/** At most this many cards of a block of 8 cite the same history film (step 6b, R6, option A). */
+export const MAX_CITATIONS_PER_BLOCK = 2;
+const CITED_PER_CARD = 2;
+
+/**
+ * Diversity of « (parce que t'as aimé X et Y) » (step 6b, R6, option A): blocks of 8 cards in the
+ * displayed order (like the pépite stamps). Each card takes its closest candidates (cosine > 0,
+ * closest first, computed by the worker) that are not already cited on 2 cards of the block; 2 at
+ * most, 1 or none if the candidates run out. Returns, per card, the indices of the kept candidates.
+ */
+export function citationPicks(candidates: readonly (readonly number[] | undefined)[]): number[][] {
+  const out: number[][] = [];
+  let uses = new Map<number, number>();
+  candidates.forEach((cands, i) => {
+    if (i % STAMP_BLOCK === 0) uses = new Map();
+    const picked: number[] = [];
+    for (let k = 0; k < (cands?.length ?? 0) && picked.length < CITED_PER_CARD; k++) {
+      const item = cands![k]!;
+      if ((uses.get(item) ?? 0) >= MAX_CITATIONS_PER_BLOCK) continue;
+      picked.push(k);
+      uses.set(item, (uses.get(item) ?? 0) + 1);
+    }
+    out.push(picked);
+  });
+  return out;
+}
+
 /** Deterministic hash of an integer to [0, 1) (multiplicative hash + xorshift). */
 function unit(n: number, salt: number): number {
   let h = Math.imul(n ^ salt, 2654435761) >>> 0;

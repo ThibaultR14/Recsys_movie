@@ -114,7 +114,8 @@ describe.skipIf(!ready)('worker protocol on the real files', () => {
     for (const f of all) {
       if (f.seriesOf) expect(f.because).toBeUndefined();
       for (const t of f.because?.titles ?? []) expect(seenTitles.has(t)).toBe(true);
-      expect(f.because?.titles.length ?? 1).toBeLessThanOrEqual(2);
+      expect(f.because?.titles.length ?? 1).toBeLessThanOrEqual(5); // candidates, grid keeps 2
+      expect(f.because?.titles.length).toBe(f.because?.items.length);
     }
     expect(reco.explainMs).toBeGreaterThanOrEqual(0);
     // the ambiguous Hamlets of 1964 are excluded (D4)

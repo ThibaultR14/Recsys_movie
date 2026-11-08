@@ -6,6 +6,7 @@
  */
 import { existsSync } from 'node:fs';
 import type { ImportResult, InitResult, RecommendResult } from '../src/reco/workerCore';
+import { citationPicks } from '../src/components/cardRules';
 import { FAR_FROM_TASTE } from '../src/pages/resultsText';
 import { exportInput, localHandler } from './local';
 
@@ -54,14 +55,18 @@ async function main() {
   for (const pos of reco.positions) {
     const first = pos.films.slice(0, 8);
     const far = pos.relativeScore < FAR_FROM_TASTE;
-    const cited = first.flatMap((f) => f.because?.titles ?? []);
+    // same diversity rule as the grid (step 6b, R6, option A)
+    const picks = citationPicks(first.map((f) => (far ? undefined : f.because?.items)));
+    const cited = first.flatMap((f, i) => picks[i]!.map((k) => f.because!.titles[k]!));
     const counts = new Map<string, number>();
     for (const t of cited) counts.set(t, (counts.get(t) ?? 0) + 1);
     const most = Math.max(0, ...counts.values());
-    const none = first.filter((f) => !f.because && !f.seriesOf).length;
+    const none = first.filter((f, i) => picks[i]!.length === 0 && !f.seriesOf).length;
+    const one = picks.filter((p) => p.length === 1).length;
     console.log(
       `${pos.cap === null ? '∞' : pos.cap} : ${counts.size} films cités distincts, ` +
-        `le plus cité sur ${most}/8 cartes, ${none} carte(s) sans explication` +
+        `le plus cité sur ${most}/8 cartes, ${one} carte(s) avec un seul film, ` +
+        `${none} carte(s) sans explication` +
         `${far ? ' (cran « loin de tes goûts » : explications masquées)' : ''}`,
     );
   }

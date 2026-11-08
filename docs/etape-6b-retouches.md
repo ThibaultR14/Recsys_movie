@@ -298,6 +298,12 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
   Aucune carte sans explication (hors séries). Sur la capture du cran 2 000 de l'exemple, les deux mêmes films sont cités ensemble sur 5 cartes sur 8.
 - **Arrêt (D6)** : un même film est cité sur presque toutes les cartes dès le cran de départ (7/8 sur l'exemple, 6/8 sur l'export de Thibault), et sur toutes aux crans 500 et 200 de l'exemple. Une règle de diversité sort des décisions écrites : à trancher par Thibault (options dans le message d'arrêt). R7 attend aussi les textes de Claude Web.
 
+**Décision de Thibault (8 novembre 2026) : option A.** Sur une rangée de 8 cartes (ordre affiché, comme le tampon « ✱ pépite »), un film de l'historique n'est cité que sur **2 cartes au plus** ; au-delà, on prend le suivant le plus proche (cosinus > 0) ; s'il n'y en a pas, un seul film, ou aucun. Test du curseur : 50 ms **sur la médiane** de plusieurs mesures, pire cas journalisé sans être bloquant.
+
+- Mise en œuvre : le worker garde jusqu'à **5 candidats** par film (`CANDIDATES`, `because.items` + `titles`) ; la grille choisit (`citationPicks`, `web/src/components/cardRules.ts`, `MAX_CITATIONS_PER_BLOCK = 2`). `reco-report` applique la même règle.
+- Mesure après la règle (8 premières cartes de chaque cran) : le film le plus cité l'est sur **2 cartes au plus à tous les crans**, sur les deux exports. Export de Thibault : 15 / 12 / 11 / 8 / **5** / 7 / 7 films cités distincts de ∞ à 500 ; au cran 2 000, 2 cartes avec un seul film et **2 sans explication** (candidats épuisés), 2 et 1 sans explication à 1 000 et 500. Export d'exemple : 6 à 10 films distincts par cran, 0 à 2 cartes avec un seul film, 1 carte sans explication au cran 200.
+- Test du curseur : 3 passages sur 7 changements de cran (21 mesures), critère sur la médiane ; 3 exécutions : médiane **33 ms**, pire cas 36 à 54 ms (journalisé).
+
 ---
 
 ## 6. À reporter

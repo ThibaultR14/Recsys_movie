@@ -6,7 +6,7 @@
 import { RECOMMENDATION_STATUSES, type MatchedEntry } from '../matching/history';
 import type { MatchStatus } from '../matching/match';
 import { profileDirectors, seriesOf } from './annotations';
-import { explain } from './explain';
+import { CANDIDATES, explain } from './explain';
 import {
   applyChoices,
   importExport,
@@ -81,8 +81,11 @@ export interface RecommendedFilm extends FilmCard {
   score: number;
   /** Title of a seen film of the same series (same main title, a director in common). */
   seriesOf?: string;
-  /** « (parce que t'as aimé X et Y) » (step 6b, D6); never with `seriesOf` (Q3). */
-  because?: { kind: 'liked' | 'seen'; titles: string[] };
+  /**
+   * « (parce que t'as aimé X et Y) » (step 6b, D6); never with `seriesOf` (Q3). Up to 5 candidate
+   * history films, closest first; the grid picks at most 2 per card (diversity rule, R6).
+   */
+  because?: { kind: 'liked' | 'seen'; items: number[]; titles: string[] };
 }
 
 export interface RecommendResult {
@@ -176,6 +179,7 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     engine.model.dims,
     res.history,
     distinct.filter((item) => !series.has(item)),
+    { maxCited: CANDIDATES },
   );
   const explainMs = performance.now() - t0;
   return {
@@ -194,6 +198,7 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
         if (w && !s) {
           film.because = {
             kind: w.kind,
+            items: w.items,
             titles: w.items.map((i) => engine.catalog.title[i] ?? ''),
           };
         }
