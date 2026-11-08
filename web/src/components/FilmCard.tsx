@@ -6,14 +6,13 @@ import {
   cardRotation,
   isDocumentary,
   letterboxdUrl,
-  showPepiteStamp,
   tapeRotation,
 } from './cardRules';
 
 interface FilmCardProps {
   film: FilmData;
-  /** Current slider cap (null = ∞), for the « ✱ pépite » stamp. */
-  cap: number | null;
+  /** « ✱ pépite » stamp, decided by the grid (`pepiteStamps`). */
+  stamp?: boolean;
   /** Title of a seen film of the same series, for « (même série que « X », que t'as vu) ». */
   seriesOf?: string;
 }
@@ -22,7 +21,7 @@ const CARD_CLASS =
   'relative flex flex-col gap-3 bg-white px-3 pt-3 pb-[18px] text-ink no-underline shadow-[0_1px_2px_rgba(0,0,0,0.12)]';
 
 /** « Taped photo » card (design system §5). The whole card links to the film on Letterboxd. */
-export function FilmCard({ film, cap, seriesOf }: FilmCardProps) {
+export function FilmCard({ film, stamp = false, seriesOf }: FilmCardProps) {
   const content = (
     <>
       <span
@@ -56,7 +55,7 @@ export function FilmCard({ film, cap, seriesOf }: FilmCardProps) {
           (même série que « {seriesOf} », que t'as vu)
         </HandNote>
       )}
-      {showPepiteStamp(film.popularity, cap) && (
+      {stamp && (
         <span
           className="absolute right-[-14px] bottom-9 font-hand text-[24px] font-bold text-pen"
           style={{ transform: 'rotate(-12deg)' }}

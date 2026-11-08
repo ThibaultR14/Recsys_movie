@@ -1,14 +1,30 @@
 // Display rules of a film card (step 5, D6), kept out of the components for tests and reuse.
 
-/** Popularity at or below which a film gets the « ✱ pépite » stamp. */
-export const PEPITE_MAX_POPULARITY = 1000;
+/** The « ✱ pépite » stamp is decided per block of 8 cards (one « encore des films » page). */
+export const STAMP_BLOCK = 8;
 export const POSTER_BASE = 'https://image.tmdb.org/t/p/w342';
 const MAX_TILT = 1.8;
 
-/** Stamp only when it still distinguishes something: popularity <= 1 000 and the slider cap above
- * 1 000 (∞ = null counts as above). At caps 1 000, 500 and 200 every card would be stamped. */
-export function showPepiteStamp(popularity: number, cap: number | null): boolean {
-  return popularity <= PEPITE_MAX_POPULARITY && (cap === null || cap > PEPITE_MAX_POPULARITY);
+function median(xs: readonly number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 === 1 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+}
+
+/**
+ * Indexes of the stamped cards, relative to the grid: at most one per block of 8 consecutive cards,
+ * on the least known film of the block (lowest popularity; first in list order on a tie), and only if
+ * its popularity is at most half the block median. A shorter last block follows the same rule.
+ */
+export function pepiteStamps(popularities: readonly number[]): Set<number> {
+  const out = new Set<number>();
+  for (let start = 0; start < popularities.length; start += STAMP_BLOCK) {
+    const block = popularities.slice(start, start + STAMP_BLOCK);
+    let low = 0;
+    for (let i = 1; i < block.length; i++) if (block[i]! < block[low]!) low = i;
+    if (block[low]! * 2 <= median(block)) out.add(start + low);
+  }
+  return out;
 }
 
 /** Deterministic hash of an integer to [0, 1) (multiplicative hash + xorshift). */

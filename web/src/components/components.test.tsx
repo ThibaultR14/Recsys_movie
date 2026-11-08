@@ -13,7 +13,7 @@ import { NoList } from './NoList';
 import { PrimaryButton } from './PrimaryButton';
 import { Slider } from './Slider';
 import { Underline } from './Underline';
-import { byline, cardRotation, showPepiteStamp, tapeRotation } from './cardRules';
+import { byline, cardRotation, pepiteStamps, tapeRotation } from './cardRules';
 import { capLabel } from './sliderText';
 
 const POSITIONS = [null, 20000, 10000, 5000, 2000, 1000, 500, 200];
@@ -168,13 +168,20 @@ describe('card rules', () => {
     expect(tapes.every((r) => r >= -4 && r <= 4)).toBe(true);
   });
 
-  it('pépite stamp: popularity <= 1 000 and cap above 1 000 only', () => {
-    expect(showPepiteStamp(1000, null)).toBe(true);
-    expect(showPepiteStamp(1000, 2000)).toBe(true);
-    expect(showPepiteStamp(1001, 2000)).toBe(false);
-    expect(showPepiteStamp(300, 1000)).toBe(false);
-    expect(showPepiteStamp(100, 500)).toBe(false);
-    expect(showPepiteStamp(100, 200)).toBe(false);
+  it('pépite stamp: least known of each block of 8, at most half the block median', () => {
+    const block = [900, 800, 700, 600, 500, 400, 300, 200]; // median 550: 200 <= 275
+    expect([...pepiteStamps(block)]).toEqual([7]);
+    // 300 > 550 / 2: no stamp, whatever the absolute popularity
+    expect(pepiteStamps([900, 800, 700, 600, 500, 400, 350, 300]).size).toBe(0);
+    expect(pepiteStamps([50000, 40000, 45000, 9000, 60000, 52000, 48000, 41000])).toEqual(
+      new Set([3]),
+    );
+    // exactly half the median counts; a tie goes to the first card
+    expect([...pepiteStamps([10, 10, 10, 10, 10, 10, 5, 5])]).toEqual([6]);
+    // one stamp per block, indexes relative to the grid; a shorter last block follows the rule
+    expect([...pepiteStamps([...block, ...block, 1000, 1000, 100])]).toEqual([7, 15, 18]);
+    expect(pepiteStamps([100]).size).toBe(0);
+    expect(pepiteStamps([]).size).toBe(0);
   });
 
   it('byline: up to two directors, then the year', () => {
@@ -187,7 +194,7 @@ describe('card rules', () => {
 
 describe('FilmCard', () => {
   it('links the whole card to Letterboxd by tmdb id, in a new tab', () => {
-    render(<FilmCard film={film()} cap={2000} />);
+    render(<FilmCard film={film()} />);
     const link = screen.getByRole('link');
     expect(link).toHaveAttribute('href', 'https://letterboxd.com/tmdb/1398/');
     expect(link).toHaveAttribute('target', '_blank');
@@ -198,47 +205,45 @@ describe('FilmCard', () => {
   });
 
   it('is not a link without tmdb id', () => {
-    render(<FilmCard film={film({ tmdbId: null })} cap={2000} />);
+    render(<FilmCard film={film({ tmdbId: null })} />);
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.getByTestId('film-card')).toHaveTextContent('Stalker');
   });
 
   it('poster: TMDB w342, lazy, alt = title; plain frame without poster', () => {
-    const { rerender } = render(<FilmCard film={film()} cap={null} />);
+    const { rerender } = render(<FilmCard film={film()} />);
     const img = screen.getByRole('img', { name: 'Stalker' });
     expect(img).toHaveAttribute('src', 'https://image.tmdb.org/t/p/w342/stalker.jpg');
     expect(img).toHaveAttribute('loading', 'lazy');
-    rerender(<FilmCard film={film({ posterPath: null })} cap={null} />);
+    rerender(<FilmCard film={film({ posterPath: null })} />);
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     expect(screen.getByTestId('no-poster')).toBeInTheDocument();
   });
 
   it('rotation comes from item_idx only', () => {
-    const { rerender } = render(<FilmCard film={film({ item: 7 })} cap={null} />);
+    const { rerender } = render(<FilmCard film={film({ item: 7 })} />);
     const a = screen.getByTestId('film-card').style.transform;
-    rerender(<FilmCard film={film({ item: 7, title: 'Autre', popularity: 3 })} cap={500} />);
+    rerender(<FilmCard film={film({ item: 7, title: 'Autre', popularity: 3 })} />);
     expect(screen.getByTestId('film-card').style.transform).toBe(a);
     expect(a).toBe(`rotate(${cardRotation(7)}deg)`);
   });
 
-  it('pépite stamp at popularity <= 1 000 while the cap is above 1 000', () => {
-    const { rerender } = render(<FilmCard film={film({ popularity: 1000 })} cap={2000} />);
+  it('pépite stamp only when the grid asks for it', () => {
+    const { rerender } = render(<FilmCard film={film()} stamp />);
     expect(screen.getByText('✱ pépite')).toBeInTheDocument();
-    rerender(<FilmCard film={film({ popularity: 1001 })} cap={2000} />);
-    expect(screen.queryByText('✱ pépite')).not.toBeInTheDocument();
-    rerender(<FilmCard film={film({ popularity: 400 })} cap={500} />);
+    rerender(<FilmCard film={film()} />);
     expect(screen.queryByText('✱ pépite')).not.toBeInTheDocument();
   });
 
   it('documentary mention from the MovieLens genre', () => {
-    const { rerender } = render(<FilmCard film={film()} cap={null} />);
+    const { rerender } = render(<FilmCard film={film()} />);
     expect(screen.queryByText('documentaire')).not.toBeInTheDocument();
-    rerender(<FilmCard film={film({ genres: ['Documentary'] })} cap={null} />);
+    rerender(<FilmCard film={film({ genres: ['Documentary'] })} />);
     expect(screen.getByText('documentaire')).toBeInTheDocument();
   });
 
   it('same-series note', () => {
-    render(<FilmCard film={film()} cap={null} seriesOf="Alien" />);
+    render(<FilmCard film={film()} seriesOf="Alien" />);
     expect(screen.getByText("(même série que « Alien », que t'as vu)")).toBeInTheDocument();
   });
 });
@@ -246,10 +251,21 @@ describe('FilmCard', () => {
 describe('FilmGrid', () => {
   it('lists one card per film, with its series note', () => {
     const films = [film({ item: 1, title: 'A' }), film({ item: 2, title: 'B', tmdbId: null })];
-    render(<FilmGrid films={films} cap={null} seriesOf={new Map([[2, 'A']])} />);
+    render(<FilmGrid films={films} seriesOf={new Map([[2, 'A']])} />);
     const list = screen.getByRole('list', { name: 'films recommandés' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByText("(même série que « A », que t'as vu)")).toBeInTheDocument();
+  });
+
+  it('stamps the least known film of each block of 8 when well below the block median', () => {
+    const pops = [5000, 4000, 4500, 6000, 1200, 5200, 4800, 4100, 3000, 3100, 2900, 3050];
+    const films = pops.map((popularity, i) => film({ item: i, title: `F${i}`, popularity }));
+    render(<FilmGrid films={films} />);
+    const items = within(screen.getByRole('list', { name: 'films recommandés' })).getAllByRole(
+      'listitem',
+    );
+    expect(screen.getAllByText('✱ pépite')).toHaveLength(1); // second block: 2 900 > 3 025 / 2
+    expect(items[4]).toHaveTextContent('✱ pépite');
   });
 });
 

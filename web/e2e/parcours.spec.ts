@@ -49,6 +49,10 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   await settle(page);
   await page.screenshot({ path: `${SHOTS}/3-resultats.png`, fullPage: true });
 
+  // « ✱ pépite »: at most one stamp per block of 8 cards (D6); counts recorded at ∞, 2 000, 500
+  const stamps = () => page.getByText('✱ pépite').count();
+  const stampCounts: Record<string, number> = { '2000': await stamps() };
+
   // slider on 3 notches with the keyboard (native range: arrow keys)
   const first = () => cards(page).first().textContent();
   const seen = new Set([await first()]);
@@ -62,13 +66,18 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
     await expect(slider).toHaveValue(value);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(sentence);
     seen.add(await first());
+    stampCounts[{ '5': '1000', '6': '500', '0': '∞' }[value]] = await stamps();
   }
   expect(seen.size).toBe(4); // a different first film at each notch
+  for (const n of Object.values(stampCounts)) expect(n).toBeLessThanOrEqual(1);
+  test.info().annotations.push({ type: 'stamps', description: JSON.stringify(stampCounts) });
+  console.log(JSON.stringify({ stamps: stampCounts }));
   await expect(page.getByText(/^moins de/)).toHaveCount(0); // nothing shown at ∞
 
   // more films
   await page.getByRole('button', { name: 'encore des films' }).click();
   await expect(cards(page)).toHaveCount(16);
+  expect(await stamps()).toBeLessThanOrEqual(2);
 
   // card link
   const link = cards(page).first().getByRole('link');

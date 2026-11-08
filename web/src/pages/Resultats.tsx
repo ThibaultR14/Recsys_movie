@@ -82,7 +82,7 @@ export function Resultats({ nEntries, reco }: ResultatsProps) {
       </p>
 
       {shown.length > 0 ? (
-        <FilmGrid films={shown} cap={position.cap} seriesOf={series} />
+        <FilmGrid films={shown} seriesOf={series} />
       ) : (
         <p className="m-0 text-[16px]">plus rien à ce cran-là : essaie un peu plus à gauche.</p>
       )}

@@ -16,7 +16,8 @@ function films(cap: number | null, n = 48): RecommendedFilm[] {
     year: 1990,
     directors: ['Someone'],
     posterPath: null,
-    popularity: cap === null ? 50000 : Math.min(cap, 900 + i),
+    // one film well below its block median at every 6th place of each block of 8
+    popularity: i % 8 === 5 ? 10 : cap === null ? 50000 : Math.min(cap, 900 + i),
     tmdbId: 10 + i,
     genres: i % 4 === 0 ? ['Documentary'] : ['Drama'],
     score: 1 - i / 100,
@@ -129,11 +130,16 @@ describe('Resultats', () => {
     expect(screen.getByText(note)).toBeInTheDocument();
   });
 
-  it('pépite stamp only while the cap is above 1 000', () => {
+  it('pépite stamp: at most one per block of 8 cards, at every notch', async () => {
     render(<Resultats nEntries={66} reco={reco()} />);
-    expect(screen.getAllByText('✱ pépite').length).toBeGreaterThan(0); // 2 000: popularity 900…
-    moveTo(1000);
-    expect(screen.queryByText('✱ pépite')).not.toBeInTheDocument();
+    expect(screen.getAllByText('✱ pépite')).toHaveLength(1);
+    expect(cards()[5]).toHaveTextContent('✱ pépite');
+    for (const cap of [null, 1000, 200]) {
+      moveTo(cap);
+      expect(screen.getAllByText('✱ pépite')).toHaveLength(1);
+    }
+    await userEvent.click(screen.getByRole('button', { name: 'encore des films' }));
+    expect(screen.getAllByText('✱ pépite')).toHaveLength(2);
   });
 
   it('« encore des films » adds 8 cards up to 48, and the number in the title follows', async () => {

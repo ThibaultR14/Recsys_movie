@@ -1,6 +1,6 @@
 # Étape 5 — Interface (direction C · Fanzine)
 
-> Version 0.2 (8 novembre 2026 ; 0.2 : ajustements de Thibault sur D5, D6, D8 et G6). Spécification de l'étape 5 de l'ordre de construction (`stack-technique.md` §8).
+> Version 0.3 (8 novembre 2026 ; 0.2 : ajustements de Thibault sur D5, D6, D8 et G6 ; 0.3 : décisions de G6, tampon « ✱ pépite » relatif à la grille, mention « spectacle » reportée). Spécification de l'étape 5 de l'ordre de construction (`stack-technique.md` §8).
 > Plan validé par Thibault le 8 novembre 2026. **Document autonome** : une nouvelle session qui lit `CLAUDE.md` puis ce fichier doit pouvoir démarrer sans autre contexte.
 
 ---
@@ -168,9 +168,10 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
   - bout de scotch de 72 × 22 px ;
   - affiche au format 2:3 depuis `https://image.tmdb.org/t/p/w342<poster_path>`, en `loading="lazy"`, avec un `alt` (titre). Sans affiche : un cadre uni encre pâle ;
   - titre en gras 16 px, puis « réalisateur, année » en encre pâle 13 px.
-- **« ✱ pépite »** (Caveat gras, stylo bleu, incliné à −12°, qui déborde du bord droit) si la popularité du film est **≤ 1 000 et** que le plafond courant du curseur est **> 1 000** (∞ à 2 000). Aux plafonds 1 000, 500 et 200, toutes les cartes seraient tamponnées et le tampon ne distinguerait plus rien : il n'apparaît pas.
+- **« ✱ pépite »** (Caveat gras, stylo bleu, incliné à −12°, qui déborde du bord droit) : règle **relative à la grille** (décision de G6, v0.3). **Au plus un tampon par rangée de 8 cartes** (une page de « encore des films », dans l'ordre affiché, après le filtre des documentaires), sur le film **le moins connu de la rangée** (popularité la plus basse ; à égalité, le premier), **s'il a au moins deux fois moins de notes que la médiane des 8** (popularité ≤ médiane / 2). Une dernière rangée plus courte suit la même règle. Le tampon ne dépend donc plus du cran : il signale le film qui détonne dans ce qu'on voit. Code : `pepiteStamps` dans `web/src/components/cardRules.ts`.
+  - *Historique* : v0.1, popularité ≤ 1 000 ; v0.2, ≤ 1 000 et plafond > 1 000, presque jamais visible (G6).
 - **Documentaires** : la mention « documentaire » sous le titre si le film a le genre MovieLens « Documentary ». Une case « sans les documentaires » sous le curseur filtre la liste déjà calculée (côté client), sans nouveau calcul.
-- **Spectacles** : heuristique à mesurer en G4 (titre de la forme « Prénom Nom: … » et genre unique « Comedy »). La liste détectée sur le catalogue est montrée à Thibault en G6. La mention « spectacle » n'est ajoutée que s'il la juge fiable ; sinon c'est reporté (enrichissement TMDB des genres).
+- **Spectacles** : heuristique mesurée en G4 (titre de la forme « Prénom Nom: … » et genre unique « Comedy »), 61 % de précision. **Décision de G6 : mention non affichée**, reportée à l'enrichissement TMDB des genres (section 6).
 - **Suites et versions** : si le film a le même titre principal (avant « : » ou « - ») et un réalisateur en commun avec un film de l'historique, une annotation en Caveat « (même série que « X », que t'as vu) ».
   - Pas de masquage : sur 237 groupes de ce type dans le catalogue, presque tous sont des suites ; seuls *Kill Bill* et *South Park* contiennent une vraie version alternative.
 - **Lien** (décision de Thibault) : toute la carte est un lien vers `https://letterboxd.com/tmdb/<tmdb_id>/`, dans un nouvel onglet, avec `rel="noopener noreferrer"`. Sans `tmdb_id`, la carte n'est pas un lien. La fiche film viendra plus tard (étape 8).
@@ -350,7 +351,7 @@ Fait le 8 novembre 2026. Tous les critères sont atteints.
   - `FilmCard`, `FilmGrid` (`<ul>` « films recommandés »), `Slider`.
 - **Règles de la carte** (`cardRules.ts`, hors des composants pour être testées seules) :
   - rotation tirée de `item_idx` seul, dans [−1,8° ; +1,8°] ; scotch dans [−4° ; +4°] ;
-  - tampon « ✱ pépite » si popularité ≤ 1 000 **et** plafond > 1 000 (∞ compris), comme ajusté en D6 ;
+  - tampon « ✱ pépite » si popularité ≤ 1 000 **et** plafond > 1 000 (∞ compris), comme ajusté en D6 (remplacé en G6 par la règle relative à la grille, voir D6 et G6) ;
   - lien `https://letterboxd.com/tmdb/<tmdb_id>/`, nouvel onglet, `rel="noopener noreferrer"`, avec un texte pour lecteur d'écran « (s'ouvre sur letterboxd, dans un nouvel onglet) » ; sans `tmdb_id`, la carte n'est pas un lien ;
   - « réalisateur, année » : deux réalisateurs au plus, joints par « et » ;
   - « documentaire » si le genre MovieLens « Documentary » est présent ;
@@ -471,7 +472,7 @@ Fait le 8 novembre 2026. Tous les critères sont atteints.
 
 ### G6
 
-Contrôle fait le 8 novembre 2026. **Arrêt obligatoire : relecture de Thibault en cours.**
+Contrôle fait le 8 novembre 2026. **Arrêt obligatoire : relecture de Thibault en cours** (captures et test sur téléphone ; décisions 1 et 2 prises, voir plus bas).
 
 - **Export de Thibault dans la vraie interface** (`vite preview` sur le build, Chromium piloté par un script non versionné dans `web/test-data/` ; ZIP refait avec `ratings.csv`, `watched.csv` et `diary.csv` seulement, jamais `profile.csv`). Taux et comptes seulement, aucun titre :
   - 225 entrées lues, **188 reconnues**, comme à l'étape 3 ;
@@ -486,10 +487,23 @@ Contrôle fait le 8 novembre 2026. **Arrêt obligatoire : relecture de Thibault 
   - captures dans `web/test-data/screenshots/thibault/` (ignoré), montrées à Thibault seulement.
 - **Lien Letterboxd** : `https://letterboxd.com/tmdb/<tmdb_id>/` vérifié sur 3 films du catalogue. TMDB 1398, 81 et 670 redirigent (1 redirection, code 200) vers `/film/stalker/`, `/film/nausicaa-of-the-valley-of-the-wind/` et `/film/oldboy/`. Critère tenu.
 - **Test sur un vrai téléphone** (`npm run dev -- --host`) : à faire à la main par Thibault ; résultat à noter ici.
-- **Décisions demandées à Thibault** :
-  1. mention « spectacle » : recommandation de ne pas l'afficher (61 % de précision sur les 56 plus populaires, voir G4) et de la reporter à l'enrichissement TMDB ;
-  2. tampon « ✱ pépite » : avec la règle ajustée (popularité ≤ 1 000 et plafond > 1 000), il n'apparaît presque jamais. Aux crans ∞ à 2 000, les premiers films sont tous au-dessus de 1 000. 0 carte tamponnée sur les 8 premières au cran 2 000, avec l'export d'exemple comme avec celui de Thibault. À garder tel quel, ou à revoir (par exemple : tamponner au cran courant les films sous le plafond suivant) ;
-  3. relecture visuelle des captures.
+- **Décisions de Thibault** (8 novembre 2026) :
+  1. **mention « spectacle »** : non affichée, reportée à l'enrichissement TMDB des genres (section 6). `src/reco/spectacle.ts` reste, non utilisé par l'interface ;
+  2. **tampon « ✱ pépite »** : la règle v0.2 n'apparaissait presque jamais (aux crans ∞ à 2 000, les premiers films sont tous au-dessus de 1 000 ; 0 carte tamponnée sur les 8 premières au cran 2 000, avec les deux exports). Remplacée par une **règle relative à la grille** (D6) ;
+  3. **écarts acceptés** : réalisateurs du profil en noms complets (G4) ; test de temps du matcher isolé dans le projet Vitest `timed` (G4) ;
+  4. en attente : relecture visuelle des captures et test sur un vrai téléphone.
+- **Nouvelle règle du tampon** (D6) : `pepiteStamps(popularités)` dans `cardRules.ts`, appelée par `FilmGrid` sur les cartes affichées ; `FilmCard` reçoit un booléen `stamp` (plus le plafond).
+  - Tests : `components.test.tsx` (règle sur des rangées choisies : seuil exact à la moitié, égalités, plusieurs rangées, rangée courte ; grille qui tamponne la bonne carte), `results.test.tsx` (un tampon par rangée à tous les crans, deux après « encore des films ») ; Playwright : au plus un tampon sur les 8 premières cartes à ∞, 2 000, 1 000 et 500, au plus deux sur 16. Vitest 187/187, Playwright 4/4, `tsc`, ESLint, Prettier verts.
+  - **Nombre de tampons** (même moteur que le site, 48 films par cran, sans le filtre des documentaires ; comptes seulement) :
+
+    | Cran | Exemple : 8 premières | Exemple : 48 cartes | Thibault : 8 premières | Thibault : 48 cartes |
+    |---|---|---|---|---|
+    | ∞ | 1 | 5 | 1 | 5 |
+    | 2 000 | 0 | 1 | 0 | 0 |
+    | 500 | 0 | 0 | 0 | 1 |
+
+    L'interface (Playwright, exemple avec *Milk* confirmé) donne la même chose sur les 8 premières : 1 à ∞, 0 à 2 000, 1 000 et 500.
+  - **Constat** : la règle marche à ∞ (environ une rangée sur six sans tampon), mais **presque jamais aux crans bas**. Le plafond resserre les popularités : au cran 2 000, les 8 premières vont de 1 266 à 2 000 environ (médiane ~1 500, il faudrait ≤ ~750) ; au cran 500, de ~270 à 500 (médiane ~430-450). Le film le moins connu est rarement à moins de la moitié de la médiane. Sur les 8 crans et 48 cartes : exemple 13 tampons en tout, dont 0 aux crans 5 000, 1 000, 500 et 200 ; Thibault 17. Si on veut un tampon visible aussi aux crans bas, il faudrait un seuil plus doux (par exemple ≤ 2/3 de la médiane) ou une règle sur le rang ; à trancher par Thibault, ou à recalibrer avec les volontaires (section 6).
 - Après la relecture : mise à jour de `CLAUDE.md` et de `stack-technique.md`, avec le diff montré avant le commit.
 
 ---
@@ -498,7 +512,7 @@ Contrôle fait le 8 novembre 2026. **Arrêt obligatoire : relecture de Thibault 
 
 *(Y noter ce qui est vu pendant l'étape et relève d'une étape suivante.)*
 
-- **Tampon « ✱ pépite »** (D6) : presque jamais visible avec la règle ajustée (voir G6, décision 2).
-- **Mention « spectacle »** : heuristique sur les titres trop imprécise (61 %) ; à refaire avec les genres ou mots-clés TMDB (enrichissement du pipeline).
+- **Tampon « ✱ pépite »** (D6, règle relative de G6) : visible à ∞, presque jamais aux crans bas (popularités resserrées sous le plafond). Seuil « ≤ médiane / 2 » à recalibrer avec les volontaires si besoin.
+- **Mention « spectacle »** (décision de G6 : non affichée) : heuristique sur les titres trop imprécise (61 %) ; à refaire avec les genres ou mots-clés TMDB (enrichissement du pipeline : `enrich_tmdb.py`, puis un champ dans `catalog.json`).
 - **Changement de cran** : 34 à 40 ms au pire pour un seuil de 50 ms, dominé par le rendu. À surveiller si les cartes s'enrichissent.
 - **Seuil de l'indicateur « loin de tes goûts »** (D5, 0,04) : à recalibrer avec les exports des volontaires (étape 7), d'après la distribution des scores relatifs par position et le ressenti (liste cohérente ou non).
