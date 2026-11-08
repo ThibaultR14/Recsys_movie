@@ -6,6 +6,7 @@
 import { RECOMMENDATION_STATUSES, type MatchedEntry } from '../matching/history';
 import type { MatchStatus } from '../matching/match';
 import { profileDirectors, seriesOf } from './annotations';
+import { explain } from './explain';
 import {
   applyChoices,
   importExport,
@@ -80,6 +81,8 @@ export interface RecommendedFilm extends FilmCard {
   score: number;
   /** Title of a seen film of the same series (same main title, a director in common). */
   seriesOf?: string;
+  /** « (parce que t'as aimé X et Y) » (step 6b, D6); never with `seriesOf` (Q3). */
+  because?: { kind: 'liked' | 'seen'; titles: string[] };
 }
 
 export interface RecommendResult {
@@ -87,6 +90,8 @@ export interface RecommendResult {
   nExcluded: number;
   /** Up to 3 directors for « (t'aimes bien X, Y et Z, non ?) »; empty = annotation hidden. */
   profileDirectors: string[];
+  /** Time spent on the explanations (step 6b, D6), for reco-bench. */
+  explainMs?: number;
   positions: {
     cap: number | null;
     relativeScore: number;
@@ -163,15 +168,21 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     return { counts: s.counts, nHistoryFilms: s.nHistoryFilms } satisfies ConfirmResult;
   }
   const res = recommend(engine, state.matched, { n: req.n, caps: req.caps });
-  const series = seriesOf(
-    [...new Set(res.positions.flatMap((p) => p.items))],
+  const distinct = [...new Set(res.positions.flatMap((p) => p.items))];
+  const series = seriesOf(distinct, res.history, engine.catalog);
+  const t0 = performance.now();
+  const why = explain(
+    engine.model.vectors,
+    engine.model.dims,
     res.history,
-    engine.catalog,
+    distinct.filter((item) => !series.has(item)),
   );
+  const explainMs = performance.now() - t0;
   return {
     nHistory: res.history.length,
     nExcluded: res.nExcluded,
     profileDirectors: profileDirectors(res.history, engine.catalog),
+    explainMs,
     positions: res.positions.map((p) => ({
       cap: p.cap,
       relativeScore: p.relativeScore,
@@ -179,6 +190,13 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
         const film: RecommendedFilm = { ...filmCard(engine, item), score: p.scores[k]! };
         const s = series.get(item);
         if (s) film.seriesOf = s;
+        const w = why.get(item);
+        if (w && !s) {
+          film.because = {
+            kind: w.kind,
+            titles: w.items.map((i) => engine.catalog.title[i] ?? ''),
+          };
+        }
         return film;
       }),
     })),

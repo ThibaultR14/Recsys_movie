@@ -108,6 +108,15 @@ describe.skipIf(!ready)('worker protocol on the real files', () => {
       }
     }
     expect(reco.positions[0]!.relativeScore).toBe(1);
+    // explanations (step 6b, D6): cited films come from the history, never with a series note
+    const all = reco.positions.flatMap((p) => p.films);
+    expect(all.some((f) => f.because)).toBe(true);
+    for (const f of all) {
+      if (f.seriesOf) expect(f.because).toBeUndefined();
+      for (const t of f.because?.titles ?? []) expect(seenTitles.has(t)).toBe(true);
+      expect(f.because?.titles.length ?? 1).toBeLessThanOrEqual(2);
+    }
+    expect(reco.explainMs).toBeGreaterThanOrEqual(0);
     // the ambiguous Hamlets of 1964 are excluded (D4)
     const hamlets = imported.unrecognized.find((u) => u.status === 'ambiguous')!.candidates;
     const recommended = new Set(reco.positions.flatMap((p) => p.films.map((f) => f.item)));

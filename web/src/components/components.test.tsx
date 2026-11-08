@@ -372,3 +372,37 @@ describe('public rating (step 6b, D5)', () => {
     expect(screen.queryByTestId('public-rating')).not.toBeInTheDocument();
   });
 });
+
+describe("« parce que t'as aimé » on a card (step 6b, D6)", () => {
+  const long = 'The Lord of the Rings: The Fellowship of the Ring';
+
+  it('one or two titles, long titles cut for the eye but whole for screen readers', () => {
+    render(<FilmCard film={film()} because={{ kind: 'liked', titles: ['Stalker', long] }} />);
+    // 32 characters at most: 31 + « … »
+    const shown = screen.getByText(
+      "(parce que t'as aimé « Stalker » et « The Lord of the Rings: The Fell… »)",
+    );
+    expect(shown).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByText(`(parce que t'as aimé « Stalker » et « ${long} »)`)).toHaveClass(
+      'sr-only',
+    );
+  });
+
+  it('« vu » when the history has no rating; the series note replaces it (Q3)', () => {
+    const { rerender } = render(
+      <FilmCard film={film()} because={{ kind: 'seen', titles: ['Ran'] }} />,
+    );
+    expect(
+      screen.getByText("(parce que t'as vu « Ran »)", { selector: '[aria-hidden]' }),
+    ).toBeInTheDocument();
+    rerender(
+      <FilmCard
+        film={film()}
+        seriesOf="Kill Bill: Vol. 1"
+        because={{ kind: 'seen', titles: ['Ran'] }}
+      />,
+    );
+    expect(screen.queryByText(/parce que/)).not.toBeInTheDocument();
+    expect(screen.getByText(/même série que/)).toBeInTheDocument();
+  });
+});

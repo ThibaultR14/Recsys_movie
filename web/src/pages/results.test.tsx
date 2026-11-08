@@ -24,6 +24,9 @@ function films(cap: number | null, n = 48): RecommendedFilm[] {
     genres: i % 4 === 0 ? ['Documentary'] : ['Drama'],
     score: 1 - i / 100,
     ...(i === 1 ? { seriesOf: 'Kill Bill: Vol. 1' } : {}),
+    ...(i === 2
+      ? { because: { kind: 'liked' as const, titles: ['Stalker', 'Paris, Texas'] } }
+      : {}),
   }));
 }
 
@@ -130,6 +133,16 @@ describe('Resultats', () => {
     expect(screen.getByText(note)).toBeInTheDocument();
     moveTo(200); // 0.02
     expect(screen.getByText(note)).toBeInTheDocument();
+  });
+
+  it("« parce que t'as aimé »: on the cards, not at a notch far from the user's taste (Q4)", () => {
+    render(<Resultats nEntries={66} reco={reco()} />);
+    const why = "(parce que t'as aimé « Stalker » et « Paris, Texas »)";
+    expect(cards()[2]).toHaveTextContent(why);
+    moveTo(1000); // 0.09
+    expect(cards()[2]).toHaveTextContent(why);
+    moveTo(500); // 0.039: far
+    expect(screen.queryByText(/parce que t'as/)).not.toBeInTheDocument();
   });
 
   it('pépite stamp: at most one per block of 8 cards, at every notch', async () => {

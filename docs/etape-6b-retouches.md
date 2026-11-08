@@ -282,6 +282,22 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - Tests : format, carte avec et sans note (Vitest) ; sur les vrais fichiers, chaque film recommandé a sa note et **`ml_count` ≤ popularité ≤ plafond du cran** (worker) ; Playwright : 8 lignes de note sur les 8 premières cartes.
 - **Temps du curseur** : la mesure Playwright compte jusqu'à deux images après la mise à jour (plancher ≈ 33 ms) ; elle donne maintenant aussi le temps jusqu'au DOM (`notchDomMs` : **3 à 8 ms**). Sur une machine chargée, des pointes isolées à 50–69 ms sont apparues (rendu des affiches, pas React) ; en alternant 2 × 5 mesures avec et sans R5 : 34–46 ms avec, 34–50 ms sans. **Pas d'effet de la note du public** ; seuil de 50 ms gardé.
 
+### R6 — Explications (8 novembre 2026) — ⚠️ arrêt : règle de diversité à décider
+
+- `web/src/reco/explain.ts` (`explain`, `explanationPool`) : pool = films notés de percentile ≥ 0,7 (`LIKED_PERCENTILE`), sinon, **si aucune entrée n'a de note**, tous les films vus (« vu ») ; cosinus sur les vecteurs déquantifiés (normes du pool précalculées), cité seulement si cosinus > 0 (`MIN_COSINE`), 2 au plus (`MAX_CITED`), ordre du plus proche ; à égalité, le plus petit `item_idx`.
+- Worker : calcul unique après `recommend`, sur les films distincts des 8 crans, **sauf ceux qui ont une annotation de série** (Q3) ; `RecommendedFilm.because = { kind, titles }`, `RecommendResult.explainMs`. Interface : annotation Caveat sous la ligne de note, titres > 32 caractères coupés avec « … » (texte complet en `sr-only`), **masquée aux crans « loin de tes goûts »** (Q4). Le changement de cran ne recalcule rien.
+- Tests : Vitest (`explain.test.ts` 6 cas : deux plus proches, seuil de percentile, cosinus ≤ 0, un seul film, aucune note → « vu », notes sans film aimé → rien ; carte : coupe, `sr-only`, « vu », série prioritaire ; résultats : masquée au cran 500 du jeu de test) ; vrais fichiers : films cités ∈ historique, jamais avec une série ; **les 22 cas de `foldin_cases.json` toujours rejoués à l'identique** ; Playwright : explication visible sur les cartes, axe 0 dans les deux thèmes, changement de cran ≤ 50 ms (`notchDomMs` 3 à 6 ms).
+- **Temps** (`reco-bench`, médiane de 7, `recommend` 8 × 48) : explications **3,5 ms** (export de Thibault, 188 films), 4,7 ms (225), 14,7 ms (1 000), **38,1 ms (3 000)** ; plafond +100 ms respecté. `recommend` complet : 24,6 / 22,5 / 39,6 / 86,7 ms (avant R6 : 17,7 / 18,9 / 41,9 / 76,7 ms, n = 50).
+- **Mesure informative (D6)**, `reco-report` (terminal ; comptes seulement), 8 premières cartes de chaque cran, nombre de films cités distincts / nombre de cartes où apparaît le film le plus cité :
+
+| Cran | ∞ | 20 000 | 10 000 | 5 000 | **2 000 (départ)** | 1 000 | 500 | 200 |
+|---|---|---|---|---|---|---|---|---|
+| Export de Thibault (188 films) | 15 / 2 | 12 / 2 | 11 / 3 | 7 / 3 | **4 / 6** | 5 / 6 | 6 / 5 | 5 / 6 (masqué) |
+| Export d'exemple (61 films) | 6 / 4 | 7 / 6 | 6 / 5 | 7 / 3 | **5 / 7** | 4 / 7 | 3 / **8** | 3 / **8** |
+
+  Aucune carte sans explication (hors séries). Sur la capture du cran 2 000 de l'exemple, les deux mêmes films sont cités ensemble sur 5 cartes sur 8.
+- **Arrêt (D6)** : un même film est cité sur presque toutes les cartes dès le cran de départ (7/8 sur l'exemple, 6/8 sur l'export de Thibault), et sur toutes aux crans 500 et 200 de l'exemple. Une règle de diversité sort des décisions écrites : à trancher par Thibault (options dans le message d'arrêt). R7 attend aussi les textes de Claude Web.
+
 ---
 
 ## 6. À reporter

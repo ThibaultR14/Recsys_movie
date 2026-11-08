@@ -10,7 +10,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CatalogFile } from '../src/reco/engine';
-import type { ImportResult, InitResult } from '../src/reco/workerCore';
+import type { ImportResult, InitResult, RecommendResult } from '../src/reco/workerCore';
 import { exportInput, localHandler, WEB_ROOT } from './local';
 
 const RUNS = 7;
@@ -56,21 +56,24 @@ async function main() {
   for (const [label, input] of histories) {
     const importMs: number[] = [];
     const recoMs: number[] = [];
+    const explainMs: number[] = [];
     let used = 0;
     for (let run = 0; run < RUNS; run++) {
       const a = performance.now();
       const imported = await call<ImportResult>({ id: id++, type: 'import', input });
       const b = performance.now();
-      await call({ id: id++, type: 'recommend', n: 50 });
+      const reco = await call<RecommendResult>({ id: id++, type: 'recommend', n: 48 });
       const c = performance.now();
       importMs.push(b - a);
       recoMs.push(c - b);
+      explainMs.push(reco.explainMs ?? 0);
       used = imported.summary.nHistoryFilms;
     }
     console.log(
       `${label.padEnd(18)} ${String(used).padStart(5)} films utilisés · lecture + correspondance ` +
-        `${median(importMs).toFixed(1)} ms · fold-in + scores + 8 positions × 50 ` +
-        `${median(recoMs).toFixed(1)} ms (médiane de ${RUNS})`,
+        `${median(importMs).toFixed(1)} ms · recommend (8 positions × 48) ` +
+        `${median(recoMs).toFixed(1)} ms, dont explications ${median(explainMs).toFixed(1)} ms ` +
+        `(médiane de ${RUNS})`,
     );
   }
 }

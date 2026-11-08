@@ -1,4 +1,5 @@
 import type { FilmCard as FilmData } from '../reco/workerCore';
+import { becauseText, shortTitle } from '../content/cards';
 import { HandNote } from './HandNote';
 import {
   POSTER_BASE,
@@ -16,6 +17,8 @@ interface FilmCardProps {
   stamp?: boolean;
   /** Title of a seen film of the same series, for « (même série que « X », que t'as vu) ». */
   seriesOf?: string;
+  /** « (parce que t'as aimé X et Y) » (step 6b, D6); hidden far from the user's taste (Q4). */
+  because?: { kind: 'liked' | 'seen'; titles: string[] };
 }
 
 function PublicRating({ mean10, count }: { mean10: number; count: number }) {
@@ -32,7 +35,7 @@ const CARD_CLASS =
   'relative flex flex-col gap-3 bg-surface px-3 pt-3 pb-[18px] text-ink no-underline shadow-photo';
 
 /** « Taped photo » card (design system §5). The whole card links to the film on Letterboxd. */
-export function FilmCard({ film, stamp = false, seriesOf }: FilmCardProps) {
+export function FilmCard({ film, stamp = false, seriesOf, because }: FilmCardProps) {
   const content = (
     <>
       <span
@@ -65,6 +68,14 @@ export function FilmCard({ film, stamp = false, seriesOf }: FilmCardProps) {
       {seriesOf && (
         <HandNote size={20} rotate={-2}>
           (même série que « {seriesOf} », que t'as vu)
+        </HandNote>
+      )}
+      {because && !seriesOf && (
+        <HandNote size={20} rotate={-2}>
+          <span aria-hidden="true">
+            {becauseText(because.kind, because.titles.map(shortTitle))}
+          </span>
+          <span className="sr-only">{becauseText(because.kind, because.titles)}</span>
         </HandNote>
       )}
       {stamp && (
