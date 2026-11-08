@@ -15,6 +15,7 @@ Variants (every one is >= the current popularity: never makes a film more niche)
     year_2019      + ml corrected by r_ref / r_year for releases >= 2019 (when r_year < r_ref)
     year_all       + the same correction for every release year with r_year < r_ref
     tmdb_recent    releases >= 2019: max(ml, round(r_mature * tmdb)), r_mature = median 2005-2012
+    adopted        popularity.year_corrected (year_all with >= 50 movies per year, adopted)
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ import scipy.sparse as sp
 import popularity as popm
 from config import PROCESSED, WEB_DATA
 
-VARIANTS = ("current", "year_2019", "year_all", "tmdb_recent")
+VARIANTS = ("current", "year_2019", "year_all", "tmdb_recent", "adopted")
 SHOWN_CAPS = (2000, 500)
 RECENT_FROM = 2019
 MATURE_YEARS = (2005, 2012)
@@ -60,6 +61,8 @@ def variant_popularity(name: str, ml: np.ndarray, tmdb: np.ndarray, years: np.nd
     current = popm.hybrid(ml, tmdb, r_ref)
     if name == "current":
         return current, {"r_ref": r_ref}
+    if name == "adopted":  # the formula of popularity.py (year_all, >= 50 movies per year)
+        return popm.year_corrected(ml, tmdb, years, r_ref)
     if name == "tmdb_recent":
         r_mature = ratio_between(ml, tmdb, years, *MATURE_YEARS)
         recent = np.nan_to_num(years, nan=0) >= RECENT_FROM
@@ -111,7 +114,7 @@ def cmd_years() -> None:
 # ----------------------------------------------------------------------------- validation
 
 
-def cmd_validation() -> None:
+def cmd_validation(variants=VARIANTS) -> None:
     import evaluate as ev
     import sweep_slider as sw
     from slider_variants import v3_lists
@@ -123,7 +126,7 @@ def cmd_validation() -> None:
     model = sw.adapter("A", catalog)
     recent = np.nan_to_num(years, nan=0) >= 2017
     print("variante      plafond  NDCG@20  Recall@20  pop_med(entr.)  couverture  films >= 2017")
-    for name in VARIANTS:
+    for name in variants:
         pop, info = variant_popularity(name, counts.astype(np.int64), tmdb, years)
         lists = v3_lists(model, eval_set.foldin, catalog.recommendable, pop, pop, SHOWN_CAPS, 20)
         for cap, (ranked, *_rest) in lists.items():
@@ -224,11 +227,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("cmd", choices=["years", "validation", "user"])
     parser.add_argument("report", nargs="?")
+    parser.add_argument("--variants", nargs="*", default=list(VARIANTS))
     args = parser.parse_args()
     if args.cmd == "years":
         cmd_years()
     elif args.cmd == "validation":
-        cmd_validation()
+        cmd_validation(args.variants)
     else:
         cmd_user(args.report)
     return 0

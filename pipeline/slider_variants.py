@@ -659,8 +659,10 @@ def cmd_popularity_check() -> None:
     counts = ev.train_counts(catalog)
     r_train = popm.tmdb_ratio(counts, cols["tmdb_vote_count"], year)
     hyb_train = popm.hybrid(counts, cols["tmdb_vote_count"], r_train)
-    full_hyb, r_full = popm.production_popularity(ev.CATALOG_PARQUET)
     full_ml = cols["ml_rating_count"]
+    # historical check of the step-3 formula (hybrid), not the year-corrected one adopted later
+    r_full = popm.tmdb_ratio(full_ml, cols["tmdb_vote_count"], year)
+    full_hyb = popm.hybrid(full_ml, cols["tmdb_vote_count"], r_full)
     eval_set = ev.load_eval_set("val", catalog)
     model = sw.adapter("A", catalog)
     recent = year >= 2019

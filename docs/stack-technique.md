@@ -129,7 +129,7 @@ Détail complet, chiffres et figures : `docs/etape-2-modele.md` (décisions D1-D
 - **ALS retenu** (configuration A) : 64 facteurs, `regularization` 0,05, `alpha` 1, β 1, 30 itérations. Fold-in maison en NumPy, identique au recalcul d'`implicit` ; c'est la référence de la version TypeScript.
 - **Résultats test** (NDCG@20) : ALS **0,1522** ; EASE (référence, jamais embarqué) 0,1715, soit ALS à −11,3 % ; `populaire` 0,0841 ; hasard 0,0010.
 - **Curseur connu ↔ pépite** : **plafond de popularité**. À la position `plafond`, seuls les films avec au plus `plafond` « notes » sont candidats, classés par le score du modèle ; positions ∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200. Retenu après comparaison de trois variantes (le re-classement `score − λ × log(popularité)` prévu au départ ne descendait pas assez et donnait des listes mixtes ou identiques pour tous).
-- **Popularité** = `max(ml_rating_count, arrondi(r × tmdb_vote_count))`, r = médiane MovieLens / TMDB des films de 2010-2018 (0,285) : corrige les films récents, sous-représentés dans MovieLens.
+- **Popularité** = `max(arrondi(ml_rating_count × f_année), arrondi(r × tmdb_vote_count))`, r = médiane MovieLens / TMDB des films de 2010-2018 (0,285), `f_année = max(1, r / r_année)` (rapport de l'année de sortie, de 1,08 en 2015 à 4,30 en 2023) : corrige les films récents, sous-représentés dans MovieLens.
 - **Modèle final** : configuration A réentraînée sur tous les utilisateurs (200 948), vecteurs en int8.
 
 | Script (`pipeline/`) | Rôle |
@@ -337,7 +337,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 |---|---|
 | Modèle en production | **ALS** (EASE seulement pour comparer hors ligne) : 64 facteurs, `reg` 0,05, `alpha` 1, β 1, 30 itérations, réentraîné sur tous les utilisateurs |
 | Curseur | **Plafond de popularité**, 8 positions (∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200), classement par le score du modèle ; pas de transition douce au MVP |
-| Popularité | `max(ml_rating_count, arrondi(0,285 × tmdb_vote_count))` (correction des films récents) |
+| Popularité | `max(arrondi(ml_rating_count × f_année), arrondi(0,285 × tmdb_vote_count))`, `f_année = max(1, 0,285 / r_année)` (correction des films récents par année de sortie, adoptée le 8 novembre 2026) |
 | Export | Vecteurs **int8** + `YᵀY` déquantifié ; cas de test du fold-in jamais versionnés (notes MovieLens brutes) |
 | Catalogue | **≥ 20 notes**, ~20 000 à 25 000 films (réel : 23 019), ~5 Mo de données |
 | Données IMDb | **Hors ligne uniquement** (jointures, vérif des imdbId, contrôles qualité), jamais embarquées ; colonnes préfixées `imdbds_` |

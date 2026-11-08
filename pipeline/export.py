@@ -15,8 +15,8 @@ Files (little-endian):
     embeddings.bin  "PEPE", uint32 version, uint32 n_items, uint32 dims,
                     int8[n_items x dims] (row = item_idx), float32[n_items] scales
     yty.bin         float32[dims x dims], YᵀY computed from the DEQUANTISED vectors
-    popularity.bin  uint32[n_items], hybrid popularity (popularity.py): complete ml_rating_count,
-                    raised with TMDB votes for recent movies
+    popularity.bin  uint32[n_items], slider popularity (popularity.py): complete ml_rating_count
+                    corrected by release year, at least r * TMDB votes
     model-meta.json version, hyperparameters, confidence formula, slider, movie_id per item_idx
 """
 
@@ -380,9 +380,9 @@ def cmd_export(out_dir: Path) -> None:
         print("writing to web/public/data/ (explicit request)")
     catalog = ev.load_catalog()
     movie_ids = trained_movie_ids(catalog)
-    hybrid_pop, ratio = popm.production_popularity(ev.CATALOG_PARQUET)
-    assert hybrid_pop.max() < 2**32
-    popularity = hybrid_pop.astype(np.uint32)
+    year_pop, pop_info = popm.production_popularity(ev.CATALOG_PARQUET)
+    assert year_pop.max() < 2**32
+    popularity = year_pop.astype(np.uint32)
     Y = np.load(FINAL_FACTORS)
     info = json.loads(FINAL_INFO.read_text())
     q, scales = quantize(Y)
@@ -414,14 +414,19 @@ def cmd_export(out_dir: Path) -> None:
         "int8[n_items x dims], float32[n_items] scales; y = int8 * scale (little-endian)",
         "popularity": {
             "file": "popularity.bin",
-            "formula": "max(ml_rating_count, round(r * tmdb_vote_count)); missing TMDB votes -> "
-            "ml_rating_count only",
+            "formula": "max(round(ml_rating_count * f_year), round(r * tmdb_vote_count)), "
+            "f_year = max(1, r / r_year); missing TMDB votes count as 0",
             "ml_rating_count": "complete (all MovieLens users)",
-            "r": ratio,
+            "r": pop_info["r_ref"],
             "r_definition": "median of ml_rating_count / tmdb_vote_count over movies released "
             f"{popm.REFERENCE_YEARS[0]}-{popm.REFERENCE_YEARS[1]}",
-            "why": "MovieLens stops in 2023: recent movies have few ratings because they are "
-            "recent; the max only ever raises popularity",
+            "r_year_definition": "median of ml_rating_count / tmdb_vote_count over the movies of "
+            f"the release year; fewer than {popm.MIN_FILMS_PER_YEAR} movies -> previous year",
+            "year_factors": pop_info["factors"],
+            "year_factors_note": "release years not listed: f = 1",
+            "why": "MovieLens stops in 2023 and its users rate mostly the movies of their time: "
+            "recent movies have few ratings because they are recent. f >= 1 and the max only "
+            "ever raise popularity",
             "dtype": "uint32 per item_idx",
         },
         "slider": {
@@ -493,9 +498,10 @@ def cmd_verify(out_dir: Path) -> dict:
     assert np.array_equal(yty, expected), "yty.bin != YᵀY of the dequantised vectors"
     pop = read_popularity(out_dir / "popularity.bin")
     assert len(pop) == meta["n_items"] == len(meta["movie_ids"]) == len(Y)
-    expected_pop, ratio = popm.production_popularity(ev.CATALOG_PARQUET)
-    assert np.array_equal(pop, expected_pop.astype(np.uint32)), "popularity.bin != hybrid"
-    assert meta["popularity"]["r"] == ratio
+    expected_pop, pop_info = popm.production_popularity(ev.CATALOG_PARQUET)
+    assert np.array_equal(pop, expected_pop.astype(np.uint32)), "popularity.bin != formula"
+    assert meta["popularity"]["r"] == pop_info["r_ref"]
+    assert meta["popularity"]["year_factors"] == pop_info["factors"]
     fixture = json.loads(fixture_path(out_dir).read_text())
     assert fixture["embeddings_sha256"] == sha256_file(out_dir / "embeddings.bin"), "stale fixture"
     rec = np.ones(meta["n_items"], dtype=bool)
