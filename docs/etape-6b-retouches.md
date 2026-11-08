@@ -241,7 +241,25 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 
 ## 5. Résultats
 
-*(à remplir pendant l'étape)*
+### R0 — Emplacements des textes (8 novembre 2026)
+
+- `web/src/content/` : `pending.ts`, `nav.ts`, `theme.ts`, `apropos.ts`, `commentCaMarche.ts`, `contact.ts`, `exportHelp.ts`, `cards.ts`. Les libellés courts dont la spec donne la valeur (navigation, bouton de thème, « ← précédent / suivant → », sujets du contact, format des explications) sont écrits ; les textes longs valent `pending('<id>')`.
+- `content.test.ts` compte les `pending` restants (non bloquant, `BLOCKING = false` jusqu'à R7).
+
+### R1 — Thème sombre (8 novembre 2026)
+
+- Jetons sombres sous `:root[data-theme='dark']` (valeurs de D7), jeton `white` renommé `surface`, ombre des cartes en variable `--shadow-photo` (filet 1 px `rule` en sombre), `color-scheme` par thème.
+- `index.html` : `data-theme="dark"` par défaut, petit script en ligne qui lit `pepite-theme` avant le premier affichage ; `web/src/theme.ts` (écrit `light`, supprime la clé au retour au sombre, `try/catch`) ; `ThemeToggle` dans l'en-tête.
+- `web/src/styles/contrast.test.ts` : contrastes calculés depuis `index.css`, AA pour `ink`, `muted`, `pen` sur `paper` et `surface` dans les deux thèmes, bordures ≥ 3:1, aucun orange : vert.
+- Playwright : axe **0 violation grave dans les deux thèmes** (accueil, analyse Letterboxd et IMDb, résultats) ; test du thème : sombre même avec un système en clair, fond `rgb(22, 23, 27)`, rien de stocké sans clic, exactement `{ "pepite-theme": "light" }` après le passage en clair, retenu au rechargement, vide après le retour au sombre.
+- `docs/design-system.md` v0.2 : §2b « thème sombre ».
+
+### R2 — Pages et navigation (8 novembre 2026)
+
+- `web/src/pages/pages.ts` (ancres de pages et de sections), `CommentCaMarche.tsx` (7 sections : `modele`, `percentiles`, `curseur`, `donnees`, `on-garde-rien`, `limites`, `inspirations`), `APropos.tsx` réduit (textes D1 + section `#mentions` « crédits » avec les mentions obligatoires, inchangées), `Contact.tsx` (coquille, R3), `PageSection.tsx`.
+- En-tête commun à tous les écrans : logo, « comment ça marche », « à propos », « contact » (`aria-current="page"` sur la page ouverte), bouton de thème ; « ← changer de fichier » en haut du contenu ; « ← retour » (`#`) sur les pages.
+- **Écart de mise en œuvre** : en ouvrant une page, l'écran des résultats était démonté et perdait le cran du curseur. L'état d'affichage (cran, nombre de cartes, « sans les documentaires ») est désormais gardé par `App` (`web/src/pages/resultsView.ts`) : retour au même cran, mêmes cartes, sans recalcul.
+- Vitest : ancres, lien direct au chargement, retour au même cran. Playwright : les trois pages par-dessus les résultats (axe deux thèmes), précédent / suivant, « ← retour » → 16 cartes au même cran, liens directs `/#contact` et `/#on-garde-rien` (section visible) ; téléphone : navigation et bouton de thème sur **2 lignes** sous le logo, aucun défilement horizontal. Temps : changement de cran ≤ 46 ms.
 
 ---
 

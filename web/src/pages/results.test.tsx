@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { App, type RecoApi } from '../App';
 import type { RecommendedFilm, RecommendResult } from '../reco/workerCore';
 import { APropos } from './APropos';
+import { CommentCaMarche } from './CommentCaMarche';
+import { isSectionHash, pageOfHash } from './pages';
 import { Resultats } from './Resultats';
 import { numberWord, profileNote, titlePhrase } from './resultsText';
 
@@ -179,12 +181,12 @@ describe('Resultats', () => {
   });
 });
 
-describe('À propos', () => {
+describe('pages (step 6b, D2)', () => {
   afterEach(() => {
     window.location.hash = '';
   });
 
-  it('mandatory notices, exact', () => {
+  it('« à propos »: mandatory notices, exact; no school name', () => {
     render(<APropos />);
     expect(screen.getByRole('img', { name: 'TMDB' })).toHaveAttribute('src', '/tmdb-logo.svg');
     expect(
@@ -197,35 +199,81 @@ describe('À propos', () => {
     expect(
       screen.getByText(/ni soutenu ni approuvé par l'université du minnesota, grouplens/),
     ).toBeInTheDocument();
-    expect(screen.getByText('compatible avec les exports Letterboxd et IMDb.')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "les affiches viennent de tmdb : leurs serveurs voient passer les affiches affichées, rien d'autre.",
-        {
-          exact: false,
-        },
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'qui on est' })).toHaveAttribute('id', 'a-propos');
-    expect(screen.getByRole('region', { name: 'comment ça marche' })).toHaveAttribute(
-      'id',
-      'comment-ca-marche',
-    );
+    expect(screen.getByRole('region', { name: 'crédits' })).toHaveAttribute('id', 'mentions');
+    expect(document.body).not.toHaveTextContent(/\bece\b|\bm2\b/i);
   });
 
-  it('opens from the navigation and gives back the current screen', async () => {
-    const client: RecoApi = {
-      init: async () => ({ nItems: 1, positions: POSITIONS, timings: {} as never }),
-      importExport: async () => ({ summary: {} as never, unrecognized: [] }),
-      confirm: async () => ({ counts: {} as never, nHistoryFilms: 1 }),
-      recommend: async () => reco(),
-    };
-    render(<App client={client} />);
-    await userEvent.click(screen.getByRole('link', { name: 'qui on est' }));
+  it('« comment ça marche »: the sections and their anchors', () => {
+    render(<CommentCaMarche />);
+    expect(screen.getAllByRole('region').map((r) => r.id)).toEqual([
+      'modele',
+      'percentiles',
+      'curseur',
+      'donnees',
+      'on-garde-rien',
+      'limites',
+      'inspirations',
+    ]);
+    expect(screen.getByText('compatible avec les exports Letterboxd et IMDb.')).toBeInTheDocument();
+  });
+
+  it('anchors: page anchors and section anchors', () => {
+    expect(pageOfHash('#contact')).toBe('contact');
+    expect(pageOfHash('#a-propos')).toBe('a-propos');
+    expect(pageOfHash('#comment-ca-marche')).toBe('comment-ca-marche');
+    expect(pageOfHash('#on-garde-rien')).toBe('comment-ca-marche');
+    expect(pageOfHash('#mentions')).toBe('a-propos');
+    expect(pageOfHash('')).toBeNull();
+    expect(pageOfHash('#nimporte')).toBeNull();
+    expect(isSectionHash('#limites')).toBe(true);
+    expect(isSectionHash('#contact')).toBe(false);
+  });
+
+  it('a direct link opens the page at load', () => {
+    window.location.hash = '#contact';
+    render(<App client={fakeApi()} />);
+    expect(h1()).toHaveTextContent('contact.');
+    expect(screen.getByRole('link', { current: 'page' })).toHaveTextContent('contact');
+  });
+
+  it('pages open over the results; « ← retour » gives them back at the same notch', async () => {
+    render(<App client={fakeApi()} />);
+    await userEvent.upload(
+      screen.getByLabelText(/glisse ton fichier ici/),
+      new File(['Date,Name,Year,Letterboxd URI,Rating\n'], 'ratings.csv', { type: 'text/csv' }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'voir mes films' }));
+    const slider = await screen.findByRole('slider');
+    fireEvent.change(slider, { target: { value: '6' } });
+    for (const [name, title] of [
+      ['à propos', 'à propos.'],
+      ['comment ça marche', 'comment ça marche.'],
+      ['contact', 'contact.'],
+    ] as const) {
+      await userEvent.click(screen.getByRole('link', { name }));
+      await act(async () => window.dispatchEvent(new HashChangeEvent('hashchange')));
+      expect(h1()).toHaveTextContent(title);
+    }
+    await userEvent.click(screen.getByRole('link', { name: '← retour' }));
     await act(async () => window.dispatchEvent(new HashChangeEvent('hashchange')));
-    expect(h1()).toHaveTextContent('qui on est,et comment ça marche.');
-    window.location.hash = '';
-    await act(async () => window.dispatchEvent(new HashChangeEvent('hashchange')));
-    expect(screen.getByLabelText(/glisse ton fichier ici/)).toBeInTheDocument();
+    expect(screen.getByRole('slider')).toHaveValue('6');
   });
 });
+
+function fakeApi(): RecoApi {
+  return {
+    init: async () => ({ nItems: 1, positions: POSITIONS, timings: {} as never }),
+    importExport: async () => ({
+      summary: {
+        nEntries: 3,
+        nHistoryFilms: 3,
+        counts: {},
+        warnings: [],
+        filesRead: [],
+      } as never,
+      unrecognized: [],
+    }),
+    confirm: async () => ({ counts: {} as never, nHistoryFilms: 3 }),
+    recommend: async () => reco(),
+  };
+}

@@ -35,20 +35,24 @@ function film(over: Partial<FilmData> = {}): FilmData {
 }
 
 describe('Layout', () => {
-  it('home header: logo, provisional-name note, navigation links, footer notices', () => {
+  it('header: logo, provisional-name note, navigation, theme button; footer notices', () => {
     render(<Layout>contenu</Layout>);
     expect(screen.getByRole('link', { name: 'pépite' })).toBeInTheDocument();
     expect(screen.getByText('(nom provisoire)')).toBeInTheDocument();
     const nav = screen.getByRole('navigation');
-    expect(within(nav).getByRole('link', { name: 'comment ça marche' })).toHaveAttribute(
-      'href',
-      '#comment-ca-marche',
-    );
-    expect(within(nav).getByRole('link', { name: 'qui on est' })).toHaveAttribute(
-      'href',
-      '#a-propos',
-    );
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((a) => [a.textContent, a.getAttribute('href')]),
+    ).toEqual([
+      ['comment ça marche', '#comment-ca-marche'],
+      ['à propos', '#a-propos'],
+      ['contact', '#contact'],
+    ]);
+    expect(within(nav).queryByRole('link', { current: 'page' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'passer en clair' })).toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveTextContent('contenu');
+    expect(screen.queryByRole('link', { name: '← retour' })).not.toBeInTheDocument();
     const footer = screen.getByRole('contentinfo');
     expect(footer).toHaveTextContent(
       'fait à la main par des gens qui regardent trop de films. projet indépendant, sans lien avec letterboxd ni imdb.',
@@ -58,19 +62,32 @@ describe('Layout', () => {
     );
   });
 
-  it('results header: « ← changer de fichier » is a button, reachable by keyboard', async () => {
+  it('analysis and results: navigation kept, « ← changer de fichier » in the content', async () => {
     const onBack = vi.fn();
     render(
       <Layout width="wide" onBack={onBack}>
         x
       </Layout>,
     );
-    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
-    const back = screen.getByRole('button', { name: '← changer de fichier' });
+    expect(screen.getByRole('navigation')).toBeInTheDocument();
+    const back = within(screen.getByRole('main')).getByRole('button', {
+      name: '← changer de fichier',
+    });
     expect(back).toHaveClass('min-h-11');
     back.focus();
     await userEvent.keyboard('{Enter}');
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('a page: its link is the current one, « ← retour » goes back to « # »', () => {
+    render(
+      <Layout page="contact" onBack={() => {}}>
+        x
+      </Layout>,
+    );
+    expect(screen.getByRole('link', { current: 'page' })).toHaveTextContent('contact');
+    expect(screen.getByRole('link', { name: '← retour' })).toHaveAttribute('href', '#');
+    expect(screen.queryByRole('button', { name: '← changer de fichier' })).not.toBeInTheDocument();
   });
 });
 

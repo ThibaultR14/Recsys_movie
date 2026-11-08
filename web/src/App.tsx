@@ -1,12 +1,17 @@
 // Screen state machine (step 5, D2): accueil -> analyse -> resultats. Nothing is stored: a reload
 // brings back the home screen. The model loads in the Web Worker as soon as the page opens.
-// « à propos » opens with #a-propos or #comment-ca-marche, over the current screen (kept).
+// Pages (« comment ça marche », « à propos », « contact ») open from the URL anchor, over the
+// current screen, which is kept (step 6b, D2).
 import { useEffect, useState } from 'react';
-import { ABOUT_HASH, HOW_HASH, Layout } from './components/Layout';
+import { Layout } from './components/Layout';
 import { APropos } from './pages/APropos';
 import { Accueil } from './pages/Accueil';
 import { Analyse } from './pages/Analyse';
+import { CommentCaMarche } from './pages/CommentCaMarche';
+import { Contact } from './pages/Contact';
+import { isSectionHash, pageOfHash } from './pages/pages';
 import { Resultats } from './pages/Resultats';
+import { initialView, type ResultsView } from './pages/resultsView';
 import { groupUnrecognized } from './pages/analysis';
 import { MESSAGES, readUpload, type UploadResult } from './pages/readUpload';
 import { RecoClient } from './reco/client';
@@ -23,9 +28,7 @@ export const EXAMPLE_URL = `${import.meta.env.BASE_URL}exemple/letterboxd-exempl
 type Screen =
   | { name: 'accueil' }
   | { name: 'analyse'; summary: ImportSummary; unrecognized: Unrecognized[] }
-  | { name: 'resultats'; nEntries: number; reco: RecommendResult };
-
-const ABOUT_HASHES = new Set([ABOUT_HASH, HOW_HASH]);
+  | { name: 'resultats'; nEntries: number; reco: RecommendResult; view: ResultsView };
 
 function currentHash(): string {
   return typeof window === 'undefined' ? '' : window.location.hash;
@@ -63,7 +66,7 @@ export function App({ client: injected }: { client?: RecoApi }) {
   const [status, setStatus] = useState<string>();
   const [error, setError] = useState<string>();
   const [hash, setHash] = useState(currentHash);
-  const about = ABOUT_HASHES.has(hash);
+  const page = pageOfHash(hash);
 
   useEffect(() => {
     initOnce(client).then(
@@ -82,9 +85,9 @@ export function App({ client: injected }: { client?: RecoApi }) {
   }, []);
 
   useEffect(() => {
-    if (about) document.getElementById(hash.slice(1))?.scrollIntoView?.();
+    if (page && isSectionHash(hash)) document.getElementById(hash.slice(1))?.scrollIntoView?.();
     else window.scrollTo?.(0, 0);
-  }, [screen.name, about, hash]);
+  }, [screen.name, page, hash]);
 
   const startImport = async (read: () => Promise<UploadResult>) => {
     setError(undefined);
@@ -142,7 +145,12 @@ export function App({ client: injected }: { client?: RecoApi }) {
         setError(MESSAGES.noneRecognized);
         return;
       }
-      setScreen({ name: 'resultats', nEntries: screen.summary.nEntries, reco });
+      setScreen({
+        name: 'resultats',
+        nEntries: screen.summary.nEntries,
+        reco,
+        view: initialView(reco),
+      });
     } catch (err) {
       setError(`oups : ${(err as Error).message}`);
     } finally {
@@ -155,10 +163,12 @@ export function App({ client: injected }: { client?: RecoApi }) {
     setScreen({ name: 'accueil' });
   };
 
-  if (about) {
+  if (page) {
     return (
-      <Layout>
-        <APropos />
+      <Layout page={page} onBack={backHome}>
+        {page === 'comment-ca-marche' && <CommentCaMarche />}
+        {page === 'a-propos' && <APropos />}
+        {page === 'contact' && <Contact />}
       </Layout>
     );
   }
@@ -178,7 +188,12 @@ export function App({ client: injected }: { client?: RecoApi }) {
   if (screen.name === 'resultats') {
     return (
       <Layout width="wide" onBack={backHome}>
-        <Resultats nEntries={screen.nEntries} reco={screen.reco} />
+        <Resultats
+          nEntries={screen.nEntries}
+          reco={screen.reco}
+          view={screen.view}
+          onViewChange={(view) => setScreen({ ...screen, view })}
+        />
       </Layout>
     );
   }

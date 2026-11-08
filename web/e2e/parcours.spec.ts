@@ -87,18 +87,32 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 
-  // about page
-  await page.getByRole('button', { name: '← changer de fichier' }).click();
-  await page.getByRole('link', { name: 'qui on est' }).click();
+  // pages over the results (step 6b, D2): the notch and the cards are kept
+  const notchBefore = await slider.inputValue();
+  for (const [name, title] of [
+    ['comment ça marche', 'comment ça marche.'],
+    ['à propos', 'à propos.'],
+    ['contact', 'contact.'],
+  ] as const) {
+    await page.getByRole('navigation').getByRole('link', { name }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
+    expect(await violationsBothThemes(page), `axe: ${name}`).toEqual([]);
+    await settle(page);
+    await page.screenshot({ path: `${SHOTS}/4-${name.replaceAll(' ', '-')}.png`, fullPage: true });
+  }
   await expect(
     page
       .getByText('This product uses the TMDB API but is not endorsed or certified by TMDB.')
       .first(),
   ).toBeVisible();
+  await page.goBack(); // contact -> à propos
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('à propos.');
   await expect(page.getByRole('img', { name: 'TMDB' })).toBeVisible();
-  expect(await violationsBothThemes(page), 'axe: à propos').toEqual([]);
-  await settle(page);
-  await page.screenshot({ path: `${SHOTS}/4-a-propos.png`, fullPage: true });
+  await page.goForward();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('contact.');
+  await page.getByRole('link', { name: '← retour' }).click();
+  await expect(cards(page)).toHaveCount(16);
+  await expect(slider).toHaveValue(notchBefore);
 
   // privacy: nothing outside the site but posters, nothing stored
   expect(net.blocked, 'requêtes hors du site').toEqual([]);
@@ -175,13 +189,29 @@ test('theme: dark by default, light remembered under one key, removed when back 
   expect(net.blocked).toEqual([]);
 });
 
+test('direct links: a page anchor or a section anchor opens its page at load', async ({
+  page,
+  baseURL,
+}) => {
+  const net = await guardNetwork(page, baseURL!);
+  await page.goto('/#contact');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('contact.');
+  await page.goto('/#on-garde-rien');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('comment ça marche.');
+  await expect(page.locator('#on-garde-rien')).toBeInViewport();
+  await page.getByRole('link', { name: '← retour' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('pas encore vus.');
+  expect(net.blocked).toEqual([]);
+});
+
 test('drop zone: keyboard and a real file; IMDb watchlist message', async ({ page, baseURL }) => {
   const net = await guardNetwork(page, baseURL!);
   await page.goto('/');
   const input = page.getByLabel(/glisse ton fichier ici/);
   await page.keyboard.press('Tab'); // logo
   await page.keyboard.press('Tab'); // comment ça marche
-  await page.keyboard.press('Tab'); // qui on est
+  await page.keyboard.press('Tab'); // à propos
+  await page.keyboard.press('Tab'); // contact
   await page.keyboard.press('Tab'); // theme
   await page.keyboard.press('Tab');
   await expect(input).toBeFocused();
@@ -210,6 +240,12 @@ test.describe('phone (375 × 812)', () => {
     const noHScroll = () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
     expect(await noHScroll(), 'accueil').toBe(true);
+    // header: navigation and theme button on two lines at most under the logo (D2)
+    const rows = await page.evaluate(() => {
+      const els = [...document.querySelectorAll('header nav a, header button')];
+      return new Set(els.map((e) => Math.round(e.getBoundingClientRect().top))).size;
+    });
+    expect(rows, 'lignes de navigation').toBeLessThanOrEqual(2);
     const helpBtn = page.getByRole('button', { name: 'je sais pas où trouver mon export' });
     await helpBtn.click();
     await expect(page.getByText(/ton profil → évaluations → actions → exporter/)).toBeVisible();

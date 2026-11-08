@@ -7,23 +7,28 @@ import { isDocumentary } from '../components/cardRules';
 import { capLabel } from '../components/sliderText';
 import type { RecommendResult } from '../reco/workerCore';
 import { FAR_FROM_TASTE, profileNote, titlePhrase } from './resultsText';
-
-/** Starting notch (mid-right, like the mockup at 70 %). */
-export const START_CAP = 2000;
-export const PAGE = 8;
+import { PAGE, initialView, type ResultsView } from './resultsView';
 
 interface ResultatsProps {
   nEntries: number;
   /** All 8 positions, computed once after the analysis: moving the slider recomputes nothing. */
   reco: RecommendResult;
+  /** Controlled view (App keeps it across pages); internal state when absent (tests). */
+  view?: ResultsView;
+  onViewChange?: (view: ResultsView) => void;
 }
 
 /** Screen 3: recommendations, the slider and the annotations (mockup C, D5). */
-export function Resultats({ nEntries, reco }: ResultatsProps) {
+export function Resultats({ nEntries, reco, view: controlled, onViewChange }: ResultatsProps) {
   const caps = useMemo(() => reco.positions.map((p) => p.cap), [reco]);
-  const [index, setIndex] = useState(() => Math.max(0, caps.indexOf(START_CAP)));
-  const [visible, setVisible] = useState(PAGE);
-  const [noDocs, setNoDocs] = useState(false);
+  const [own, setOwn] = useState(() => initialView(reco));
+  const view = controlled ?? own;
+  const setView = (patch: Partial<ResultsView>) => {
+    const next = { ...view, ...patch };
+    setOwn(next);
+    onViewChange?.(next);
+  };
+  const { index, visible, noDocs } = view;
   const docsId = useId();
 
   const position = reco.positions[index] ?? reco.positions[0]!;
@@ -55,7 +60,7 @@ export function Resultats({ nEntries, reco }: ResultatsProps) {
           )}
         </div>
         <div className="flex flex-col gap-3">
-          <Slider positions={caps} index={index} onChange={(i) => setIndex(i)} />
+          <Slider positions={caps} index={index} onChange={(i) => setView({ index: i })} />
           {far && (
             <HandNote as="p" rotate={-2} size={22}>
               (là, on s'éloigne pas mal de tes goûts habituels)
@@ -69,7 +74,7 @@ export function Resultats({ nEntries, reco }: ResultatsProps) {
               id={docsId}
               type="checkbox"
               checked={noDocs}
-              onChange={(e) => setNoDocs(e.target.checked)}
+              onChange={(e) => setView({ noDocs: e.target.checked })}
               className="size-5 accent-pen"
             />
             sans les documentaires
@@ -93,7 +98,7 @@ export function Resultats({ nEntries, reco }: ResultatsProps) {
 
       <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-4">
         {visible < films.length && (
-          <PrimaryButton onClick={() => setVisible((v) => v + PAGE)}>
+          <PrimaryButton onClick={() => setView({ visible: visible + PAGE })}>
             encore des films
           </PrimaryButton>
         )}
