@@ -170,17 +170,38 @@ describe('parseImdbCsv (D1)', () => {
 });
 
 describe('title types and encoding', () => {
-  it('« TV Movie », « tvMovie », « tv-movie » -> tvmovie; film types (D3)', () => {
+  it('« TV Movie », « tvMovie », « tv-movie » -> tvmovie; « Série télévisée » keeps its accents', () => {
     expect(normalizeTitleType('TV Movie')).toBe('tvmovie');
     expect(normalizeTitleType('tvMovie')).toBe('tvmovie');
     expect(normalizeTitleType('tv-movie')).toBe('tvmovie');
+    expect(normalizeTitleType('Série télévisée')).toBe('sérietélévisée');
     expect(normalizeTitleType('  ')).toBeUndefined();
-    for (const t of ['Movie', 'TV Movie', 'Short', 'Video', 'TV Special', 'TV Short']) {
-      expect(isFilmType(normalizeTitleType(t))).toBe(true);
+  });
+
+  it('known non-film types, English and French, are not films (D3-D4 v0.3)', () => {
+    for (const t of [
+      'TV Series',
+      'TV Mini Series',
+      'TV Episode',
+      'Video Game',
+      'Podcast Series',
+      'Podcast Episode',
+      'Music Video',
+      'tvSeries', // old exports
+      'tvEpisode',
+      'Série télévisée', // French account (real export)
+    ]) {
+      expect(isFilmType(normalizeTitleType(t)), t).toBe(false);
     }
-    for (const t of ['TV Series', 'TV Mini Series', 'TV Episode', 'Video Game', 'Podcast Series']) {
-      expect(isFilmType(normalizeTitleType(t))).toBe(false);
+  });
+
+  it('film types, unknown types (other languages) and an absent type are films', () => {
+    for (const t of ['Movie', 'TV Movie', 'Short', 'Video', 'TV Special', 'TV Short', 'movie']) {
+      expect(isFilmType(normalizeTitleType(t)), t).toBe(true);
     }
+    expect(isFilmType(normalizeTitleType('Film'))).toBe(true); // French account (real export)
+    expect(isFilmType(normalizeTitleType('Spielfilm'))).toBe(true); // German: unknown -> film
+    expect(isFilmType(normalizeTitleType('Fernsehserie'))).toBe(true); // unknown, even a series
     expect(isFilmType(undefined)).toBe(true); // no Title Type column
   });
 

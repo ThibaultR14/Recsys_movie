@@ -11,16 +11,22 @@ import type { AdapterResult, HistoryEntry } from './types';
 export const IMDB_SCALE_MAX = 10;
 
 /**
- * Title types that get the title fallback (D3): the six IMDb types of the catalogue's films.
- * A row without a type counts as a film. Every other type (series, episodes, games…) does not.
+ * Title types known NOT to be films (docs/etape-6-imdb.md, D3-D4, v0.3), normalized: they get no
+ * title fallback and are counted apart. IMDb translates `Title Type` into the account's language,
+ * so the list holds English and French labels; any other type, unknown or absent, is a film (safe:
+ * a title match always goes to review). French labels: only the ones seen in a real export.
  */
-export const FILM_TITLE_TYPES: ReadonlySet<string> = new Set([
-  'movie',
-  'tvmovie',
-  'short',
-  'video',
-  'tvspecial',
-  'tvshort',
+export const NON_FILM_TITLE_TYPES: ReadonlySet<string> = new Set([
+  // English (IMDb's documented values, old camelCase exports normalize to the same keys)
+  'tvseries',
+  'tvminiseries',
+  'tvepisode',
+  'videogame',
+  'podcastseries',
+  'podcastepisode',
+  'musicvideo',
+  // French (seen in a real export, 8 November 2026)
+  'sérietélévisée',
 ]);
 
 /** "TV Movie", "tvMovie", "tv-movie" -> "tvmovie". */
@@ -29,8 +35,9 @@ export function normalizeTitleType(value: string | undefined): string | undefine
   return t || undefined;
 }
 
+/** Everything but a known non-film type, including an unknown or absent type. */
 export function isFilmType(titleType: string | undefined): boolean {
-  return titleType === undefined || FILM_TITLE_TYPES.has(titleType);
+  return titleType === undefined || !NON_FILM_TITLE_TYPES.has(titleType);
 }
 
 /** Strict UTF-8, else Windows-1252 (some old IMDb exports); a BOM is dropped. */

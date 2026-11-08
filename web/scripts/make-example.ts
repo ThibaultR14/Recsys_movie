@@ -124,14 +124,17 @@ console.log(
 const IMDB_HEADER =
   'Const,Your Rating,Date Rated,Title,Original Title,URL,Title Type,IMDb Rating,Runtime (mins),Year,Genres,Num Votes,Release Date,Directors';
 
-/** Test rows (invented ids, not in the catalogue): [id, title, original, type, year, rating]. */
+/**
+ * Test rows (invented ids, not in the catalogue): [id, title, original, type, year, rating].
+ * Title Type in French (a French account, the most likely case; v0.3): only labels seen in a real
+ * export. An episode row comes back once its French label is known.
+ */
 const IMDB_SPECIAL: [string, string, string, string, number, number | null][] = [
   // id not in the catalogue, title in it (via Original Title): « à vérifier », never automatic
-  ['tt99000001', 'Die Regenschirme von Cherbourg', 'Les Parapluies de Cherbourg', 'Movie', 1964, 9],
-  ['tt99000002', 'Anora', 'Anora', 'Movie', 2024, 8], // after 2023
-  ['tt99000003', 'Chernobyl', 'Chernobyl', 'TV Mini Series', 2019, 9], // not a film
-  ['tt99000004', 'Twin Peaks', 'Twin Peaks', 'TV Series', 1990, 9], // not a film
-  ['tt99000005', 'Pilot', 'Pilot', 'TV Episode', 1990, 8], // not a film
+  ['tt99000001', 'Die Regenschirme von Cherbourg', 'Les Parapluies de Cherbourg', 'Film', 1964, 9],
+  ['tt99000002', 'Anora', 'Anora', 'Film', 2024, 8], // after 2023
+  ['tt99000003', 'Chernobyl', 'Chernobyl', 'Série télévisée', 2019, 9], // not a film (mini-series: French label not seen yet)
+  ['tt99000004', 'Twin Peaks', 'Twin Peaks', 'Série télévisée', 1990, 9], // not a film
 ];
 /** Localized titles (French account) and original titles, for films found by id. */
 const LOCALIZED: Record<string, [string, string]> = {
@@ -165,7 +168,7 @@ FILMS.forEach(([title, year, rating], i) => {
   const note =
     title === 'The Matrix' ? '' : String(rating === null ? 7 : Math.max(1, Math.round(rating * 2)));
   const url = `https://www.imdb.com/title/${id}/`;
-  const row = [id, note, day(i), shown, original, url, 'Movie'];
+  const row = [id, note, day(i), shown, original, url, 'Film'];
   imdbRows.push([...row, '', '', String(year), '', '', '', ''].map(csvField).join(','));
   nById++;
 });

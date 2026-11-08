@@ -316,14 +316,25 @@ describe('matchEntry (synthetic catalogue)', () => {
     expect(r.candidates[0]!.item).toBe(1);
   });
 
-  it('id unknown, not a film: no title fallback (non_film)', () => {
-    for (const titleType of ['tvseries', 'tvepisode', 'videogame', 'somethingnew']) {
+  it('id unknown, known non-film type (English or French): no title fallback (non_film)', () => {
+    for (const titleType of ['tvseries', 'tvepisode', 'videogame', 'sérietélévisée']) {
       expect(matchEntry(m, imdb({ title: 'Interstellar', year: 2014, titleType }), ids)).toEqual({
         status: 'not_found',
         candidates: [],
         reason: 'non_film',
       });
     }
+  });
+
+  it('id unknown, French « film » or an unknown type: title fallback, to review (v0.3)', () => {
+    for (const titleType of ['film', 'spielfilm', undefined]) {
+      const r = matchEntry(m, imdb({ title: 'Interstellar', year: 2014, titleType }), ids);
+      expect(r).toMatchObject({ status: 'ambiguous', titleStatus: 'exact', matchedBy: 'title' });
+      expect(r.reason).toBeUndefined();
+    }
+    // nothing found by title: a plain not_found (after 2023 / not in the catalogue), not non_film
+    const none = matchEntry(m, imdb({ title: 'Nouveau', year: 2025, titleType: 'spielfilm' }), ids);
+    expect(none).toEqual({ status: 'not_found', candidates: [] });
   });
 
   it('nothing found by title stays not_found; Letterboxd unchanged', () => {
