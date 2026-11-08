@@ -5,7 +5,7 @@
 
 ## Prochaine étape à lancer : 6, adaptateur IMDb
 
-Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 novembre 2026 (repli par titre toujours dans « à vérifier »). G1-G3 faits sur fixtures synthétiques. G0 fait sur un export IMDb fabriqué par Thibault : `Title Type` est traduit dans la langue du compte (`Film`, `Série télévisée`) ; corrigé en **v0.3** (repli refusé seulement aux types non-films connus, anglais et français ; type inconnu = film). En attente : nouveaux exports de Thibault (libellés français manquants, watchlist réelle), sa vérification du fichier de contrôle, le chemin exact de l'export sur imdb.com pour l'aide de l'accueil. G4 : rapport de bout en bout seulement, mesure des taux reportée. L'étape 7 (mise en ligne) reste bloquée par GroupLens. L'étape 6 ne l'est pas.
+Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 novembre 2026 (repli par titre toujours dans « à vérifier »). G1-G3 faits sur fixtures synthétiques. G0 fait sur un export IMDb fabriqué par Thibault : `Title Type` est traduit dans la langue du compte (`Film`, `Série télévisée`) ; corrigé en **v0.3** (repli refusé seulement aux types non-films connus, anglais et français ; type inconnu = film). Second export (libellé `Épisode télévisé` ajouté) et watchlist réelle (bien détectée comme liste) traités. En attente : libellés français de mini-série et de jeu (absents de l'export), la vérification du fichier de contrôle par Thibault, le chemin exact de l'export sur imdb.com pour l'aide de l'accueil. G4 : rapport de bout en bout seulement, mesure des taux reportée. L'étape 7 (mise en ligne) reste bloquée par GroupLens. L'étape 6 ne l'est pas.
 
 ## Étapes restantes
 

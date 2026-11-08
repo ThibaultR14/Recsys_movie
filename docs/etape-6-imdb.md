@@ -51,12 +51,14 @@
 
   - Le nom du fichier n'aide pas : IMDb le nomme souvent `ratings.csv`, **comme le fichier Letterboxd**. La détection se fait sur l'en-tête (D5).
 - **Export IMDb de Thibault** (`web/test-data/exports/IMDB_thibault/<uuid>.csv`, non versionné), constaté le 8 novembre 2026 (G0). **Compte créé pour l'occasion, réglé en français**, ~40 titres notés à la main (films, séries, titres étrangers) : un export **fabriqué**, pas un vrai historique.
-  - Nom du fichier : un UUID (`<uuid>.csv`), ni `ratings.csv` ni rien de reconnaissable : la détection par l'en-tête (D5) est bien nécessaire. **Aucun export de watchlist fourni** : la détection `imdb-list` n'est vérifiée que sur fixtures synthétiques.
+  - Nom du fichier : un UUID (`<uuid>.csv`), ni `ratings.csv` ni rien de reconnaissable : la détection par l'en-tête (D5) est bien nécessaire. **Watchlist** : export réel fourni dans un second temps (voir plus bas).
   - **Colonnes : exactement les 14 attendues, dans l'ordre attendu** (`Const, Your Rating, Date Rated, Title, Original Title, URL, Title Type, IMDb Rating, Runtime (mins), Year, Genres, Num Votes, Release Date, Directors`) ; en-têtes en anglais même pour un compte en français.
   - Encodage UTF-8 valide, **sans BOM**, fins de ligne **LF**, saut de ligne final ; champs entre guillemets présents.
   - 40 lignes ; `Your Rating` : entiers de 2 à 10 ; `Date Rated` et `Release Date` : `AAAA-MM-JJ` (40/40) ; `Year` : 4 chiffres, jamais vide (40/40) ; `Const` : `tt` + 7 chiffres (35) ou 8 chiffres (5).
   - **`Title` localisé** : `Title` ≠ `Original Title` sur 23/40 lignes (toutes des films) ; `Original Title` toujours rempli ; seule colonne parfois vide : `Directors` (2, les séries).
-  - **`Title Type` localisé lui aussi** : `Film` 38, `Série télévisée` 2. **Aucun épisode dans le fichier.** ⚠️ Contredit D3-D4 et les fixtures (qui attendent `Movie`, `TV Series`…) : voir section 5, G0.
+  - **`Title Type` localisé lui aussi** : `Film` 38, `Série télévisée` 2. **Aucun épisode dans le fichier.** ⚠️ Contredit D3-D4 et les fixtures (qui attendent `Movie`, `TV Series`…) : voir section 5, G0 (corrigé en v0.3).
+- **Second export de notes** (même compte, remplace le premier) : mêmes 14 colonnes, UTF-8 sans BOM, LF ; 42 lignes = les 40 précédentes + **2 `Épisode télévisé`**. `Title Type` : `Film` 38, `Série télévisée` 2, `Épisode télévisé` 2. **Aucune ligne de mini-série, de jeu, de court métrage ni de téléfilm** dans le fichier, alors qu'il devait en contenir : leurs libellés français restent inconnus.
+- **Export de la watchlist** (`<uuid>.csv`) : 3 lignes, **18 colonnes** : `Position, Const, Created, Modified, Description, Title, Original Title, URL, Title Type, IMDb Rating, Runtime (mins), Year, Genres, Num Votes, Release Date, Directors, Your Rating, Date Rated`. **`Your Rating` et `Date Rated` sont présentes, mais vides** : c'est `Position` qui distingue la watchlist (règle D5). Détectée `imdb-list` → message, aucun import (vérifié sur le vrai fichier).
 
 ---
 
@@ -93,7 +95,7 @@
 
 - **Types non film (v0.3)** : `Title Type` est **traduit dans la langue du compte** (G0 : `Film`, `Série télévisée` pour un compte en français). Le repli par titre est donc refusé **seulement aux types connus comme non-films** (liste `NON_FILM_TITLE_TYPES` dans `web/src/adapters/imdb.ts`, normalisée par `normalizeTitleType` : minuscules, sans espaces, tirets ni soulignés, accents gardés) :
   - anglais : `tvseries`, `tvminiseries`, `tvepisode`, `videogame`, `podcastseries`, `podcastepisode`, `musicvideo` ;
-  - français : `sérietélévisée` (seul libellé constaté au 8 novembre 2026 ; les autres seront ajoutés d'après les vrais exports, section 5) ;
+  - français : `sérietélévisée`, `épisodetélévisé` (libellés constatés au 8 novembre 2026 ; mini-série, jeu vidéo, podcast… seront ajoutés quand on les verra dans un vrai export, section 5) ;
   - **tout autre type, inconnu ou absent, est traité comme un film** (`Film`, `Movie`, un libellé allemand…). C'est sûr : un résultat par titre va toujours dans « à vérifier », jamais dans le fold-in.
   - *v0.2, remplacée* : une liste des six types film anglais ; elle classait `Film` comme non-film.
 - Le repli est **le matcher de l'étape 3, inchangé** (normalisation v2, année ±1 TMDB ou ML, variantes) : d'abord sur `Title`, puis, si `Title` ne donne ni `exact` ni `probable_variant`, sur `Original Title`. On garde le meilleur résultat (`exact` > `probable_variant` > `ambiguous` > `probable_fuzzy` > `not_found`).
@@ -209,13 +211,13 @@
 
 ## 5. Résultats
 
-G1 à G3 faits le 8 novembre 2026 **sur fixtures synthétiques** (exception de la section 0). G0 fait le 8 novembre 2026 sur l'export fabriqué de Thibault : `Title Type` localisé, arrêt, puis **correction v0.3 validée et faite** (voir G0). G0 reste ouverte pour les libellés français manquants et la watchlist (nouveaux exports de Thibault attendus). G4 : rapport de bout en bout seulement, mesure reportée.
+G1 à G3 faits le 8 novembre 2026 **sur fixtures synthétiques** (exception de la section 0). G0 fait le 8 novembre 2026 sur l'export fabriqué de Thibault : `Title Type` localisé, arrêt, puis **correction v0.3 validée et faite** (voir G0). Second export (épisodes) et watchlist réelle traités le 8 novembre 2026 ; restent inconnus les libellés français de mini-série et de jeu (non présents dans l'export). G4 : rapport de bout en bout seulement, mesure reportée.
 
 | Critère | Résultat |
 |---|---|
-| G0 — format réel | ✅ colonnes, encodage, dates, notes, `Title` localisé : conformes ; `Title Type` localisé : corrigé en v0.3 ; ⏳ libellés français manquants (épisode, mini-série, jeu, court, téléfilm) et watchlist réelle : nouveaux exports attendus |
+| G0 — format réel | ✅ colonnes, encodage, dates, notes, `Title` localisé : conformes ; `Title Type` localisé : corrigé en v0.3 ; `Épisode télévisé` ajouté ; watchlist réelle détectée `imdb-list` ✅ ; ⏳ libellés de mini-série et de jeu jamais vus (absents du second export ; court et téléfilm sont de toute façon des films) |
 | Films reconnus par id (≥ 98 %), échecs (≤ 1 %), précision par id, candidats par titre | ⏳ **mesure reportée** : export trop petit et fabriqué (voir G4) |
-| Types non film | ✅ types non-films connus (anglais, français) jamais envoyés au repli par titre, comptés à part ; type inconnu (allemand) traité comme un film (tests unitaires) ; exemple : 2/2 séries à part ; export réel : 2/2 séries à part, 3/3 films récents dans « trop récents » |
+| Types non film | ✅ types non-films connus (anglais, français) jamais envoyés au repli par titre, comptés à part ; type inconnu (allemand) traité comme un film (tests unitaires) ; exemple : 3/3 (2 séries, 1 épisode) à part ; second export réel : 4/4 (2 séries, 2 épisodes) à part, 3/3 films récents non trouvés dans « trop récents » |
 | Repli par titre dans « à vérifier », non coché | ✅ Vitest (moteur, worker, écran) et Playwright |
 | Letterboxd inchangé | ✅ tests existants verts, 22 cas de `foldin_cases.json` rejoués à l'identique, exemple Letterboxd : mêmes comptes (61 `exact`, 1 `ambiguous`, 1 `probable_fuzzy`, 3 `not_found`) |
 | Performance | ✅ 3 000 lignes IMDb lues et rapprochées en **22 ms** (Node, seuil 300 ms) ; analyse de l'exemple IMDb dans le navigateur : instantanée (Playwright) |
@@ -237,9 +239,10 @@ Comptes et colonnes en section 2. Conforme aux décisions, sauf un point :
 **Fait (v0.3)** :
 - `NON_FILM_TITLE_TYPES` remplace `FILM_TITLE_TYPES` (`web/src/adapters/imdb.ts`) ; `isFilmType` = tout sauf un type non-film connu.
 - Vitest : types anglais (actuels et anciens `tvSeries`), français (`Film`, `Série télévisée`), inconnus (`Spielfilm`, `Fernsehserie` → film), absent → film ; repli par titre pour `film` et un type inconnu ; type inconnu sans candidat → `not_found` simple (pas `non_film`).
-- `imdb-exemple.csv` en types français : 67 lignes (63 par id, la ligne du repli par titre, 1 film de 2024, 2 séries) ; la ligne d'épisode est retirée tant que son libellé français n'est pas connu.
+- `imdb-exemple.csv` en types français : 67 lignes (63 par id, la ligne du repli par titre, 1 film de 2024, 2 séries) ; la ligne d'épisode est retirée tant que son libellé français n'est pas connu. **Remise après le second export** (`Épisode télévisé`) : 68 lignes. La mini-série reste en `Série télévisée` tant que son libellé n'est pas vu.
 - Export réel relu : 35 par id, 2 séries dans « séries, épisodes ou jeux », 3 films récents non trouvés → « trop récents » (au lieu de `non_film`).
-- **À faire à l'arrivée des nouveaux exports de Thibault** (épisode, mini-série, jeu, court, téléfilm, watchlist, peut-être un compte en anglais) : compléter les libellés français d'après les valeurs réelles, remettre une ligne d'épisode dans l'exemple, vérifier la détection de la watchlist sur le vrai fichier, tout noter ici.
+- **Second export et watchlist (8 novembre 2026)** : `épisodetélévisé` ajouté à `NON_FILM_TITLE_TYPES` et aux fixtures ; ligne d'épisode remise dans l'exemple ; en-tête réel de la watchlist ajouté aux fixtures de détection (noms de colonnes seulement). Rapport sur le second export (`imdb_thibault_2.json`, ignoré) : 42 lignes, 35 par id, 4 `non_film`, 3 `not_found`.
+- **Encore ouvert** : libellés français de mini-série et de jeu vidéo (pas dans l'export) ; un export avec le compte en anglais (facultatif : les libellés anglais documentés sont déjà dans la liste). Sans ces libellés, une mini-série ou un jeu non trouvé par id est traité comme un film : repli par titre (« à vérifier »), sinon « pas dans notre catalogue ». Gêne mineure, rien n'entre dans le fold-in.
 
 **Ce qui devait changer (proposé avant la v0.3)** :
 1. **D3-D4** — proposition : inverser la règle. Le repli par titre est refusé seulement pour les types **connus comme non film** (séries, mini-séries, épisodes, jeux, podcasts…, en anglais **et** dans les langues d'interface d'IMDb que l'on sait lire : au minimum le français), et tout type **inconnu** est traité comme un film. C'est sans risque depuis la v0.2 : un résultat par titre va toujours dans « à vérifier », jamais dans le fold-in. Autre option : une table de traduction des types film (`Film`, `Téléfilm`, `Court métrage`, `Vidéo`, `Spécial TV`…), mais un type film non prévu tomberait encore dans « séries ».
@@ -273,7 +276,7 @@ Comptes et colonnes en section 2. Conforme aux décisions, sauf un point :
 - `readUpload.ts` : CSV décodé (D1) puis détecté par l'en-tête ; message `imdbList` pour une liste ou une watchlist IMDb (testé avant la règle « watchlist » de Letterboxd, puisque le fichier IMDb s'appelle aussi `WATCHLIST.csv`) ; `imdbSoon` supprimé ; `notExport` et `noneRecognized` mentionnent imdb.
 - Écran d'analyse : groupe « N séries, épisodes ou jeux : on fait que les films. » après « trop récents », à part de « pas dans notre catalogue ».
 - Accueil : aide « sur imdb : tes notes (« your ratings ») → menu ⋯ → exporter. tu reçois un .csv : glisse-le ici. » (**chemin dans le menu d'IMDb à confirmer par Thibault en G0**). « À propos » : « (pour imdb, ça arrive bientôt) » retiré, « comment ça marche » cite les notes imdb.
-- `web/public/exemple/imdb-exemple.csv` (68 lignes en G3, **67 en v0.3**, types français, voir G0 ; généré par `npm run make-example`) : 63 films trouvés par id (dont 3 titres français avec leur titre original, « Milk » sur le candidat le plus populaire, une ligne sans note), une ligne avec un id inventé et un titre allemand dont le titre original est dans le catalogue (→ « à vérifier »), un film de 2024, une mini-série, une série, un épisode. Colonnes IMDb (`IMDb Rating`, `Num Votes`…) vides.
+- `web/public/exemple/imdb-exemple.csv` (68 lignes en G3, 67 puis de nouveau **68** en v0.3, types français, voir G0 ; généré par `npm run make-example`) : 63 films trouvés par id (dont 3 titres français avec leur titre original, « Milk » sur le candidat le plus populaire, une ligne sans note), une ligne avec un id inventé et un titre allemand dont le titre original est dans le catalogue (→ « à vérifier »), un film de 2024, une mini-série, une série, un épisode. Colonnes IMDb (`IMDb Rating`, `Num Votes`…) vides.
 - Playwright : parcours IMDb complet (dépôt du CSV → « à vérifier » non coché, séries à part → choix → 8 cartes), axe 0 violation grave, réseau, stockage ; message de la watchlist IMDb.
 
 ---

@@ -119,7 +119,7 @@ test('IMDb example CSV: title fallback to verify (unticked), series apart, resul
   await page.goto('/');
   await page.getByLabel(/glisse ton fichier ici/).setInputFiles('public/exemple/imdb-exemple.csv');
   const h1 = page.getByRole('heading', { level: 1 });
-  await expect(h1).toContainText('on a lu tes 67 films.');
+  await expect(h1).toContainText('on a lu tes 68 films.');
   await expect(h1).toContainText('on en a reconnu 63.');
   const verify = page.getByRole('region', { name: 'à vérifier' });
   await expect(verify.getByRole('group')).toHaveCount(1);
@@ -128,7 +128,7 @@ test('IMDb example CSV: title fallback to verify (unticked), series apart, resul
   });
   for (const radio of await cherbourg.getByRole('radio').all())
     await expect(radio).not.toBeChecked();
-  await expect(page.getByText('2 séries, épisodes ou jeux : on fait que les films.')).toBeVisible();
+  await expect(page.getByText('3 séries, épisodes ou jeux : on fait que les films.')).toBeVisible();
   await expect(
     page.getByText('1 film est sorti après 2023 : trop récent pour nous, désolé.'),
   ).toBeVisible();

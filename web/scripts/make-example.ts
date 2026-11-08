@@ -127,7 +127,7 @@ const IMDB_HEADER =
 /**
  * Test rows (invented ids, not in the catalogue): [id, title, original, type, year, rating].
  * Title Type in French (a French account, the most likely case; v0.3): only labels seen in a real
- * export. An episode row comes back once its French label is known.
+ * export. The mini-series row uses « Série télévisée » until its own label is seen.
  */
 const IMDB_SPECIAL: [string, string, string, string, number, number | null][] = [
   // id not in the catalogue, title in it (via Original Title): « à vérifier », never automatic
@@ -135,6 +135,7 @@ const IMDB_SPECIAL: [string, string, string, string, number, number | null][] = 
   ['tt99000002', 'Anora', 'Anora', 'Film', 2024, 8], // after 2023
   ['tt99000003', 'Chernobyl', 'Chernobyl', 'Série télévisée', 2019, 9], // not a film (mini-series: French label not seen yet)
   ['tt99000004', 'Twin Peaks', 'Twin Peaks', 'Série télévisée', 1990, 9], // not a film
+  ['tt99000005', 'Pilote', 'Pilot', 'Épisode télévisé', 1990, 8], // not a film
 ];
 /** Localized titles (French account) and original titles, for films found by id. */
 const LOCALIZED: Record<string, [string, string]> = {

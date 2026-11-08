@@ -41,11 +41,11 @@ describe.skipIf(!ready)('IMDb example export (real files)', () => {
     });
     if (!imp.ok) throw new Error(imp.error);
     const { summary, unrecognized } = imp.result as ImportResult;
-    expect(summary.nEntries).toBe(67);
+    expect(summary.nEntries).toBe(68);
     expect(summary.counts).toMatchObject({
       exact: 63,
       ambiguous: 1,
-      not_found: 3,
+      not_found: 4,
       probable_fuzzy: 0,
       probable_variant: 0,
     });
@@ -53,7 +53,7 @@ describe.skipIf(!ready)('IMDb example export (real files)', () => {
 
     const groups = groupUnrecognized(unrecognized);
     expect(groups.toVerify.map((u) => [u.title, u.byTitle])).toEqual([[CHERBOURG, true]]);
-    expect(groups.nonFilm.map((u) => u.title)).toEqual(['Chernobyl', 'Twin Peaks']);
+    expect(groups.nonFilm.map((u) => u.title)).toEqual(['Chernobyl', 'Twin Peaks', 'Pilote']);
     expect(groups.tooRecent.map((u) => u.title)).toEqual(['Anora']);
     expect(groups.notInCatalog).toEqual([]);
 

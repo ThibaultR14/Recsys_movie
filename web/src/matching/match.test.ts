@@ -317,7 +317,13 @@ describe('matchEntry (synthetic catalogue)', () => {
   });
 
   it('id unknown, known non-film type (English or French): no title fallback (non_film)', () => {
-    for (const titleType of ['tvseries', 'tvepisode', 'videogame', 'sérietélévisée']) {
+    for (const titleType of [
+      'tvseries',
+      'tvepisode',
+      'videogame',
+      'sérietélévisée',
+      'épisodetélévisé',
+    ]) {
       expect(matchEntry(m, imdb({ title: 'Interstellar', year: 2014, titleType }), ids)).toEqual({
         status: 'not_found',
         candidates: [],

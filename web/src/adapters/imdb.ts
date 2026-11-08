@@ -25,8 +25,9 @@ export const NON_FILM_TITLE_TYPES: ReadonlySet<string> = new Set([
   'podcastseries',
   'podcastepisode',
   'musicvideo',
-  // French (seen in a real export, 8 November 2026)
+  // French (seen in real exports, 8 November 2026)
   'sérietélévisée',
+  'épisodetélévisé',
 ]);
 
 /** "TV Movie", "tvMovie", "tv-movie" -> "tvmovie". */

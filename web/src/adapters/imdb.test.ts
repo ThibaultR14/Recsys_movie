@@ -96,6 +96,12 @@ describe('detectCsv (D5)', () => {
       ),
     ).toBe('imdb-list');
     expect(detectCsv('Const,Created,Modified,Description,Title,URL,Title Type')).toBe('imdb-list');
+    // real watchlist header (8 November 2026): Your Rating is there, empty; Position decides
+    expect(
+      detectCsv(
+        'Position,Const,Created,Modified,Description,Title,Original Title,URL,Title Type,IMDb Rating,Runtime (mins),Year,Genres,Num Votes,Release Date,Directors,Your Rating,Date Rated',
+      ),
+    ).toBe('imdb-list');
   });
   it('Letterboxd, whatever the file name, and unknown files', () => {
     expect(detectCsv('Date,Name,Year,Letterboxd URI,Rating\n2024-01-01,X,2000,u,4')).toBe(
@@ -190,6 +196,7 @@ describe('title types and encoding', () => {
       'tvSeries', // old exports
       'tvEpisode',
       'Série télévisée', // French account (real export)
+      'Épisode télévisé',
     ]) {
       expect(isFilmType(normalizeTitleType(t)), t).toBe(false);
     }

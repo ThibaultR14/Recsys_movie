@@ -298,7 +298,7 @@ describe.skipIf(!ready)('App on the real files, example export', () => {
       screen.getByLabelText(/glisse ton fichier ici/),
       new File([csv], 'ratings.csv', { type: 'text/csv' }),
     );
-    const h1 = await screen.findByText(/on a lu tes 67 films/, {}, { timeout: 10000 });
+    const h1 = await screen.findByText(/on a lu tes 68 films/, {}, { timeout: 10000 });
     expect(h1).toHaveTextContent('on en a reconnu 63.');
     const verify = screen.getByRole('region', { name: 'à vérifier' });
     const groups = within(verify).getAllByRole('group');
@@ -308,7 +308,7 @@ describe.skipIf(!ready)('App on the real files, example export', () => {
     );
     for (const r of within(groups[0]!).getAllByRole('radio')) expect(r).not.toBeChecked();
     expect(
-      screen.getByText('2 séries, épisodes ou jeux : on fait que les films.'),
+      screen.getByText('3 séries, épisodes ou jeux : on fait que les films.'),
     ).toBeInTheDocument();
     expect(
       screen.getByText('1 film est sorti après 2023 : trop récent pour nous, désolé.'),
