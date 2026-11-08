@@ -1,17 +1,29 @@
 /**
  * Step 6c diagnostics (docs/etape-6c-qualite.md), terminal only, counts and shares only (no title).
  *
- *   npx tsx scripts/quality-report.ts <export.zip | export folder>
+ *   npx tsx scripts/quality-report.ts <export.zip | export folder> [--lambdas 0,0.9,0.99]
  *
  * 1. Genres (MovieLens genres of catalog.json): share of each dominant genre of the history among
  *    the first 16 recommendations of each notch, in the history, and in the catalogue under each
  *    cap (recommendable films).
+ * 3. With --lambdas: genre calibration (step 6c, D1, `calibrate.ts`) for each λ: share of
+ *    animation in the first 16 films of each notch, and miscalibration C_KL of the first 20.
  * 2. Disliked neighbours: among the first 16 recommendations of each notch, how many have, among
  *    their 2 (and 5) closest rated history films (cosine), one with a percentile < 0.2 / < 0.3.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  bernoulliDivergence,
+  calibrate,
+  genreProfile,
+  genreRows,
+  klDivergence,
+  POOL,
+  type CalibrationMode,
+} from '../src/reco/calibrate';
 import { explain } from '../src/reco/explain';
+import { keptForFoldIn, signal } from '../src/reco/foldIn';
 import { importExport, loadEngine, recommend } from '../src/reco/engine';
 import { exportInput, WEB_ROOT } from './local';
 
@@ -22,6 +34,11 @@ const pct = (x: number) => `${(100 * x).toFixed(0)} %`.padStart(5);
 
 async function main() {
   const path = process.argv[2];
+  const lamAt = process.argv.indexOf('--lambdas');
+  const lambdas = lamAt > 0 ? process.argv[lamAt + 1]!.split(',').map(Number) : [];
+  const poolAt = process.argv.indexOf('--pool');
+  const poolSize = poolAt > 0 ? Number(process.argv[poolAt + 1]) : POOL;
+  const mode: CalibrationMode = process.argv.includes('--share') ? 'share' : 'mass';
   if (!path || !existsSync(path)) throw new Error('usage : quality-report <export.zip | dossier>');
   const engine = await loadEngine(async (url) => {
     if (!url.startsWith('/data/')) throw new Error(`URL interdite : ${url}`);
@@ -88,6 +105,60 @@ async function main() {
       );
     }
     console.log(`${k} voisins les plus proches :\n  ${lines.join('\n  ')}`);
+  }
+
+  // ---- 3. calibration by genres (step 6c, D1)
+  if (lambdas.length) {
+    const meta = model.meta;
+    const kept = keptForFoldIn(
+      history.map((h) => h.percentile),
+      history.map((h) => h.rating !== undefined),
+      meta.foldin_drop_below,
+      meta.foldin_min_kept ?? 0,
+    );
+    const films = history.filter((_, i) => kept[i]);
+    const rows = genreRows(catalog.genres, mode);
+    const nG = catalog.genre_names.length;
+    const p = genreProfile(
+      rows,
+      nG,
+      films.map((h) => h.item),
+      films.map((h) => signal(h.percentile, meta.beta)),
+      mode,
+    );
+    const anim = catalog.genre_names.indexOf('Animation');
+    const pools = recommend(engine, matched, { n: poolSize });
+    const div = mode === 'mass' ? klDivergence : bernoulliDivergence;
+    const qOf = (items: readonly number[]) =>
+      genreProfile(
+        rows,
+        nG,
+        items,
+        items.map(() => 1),
+      );
+    console.log(
+      `
+── calibration ${mode} (vivier ${poolSize}) : part de films d'animation (16 premières) · C_KL@20, par cran ; ` +
+        `historique gardé : ${pct(
+          share(
+            films.map((h) => h.item),
+            'Animation',
+          ),
+        )} des films, ` +
+        `profil : ${pct(p[anim]!)} de la masse des genres ──`,
+    );
+    for (const lam of lambdas) {
+      const t0 = performance.now();
+      const cells = pools.positions.map((pos) => {
+        const list = calibrate(pos.items, pos.scores, p, rows, lam, 48, mode);
+        const top = list.slice(0, SHOWN);
+        return `${pct(share(top, 'Animation'))} · ${div(p, qOf(list.slice(0, 20))).toFixed(2)}`;
+      });
+      const ms = performance.now() - t0;
+      console.log(
+        `λ ${String(lam).padEnd(5)} ${cells.map((c) => c.padStart(13)).join(' ')}  (${ms.toFixed(0)} ms)`,
+      );
+    }
   }
 }
 
