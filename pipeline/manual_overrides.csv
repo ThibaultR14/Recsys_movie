@@ -3,3 +3,7 @@ movie_id,action,target_movie_id,title,reason
 168358,merge_into,2851,,"Saturn 3 (1980): duplicate MovieLens entry; 2851 has a dead imdb_id and no tmdb_id, 168358 has the valid ones (tt0079285, 19761)"
 100538,merge_into,4970,,"The Blue Angel (1930): duplicate MovieLens entry with a dead imdb_id (tt0818931) and a deleted TMDB id; not the 1959 remake"
 7099,title,,Nausicaä of the Valley of the Wind,"Nausicaä (1984): TMDB 81 English title is ""Warriors of the Wind"", the cut 1985 US version; the film is known by its full English title"
+2292,title,,Overnight Delivery,"Overnight Delivery (1998): American film (original language en); TMDB 25723 only has a Chinese title"
+40337,title,,Ushpizin,"Ushpizin (2004): TMDB 15083 only has the Hebrew title; released internationally as Ushpizin"
+243208,title,,Yes Day,"Yes Day (2021): TMDB 638597 title in capitals; normal case as in MovieLens"
+211966,title,,What Did Jack Do?,"What Did Jack Do? (2017): TMDB 528491 title in capitals; normal case, validated by Thibault"

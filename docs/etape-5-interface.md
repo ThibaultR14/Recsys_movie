@@ -307,7 +307,7 @@ Fait le 8 novembre 2026. Tous les critères sont atteints.
 
 ### G1
 
-Code fait le 8 novembre 2026 ; **en attente de la validation de la liste des titres** (arrêt prévu).
+Fait le 8 novembre 2026. Liste des titres validée par Thibault le même jour (les 5 lignes proposées).
 
 - **Action `title`** :
   - `manual_overrides.csv` reçoit une colonne `title` (vide pour `exclude` et `merge_into`) ;
@@ -326,7 +326,7 @@ Code fait le 8 novembre 2026 ; **en attente de la validation de la liste des tit
 - **Relecture des titres divergents** (titre TMDB différent de tous les titres MovieLens et du titre original : 728 films, dont 8 à ≥ 2 000 notes et 20 à ≥ 1 000) :
   - à ≥ 1 000 notes, un seul titre est faux : « Warriors of the Wind ». Les 19 autres sont les titres anglais d'usage (*The Intouchables*, *Oldboy*, *Castle in the Sky*, *The Raid*, *Police Story 3: Super Cop*, *Arrietty*, *District B13*, *Fantastic Planet*, *Mirror*, *Children of Heaven*…) ;
   - une recherche en plus, sur tout le catalogue, des titres affichés en écriture non latine ou tout en majuscules fait ressortir 4 cas douteux (moins de 300 notes chacun) : voir la liste proposée.
-- **Liste proposée à Thibault** (seul Nausicaä est déjà écrit) :
+- **Liste validée par Thibault et écrite dans `manual_overrides.csv`** :
 
   | movie_id | TMDB | titre affiché aujourd'hui | proposé | raison |
   |---|---|---|---|---|
@@ -334,9 +334,10 @@ Code fait le 8 novembre 2026 ; **en attente de la validation de la liste des tit
   | 2292 | 25723 | 愛情快遞 | Overnight Delivery | film américain (langue originale `en`) ; TMDB n'a qu'un titre chinois |
   | 40337 | 15083 | האושפיזין | Ushpizin | titre en hébreu seulement ; le film est sorti sous le nom *Ushpizin* |
   | 243208 | 638597 | YES DAY | Yes Day | capitales TMDB ; MovieLens écrit « Yes Day » |
-  | 211966 | 528491 | WHAT DID JACK DO? | *(à trancher)* What Did Jack Do? | capitales voulues par Lynch ? à garder si oui |
+  | 211966 | 528491 | WHAT DID JACK DO? | What Did Jack Do? | capitales TMDB ; casse normale (choix de Thibault) |
 
   Les autres titres en capitales sont des graphies voulues (*WALL·E*, *C.R.A.Z.Y.*, *BLAME!*, *GANTZ:O*…) et ne sont pas proposés.
+- **Après validation** : `export.py catalog` (relecture et `web`) puis `catalog-verify` OK, avec 5 titres manuels et `manual_titles_not_applied` vide ; `catalog_title_keys.json` régénéré ; pytest 231/231 ; Vitest 126/126.
 
 ### G2
 ### G3
