@@ -168,6 +168,30 @@ def top_under_cap(
     return idx[order[:k]]
 
 
+def version_partners(movie_ids: np.ndarray) -> dict[int, set[int]]:
+    """item_idx -> the item_idx of its other cuts (`version_of` lines, both ways; step 6c, D3)."""
+    from build_catalog import load_manual_overrides
+
+    idx = {int(m): i for i, m in enumerate(movie_ids)}
+    out: dict[int, set[int]] = {}
+    lines = load_manual_overrides().filter(pl.col("action") == "version_of")
+    for m, t in lines.select("movie_id", "target_movie_id").iter_rows():
+        a, b = idx[m], idx[t]
+        out.setdefault(a, set()).add(b)
+        out.setdefault(b, set()).add(a)
+    return out
+
+
+def seen_mask(n_items: int, items: np.ndarray, partners: dict[int, set[int]]) -> np.ndarray:
+    """Seen films plus the other cuts of the seen films (never recommended)."""
+    seen = np.zeros(n_items, dtype=bool)
+    seen[items] = True
+    for i in items:
+        for j in partners.get(int(i), ()):
+            seen[j] = True
+    return seen
+
+
 # --- train ----------------------------------------------------------------------------------------
 
 
@@ -311,6 +335,13 @@ def fixture_cases(
     first = np.flatnonzero(recommendable)[:5]
     histories.append(("single_film", first[:1], np.array([4.0], dtype=np.float32)))
     histories.append(("all_ties", first, np.full(5, 3.5, dtype=np.float32)))
+    # step 6c (D3): a history with one cut of a film (the other cut must never be recommended)
+    partners = version_partners(movie_ids)
+    if partners:
+        a = min(partners)
+        histories.append(
+            ("version_seen", np.array([a, *first[:4]]), np.array([5, 4, 3, 2, 1], dtype=np.float32))
+        )
     cfg = FINAL_CONFIG
     cases = []
     for name, items, ratings in histories:
@@ -326,8 +357,7 @@ def fixture_cases(
             Y, signal, regularization=cfg["regularization"], alpha=cfg["alpha"], yty=yty
         )[0]
         scores = Y.astype(np.float64) @ x
-        seen = np.zeros(len(Y), dtype=bool)
-        seen[items] = True
+        seen = seen_mask(len(Y), items, partners)
         tops = {}
         for pos in FIXTURE_POSITIONS:
             top = top_under_cap(scores, seen, recommendable, popularity, pos, FIXTURE_TOP)
@@ -345,6 +375,9 @@ def fixture_cases(
                 "percentile": p.astype(float).tolist(),
                 "signal": signal.data.astype(float).tolist(),
                 "user_vector": x.tolist(),
+                "excluded_versions": sorted(
+                    int(i) for i in np.flatnonzero(seen) if i not in set(items)
+                ),
                 "top10": tops,
             }
         )
@@ -507,6 +540,7 @@ def cmd_verify(out_dir: Path) -> dict:
     rec = np.ones(meta["n_items"], dtype=bool)
     rec[meta["non_recommendable_item_idx"]] = False
     cfg = fixture["config"]
+    partners = version_partners(np.array(meta["movie_ids"]))
     max_vec_err, n_tops = 0.0, 0
     for case in fixture["cases"]:
         items = np.array(case["item_idx"], dtype=np.int32)
@@ -528,8 +562,7 @@ def cmd_verify(out_dir: Path) -> dict:
         )[0]
         max_vec_err = max(max_vec_err, float(np.abs(x - np.array(case["user_vector"])).max()))
         scores = Yq.astype(np.float64) @ x
-        seen = np.zeros(meta["n_items"], dtype=bool)
-        seen[items] = True
+        seen = seen_mask(meta["n_items"], items, partners)
         for pos_key, top in case["top10"].items():
             cap = None if pos_key == "inf" else int(pos_key)
             got = top_under_cap(scores, seen, rec, pop, cap, fixture["top"])
@@ -563,9 +596,11 @@ def cmd_catalog(out_dir: Path) -> dict:
     catalog = ev.load_catalog()
     trained_movie_ids(catalog)  # refuses a catalogue whose item order moved since training
     cat = sc.load_catalog_frame(ev.CATALOG_PARQUET)
-    manual = sc.title_overrides(cat, load_manual_overrides())
+    overrides = load_manual_overrides()
+    manual = sc.title_overrides(cat, overrides)
+    versions = sc.version_pairs(cat, overrides)
     out_dir.mkdir(parents=True, exist_ok=True)
-    write_compact_json(out_dir / "catalog.json", sc.build_catalog_json(cat, manual))
+    write_compact_json(out_dir / "catalog.json", sc.build_catalog_json(cat, manual, versions))
     write_compact_json(out_dir / "title-index.json", sc.build_title_index(cat, manual))
     sizes = file_sizes(out_dir)
     total = sum(v["gzip_bytes"] for v in sizes.values())
@@ -612,7 +647,10 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
         key = normalize_title(r["tmdb_title"]) if r["tmdb_title"] else None
         if key and where.get(r["item_idx"], {}).get(key) != sc.SRC_TMDB:
             missing += 1
-    manual = sc.title_overrides(cat, load_manual_overrides())
+    overrides = load_manual_overrides()
+    manual = sc.title_overrides(cat, overrides)
+    assert cat_json["version_of"] == sc.version_pairs(cat, overrides), "version_of"
+    assert all(0 <= i < n for pair in cat_json["version_of"] for i in pair), "version_of"
     manual_bad = [
         i
         for i, t in manual.items()
@@ -626,6 +664,7 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
         "tmdb_title_not_indexed_as_source_0": missing,
         "manual_titles": len(manual),
         "manual_titles_not_applied": manual_bad,
+        "version_pairs": len(cat_json["version_of"]),
     }
     assert films_without_key == 0 and missing == 0 and not manual_bad, out
     print(json.dumps(out, indent=2))

@@ -13,6 +13,8 @@ key too). The model and catalog.parquet are untouched.
 
 catalog.json v2 (step 6b, D5): `ml_mean` (MovieLens mean rating x 10, int) and `ml_count`
 (number of MovieLens ratings) for the « ★ 3,9 · 1 240 notes » line of the cards.
+`version_of` (step 6c, D3): [item_idx, target item_idx] pairs from the `version_of` lines of
+manual_overrides.csv; the site never recommends one film of a pair once the other is seen.
 """
 
 from __future__ import annotations
@@ -74,7 +76,24 @@ def display_title(tmdb_title: str | None, ml_title: str) -> str:
     return tmdb_title if tmdb_title else ml_title_variants(ml_title)
 
 
-def build_catalog_json(cat: pl.DataFrame, manual_titles: dict[int, str] | None = None) -> dict:
+def version_pairs(cat: pl.DataFrame, overrides: pl.DataFrame) -> list[list[int]]:
+    """`version_of` lines of manual_overrides.csv -> sorted [item_idx, target item_idx] pairs. Both
+    movies must be in the catalogue."""
+    lines = overrides.filter(pl.col("action") == "version_of")
+    idx = dict(cat.select("movie_id", "item_idx").iter_rows())
+    pairs = []
+    for m, t in lines.select("movie_id", "target_movie_id").iter_rows():
+        if m not in idx or t not in idx:
+            raise ValueError(f"manual_overrides: version_of {m} -> {t}: movie not in the catalogue")
+        pairs.append([idx[m], idx[t]])
+    return sorted(pairs)
+
+
+def build_catalog_json(
+    cat: pl.DataFrame,
+    manual_titles: dict[int, str] | None = None,
+    versions: list[list[int]] | None = None,
+) -> dict:
     manual = manual_titles or {}
     rows = cat.to_dicts()
     genre_names = sorted({g for r in rows for g in (r["ml_genres"] or []) if g != NO_GENRE})
@@ -104,6 +123,8 @@ def build_catalog_json(cat: pl.DataFrame, manual_titles: dict[int, str] | None =
         # Public rating on the cards (step 6b, D5): aggregates only, never a raw rating.
         "ml_mean": [mean_x10(r["ml_mean_rating"]) for r in rows],
         "ml_count": [r["ml_rating_count"] for r in rows],
+        # Other cuts of a film (step 6c, D3): never recommended once the other one is seen.
+        "version_of": versions or [],
     }
 
 

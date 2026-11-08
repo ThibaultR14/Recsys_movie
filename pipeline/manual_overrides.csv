@@ -7,3 +7,6 @@ movie_id,action,target_movie_id,title,reason
 40337,title,,Ushpizin,"Ushpizin (2004): TMDB 15083 only has the Hebrew title; released internationally as Ushpizin"
 243208,title,,Yes Day,"Yes Day (2021): TMDB 638597 title in capitals; normal case as in MovieLens"
 211966,title,,What Did Jack Do?,"What Did Jack Do? (2017): TMDB 528491 title in capitals; normal case, validated by Thibault"
+231701,version_of,6874,,"Kill Bill: The Whole Bloody Affair (2011): both volumes in one cut; another version of Kill Bill: Vol. 1 (step 6c, D3)"
+231701,version_of,7438,,"Kill Bill: The Whole Bloody Affair (2011): both volumes in one cut; another version of Kill Bill: Vol. 2 (step 6c, D3)"
+176653,version_of,2641,,"Superman II: The Richard Donner Cut (2006): another cut of Superman II (1980) (step 6c, D3)"

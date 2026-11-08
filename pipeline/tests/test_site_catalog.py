@@ -131,3 +131,19 @@ def test_manual_title_keeps_the_tmdb_title_key():
 def test_manual_title_for_unknown_movie_is_refused():
     with pytest.raises(ValueError):
         sc.title_overrides(frame(), _title_lines([(999, "title", None, "X", "not in catalogue")]))
+
+
+def test_version_pairs_written_to_catalog_json():
+    o = _title_lines(
+        [
+            (4973, "version_of", 50, None, "cut"),
+            (4973, "version_of", 156, None, "cut"),
+            (50, "exclude", None, None, "ignored here"),
+        ]
+    )
+    pairs = sc.version_pairs(frame(), o)
+    assert pairs == [[2, 0], [2, 1]]
+    assert sc.build_catalog_json(frame(), None, pairs)["version_of"] == [[2, 0], [2, 1]]
+    assert sc.build_catalog_json(frame())["version_of"] == []
+    with pytest.raises(ValueError):
+        sc.version_pairs(frame(), _title_lines([(999, "version_of", 50, None, "not in catalogue")]))

@@ -3,7 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { percentiles } from '../adapters/normalizeRatings';
 import type { MatchedEntry } from '../matching/history';
-import { exclusions, loadEngine, recommend, type Engine } from './engine';
+import {
+  exclusions,
+  loadEngine,
+  recommend,
+  versionExclusions,
+  versionPartners,
+  type Engine,
+} from './engine';
 import { choleskySolve, foldIn, FoldInError, signal } from './foldIn';
 import {
   buildModelFiles,
@@ -179,6 +186,8 @@ interface FixtureCase {
   percentile: number[];
   signal: number[];
   user_vector: number[];
+  /** Other cuts of the seen films (step 6c, D3). */
+  excluded_versions: number[];
   top10: Record<string, { item_idx: number[]; score: number[] }>;
 }
 
@@ -195,11 +204,11 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
     : null;
 
   it('uses the same model files as the fixture', () => {
-    expect(fixture!.cases).toHaveLength(22);
+    expect(fixture!.cases).toHaveLength(23); // 22 + version_seen (step 6c)
     expect(fixture!.embeddings_sha256).toBe(engine!.model.meta.embeddings_sha256);
   });
 
-  it('22 user vectors within 1e-9, signal identical', () => {
+  it('23 user vectors within 1e-9, signal identical', () => {
     let worst = 0;
     for (const c of fixture!.cases) {
       const p = percentiles(c.rating);
@@ -216,14 +225,18 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
     expect(worst).toBeLessThanOrEqual(1e-9);
   });
 
-  it('66 top-10 lists identical (item_idx and order), scores within 1e-9', () => {
+  it('69 top-10 lists identical (item_idx and order), scores within 1e-9', () => {
     const model = engine!.model;
     let lists = 0;
     let worst = 0;
     for (const c of fixture!.cases) {
       const x = foldIn(model, c.item_idx, percentiles(c.rating));
       const scores = scoreAll(model, x);
-      const ranked = rankCandidates(scores, model.recommendable, new Set(c.item_idx));
+      const ranked = rankCandidates(
+        scores,
+        model.recommendable,
+        new Set([...c.item_idx, ...c.excluded_versions]),
+      );
       for (const [key, expected] of Object.entries(c.top10)) {
         const cap = key === 'inf' ? null : Number(key);
         const [got] = topByPosition(ranked, scores, model.popularity, [cap], 10);
@@ -233,7 +246,7 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
       }
     }
     console.info(`top-10 lists: ${lists} identical, max |Δscore| = ${worst.toExponential(2)}`);
-    expect(lists).toBe(66);
+    expect(lists).toBe(69);
     expect(worst).toBeLessThanOrEqual(1e-9);
   });
 
@@ -258,5 +271,34 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
     }
     // the ∞ top 10 is the fixture's
     expect(res.positions[0]!.items.slice(0, 10)).toEqual(c.top10['inf']!.item_idx);
+  });
+
+  it('recommend(): the other cut of a seen film is never recommended (step 6c, D3)', () => {
+    const c = fixture!.cases.find((k) => k.name === 'version_seen')!;
+    expect(c.excluded_versions.length).toBeGreaterThan(0);
+    const entry = { scaleMax: 5, source: 'letterboxd' as const };
+    const matched: MatchedEntry[] = c.item_idx.map((item, k) => ({
+      entry: { ...entry, title: `f${k}`, sourceKey: `k${k}`, rating: c.rating[k] },
+      result: { status: 'exact', item, candidates: [{ item, source: 0, yearGap: 0 }] },
+    }));
+    const res = recommend(engine!, matched, { n: 200 });
+    for (const pos of res.positions)
+      for (const v of c.excluded_versions) expect(pos.items).not.toContain(v);
+  });
+});
+
+describe('versions (step 6c, D3)', () => {
+  it('pairs both ways; only the seen films exclude their other cuts', () => {
+    const v = versionPartners([
+      [10, 1],
+      [10, 2],
+      [20, 3],
+    ]);
+    expect(v.get(10)).toEqual([1, 2]);
+    expect(v.get(1)).toEqual([10]);
+    expect(v.get(3)).toEqual([20]);
+    expect([...versionExclusions(v, [1])]).toEqual([10]); // saw Vol. 1 -> no long cut
+    expect([...versionExclusions(v, [10]).values()].sort()).toEqual([1, 2]); // saw the long cut
+    expect(versionExclusions(v, [5]).size).toBe(0);
   });
 });

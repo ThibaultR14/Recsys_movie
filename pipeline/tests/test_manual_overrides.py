@@ -53,6 +53,21 @@ def test_versioned_file_is_valid_and_documented():
     assert set(df["action"]) <= set(bc.MANUAL_ACTIONS)
 
 
+def test_version_lines_are_read_one_line_per_target():
+    df = bc.load_manual_overrides()
+    versions = df.filter(pl.col("action") == "version_of")
+    pairs = set(versions.select("movie_id", "target_movie_id").iter_rows())
+    # Kill Bill: The Whole Bloody Affair -> Vol. 1 and Vol. 2; Superman II: The Richard Donner Cut
+    assert pairs == {(231701, 6874), (231701, 7438), (176653, 2641)}
+
+
+def test_version_lines_may_share_a_movie_id(tmp_path):
+    f = tmp_path / "o.csv"
+    lines = ["1,version_of,2,,a", "1,version_of,3,,b", "4,exclude,,,c"]
+    f.write_text(H + "\n".join(lines) + "\n", encoding="utf-8")
+    assert bc.load_manual_overrides(f).height == 3
+
+
 def test_title_lines_are_read():
     df = bc.load_manual_overrides()
     titles = dict(df.filter(pl.col("action") == "title").select("movie_id", "title").iter_rows())
@@ -73,6 +88,9 @@ H = "movie_id,action,target_movie_id,title,reason\n"
         H + "1,title,,  ,blank title\n",
         H + "1,exclude,,Some Title,title on another action\n",
         H + "1,title,2,Some Title,target on a title line\n",
+        H + "1,version_of,,,no target\n",
+        H + "1,version_of,1,,itself\n",
+        H + "1,version_of,2,,a\n1,version_of,2,,b\n",  # duplicate pair
     ],
 )
 def test_invalid_files_are_rejected(tmp_path, content):

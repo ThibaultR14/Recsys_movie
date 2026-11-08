@@ -33,6 +33,8 @@ export interface CatalogFile {
   /** v2 (step 6b, D5): MovieLens mean rating x 10 and number of ratings. */
   ml_mean?: (number | null)[];
   ml_count?: (number | null)[];
+  /** Step 6c (D3): [item, target] pairs of other cuts (`version_of` of manual_overrides.csv). */
+  version_of?: [number, number][];
 }
 
 export interface Engine {
@@ -42,6 +44,8 @@ export interface Engine {
   matcher: Matcher;
   /** imdb_id (and aliases) -> item, for the IMDb adapter (docs/etape-6-imdb.md, D2). */
   ids: ImdbIdIndex;
+  /** item -> its other cuts, both ways (step 6c, D3). */
+  versions: Map<number, number[]>;
   timings: { fetchMs: number; modelMs: number; indexMs: number; matcherMs: number };
 }
 
@@ -65,6 +69,7 @@ export async function loadEngine(fetchFn: FetchFn, base = '/data/'): Promise<Eng
   const t3 = performance.now();
   const matcher = new Matcher(index);
   const ids = new ImdbIdIndex(catalog.imdb_id, catalog.imdb_id_aliases);
+  const versions = versionPartners(catalog.version_of ?? []);
   const t4 = performance.now();
   return {
     model,
@@ -72,6 +77,7 @@ export async function loadEngine(fetchFn: FetchFn, base = '/data/'): Promise<Eng
     index,
     matcher,
     ids,
+    versions,
     timings: { fetchMs: t1 - t0, modelMs: t2 - t1, indexMs: t3 - t2, matcherMs: t4 - t3 },
   };
 }
@@ -172,6 +178,27 @@ export function exclusions(matched: readonly MatchedEntry[], history: readonly U
   return out;
 }
 
+/** [item, target] pairs -> item -> other cuts, both ways (step 6c, D3). */
+export function versionPartners(pairs: readonly (readonly [number, number])[]) {
+  const out = new Map<number, number[]>();
+  const add = (a: number, b: number) => out.set(a, [...(out.get(a) ?? []), b]);
+  for (const [a, b] of pairs) {
+    add(a, b);
+    add(b, a);
+  }
+  return out;
+}
+
+/** Other cuts of the seen films: never recommended (step 6c, D3). */
+export function versionExclusions(
+  versions: ReadonlyMap<number, readonly number[]>,
+  seen: Iterable<number>,
+): Set<number> {
+  const out = new Set<number>();
+  for (const i of seen) for (const j of versions.get(i) ?? []) out.add(j);
+  return out;
+}
+
 export interface Recommendations {
   positions: PositionResult[];
   history: UserFilm[];
@@ -193,6 +220,8 @@ export function recommend(
   );
   const scores = scoreAll(model, x);
   const excluded = exclusions(matched, history);
+  const seen = history.map((h) => h.item);
+  for (const i of versionExclusions(engine.versions, seen)) excluded.add(i);
   const ranked = rankCandidates(scores, model.recommendable, excluded);
   const caps = options.caps ?? model.meta.slider.positions;
   return {
