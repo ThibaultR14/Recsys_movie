@@ -5,7 +5,7 @@
 
 ## Prochaine étape à lancer : 6, adaptateur IMDb
 
-Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 novembre 2026 (repli par titre toujours dans « à vérifier »). G0 attend le vrai export IMDb de Thibault dans `web/test-data/exports/`. Il faut aussi récupérer un vrai export IMDb, celui de Thibault, à ranger dans `web/test-data/exports/`. L'étape 7 (mise en ligne) reste bloquée par GroupLens. L'étape 6 ne l'est pas.
+Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 novembre 2026 (repli par titre toujours dans « à vérifier »). G1-G3 faits sur fixtures synthétiques. G0 fait sur un export IMDb fabriqué par Thibault : **arrêt**, `Title Type` est traduit dans la langue du compte (`Film`, `Série télévisée`), ce qui contredit D3-D4 (changements proposés en §5 G0 de la spec, à valider). G4 : rapport de bout en bout seulement, mesure des taux reportée. L'étape 7 (mise en ligne) reste bloquée par GroupLens. L'étape 6 ne l'est pas.
 
 ## Étapes restantes
 
@@ -52,13 +52,15 @@ Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 novembre 2026 (repli par titr
 
 ### Étape 6 (IMDb)
 
-- Mesurer les mêmes taux de correspondance qu'à l'étape 3 sur un vrai export IMDb (`é3` §6).
+- Mesurer les mêmes taux de correspondance qu'à l'étape 3 sur un vrai export IMDb (`é3` §6). **Reporté** (`é6` §5 G4, §6) : l'export de Thibault (~40 titres, compte créé pour l'occasion) est trop petit et fabriqué. À faire sur l'export d'un proche si possible, sinon à l'étape 7 avec les volontaires.
+- Ids inventés `tt99000001`-`tt99000005` de `imdb-exemple.csv` : à revérifier, IMDb pourrait les attribuer un jour (`é6` §6).
 
 ### Étape 7 (mise en ligne, volontaires)
 
 - **Seuil « loin de tes goûts »** (0,04) : le recaler d'après la distribution des scores relatifs par cran et le ressenti des volontaires (`é5` §6).
 - **Tampon « ✱ pépite »** : il est visible à ∞ mais presque jamais aux crans bas, parce que le plafond resserre les popularités. Il faudra peut-être un seuil plus doux, par exemple deux tiers de la médiane (`é5` §6, G6).
 - **Correspondance sur les exports des volontaires** : mêmes taux qu'à l'étape 3, en particulier la précision de `probable_variant`, qui n'avait aucun cas dans le premier export. Taux seulement, fichiers supprimés ensuite (`é3` §6).
+- **Correspondance IMDb sur un vrai historique** (si aucun proche n'a fourni d'export avant) : reconnus par id, échecs, précision par id, part d'homonymes parmi les candidats par titre ; taux seulement (`é6` §6).
 - **Évaluation sur de vrais historiques Letterboxd** : les exports des volontaires, sans dataset scrapé (`é2` §6).
 - **Formulaire de retour** derrière « dis-nous si on s'est planté » (`é5` D5).
 - **Cache du modèle** : IndexedDB éventuellement (`é4` D1).
