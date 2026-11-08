@@ -5,6 +5,9 @@ import pytest
 
 import export
 
+# synthetic cases: single_film, all_ties (step 4); version_seen, ties_at_threshold, guard_small (6c)
+N_SYNTHETIC = 5
+
 
 def test_quantize_by_hand_and_zero_row():
     Y = np.array([[1.27, -0.635, 0.0], [0.0, 0.0, 0.0], [-2.0, 1.0, 0.5]], dtype=np.float32)
@@ -56,7 +59,7 @@ def test_fixture_shape():
     if not export.FIXTURE.exists():
         pytest.skip("fixture not generated yet (export.py export)")
     fixture = json.loads(export.FIXTURE.read_text())
-    assert len(fixture["cases"]) == export.N_CASES + 2
+    assert len(fixture["cases"]) == export.N_CASES + N_SYNTHETIC
     for case in fixture["cases"]:
         n = len(case["item_idx"])
         assert len(case["movie_id"]) == len(case["rating"]) == len(case["percentile"]) == n
@@ -73,5 +76,7 @@ def test_exported_files_replay():
     if not (export.STAGING / "embeddings.bin").exists() or not export.FINAL_FACTORS.exists():
         pytest.skip("no export in data/processed/export (export.py export)")
     out = export.cmd_verify(export.STAGING)
-    assert out["top_lists_identical"] == (export.N_CASES + 2) * len(export.FIXTURE_POSITIONS)
+    assert out["top_lists_identical"] == (export.N_CASES + N_SYNTHETIC) * len(
+        export.FIXTURE_POSITIONS
+    )
     assert out["max_user_vector_abs_diff"] < 1e-9
