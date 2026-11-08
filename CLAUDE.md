@@ -2,6 +2,8 @@
 
 Site gratuit de recommandation de films pour cinéphiles. L'utilisateur dépose son export Letterboxd (ZIP) ou IMDb (CSV), et le site lui recommande des films qu'il n'a pas vus, avec un curseur « connu ↔ pépite ». Projet étudiant (M2, ECE Paris), non commercial.
 
+Contexte résumé pour une nouvelle session ou pour Claude Web : `contexte/` (`etat-du-projet.md`, `decisions.md`, `feuille-de-route.md`).
+
 Documentation de référence dans `docs/` — **la lire avant toute décision structurante** :
 - `docs/projet-reco-films.md` : vision, fonctionnalités, décisions, contraintes
 - `docs/stack-technique.md` : stack, sources de données, architecture, ordre de construction
@@ -76,6 +78,7 @@ Méthode de travail : avancer seul, ne s'arrêter qu'aux points de décision.
   - un choix sort d'une décision écrite (D1-D9 de la spec d'étape, ou §9 de `docs/stack-technique.md`) ;
   - la spec prévoit explicitement un arrêt ;
   - une action est irréversible ou touche aux secrets.
+- **À la fin de chaque étape**, mettre à jour `contexte/` (état, décisions, feuille de route) dans le même commit que la clôture.
 - **Avant chaque arrêt** : tout est commité et poussé (`git status` à jour avec `origin`), et la section 5 de la spec est à jour, pour qu'une relecture puisse se faire directement depuis GitHub.
 
 ## Commandes
