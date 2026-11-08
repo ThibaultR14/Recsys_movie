@@ -18,6 +18,7 @@ import sys
 
 import polars as pl
 
+from build_catalog import load_manual_overrides
 from config import PROCESSED, REPO_ROOT
 from titles import NORMALIZATION_VERSION, normalize_title
 
@@ -63,7 +64,10 @@ def cmd_catalog_keys() -> None:
     cat = pl.read_parquet(
         PROCESSED / "catalog.parquet", columns=["tmdb_title", "tmdb_original_title", "ml_title"]
     )
-    strings = sorted({t for col in cat.columns for t in cat[col].drop_nulls().to_list()})
+    manual = load_manual_overrides().filter(pl.col("action") == "title")["title"].to_list()
+    strings = sorted(
+        {t for col in cat.columns for t in cat[col].drop_nulls().to_list()} | set(manual)
+    )
     write_json(
         CATALOG_KEYS,
         {"norm": NORMALIZATION_VERSION, "cases": [[s, normalize_title(s)] for s in strings]},

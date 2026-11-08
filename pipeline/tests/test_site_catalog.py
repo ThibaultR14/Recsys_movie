@@ -9,6 +9,7 @@ def frame():
     return pl.DataFrame(
         {
             "item_idx": [0, 1, 2],
+            "movie_id": [50, 156, 4973],
             "tmdb_title": ["The Usual Suspects", None, "Amélie"],
             "tmdb_original_title": [
                 "The Usual Suspects",
@@ -76,3 +77,48 @@ def test_exported_catalog_files_verify():
         pytest.skip("catalog files not exported (export.py catalog)")
     out = export.cmd_catalog_verify(export.STAGING)
     assert out["films_without_key"] == 0
+
+
+def _title_lines(rows):
+    return pl.DataFrame(
+        rows,
+        schema={
+            "movie_id": pl.Int32,
+            "action": pl.String,
+            "target_movie_id": pl.Int32,
+            "title": pl.String,
+            "reason": pl.String,
+        },
+        orient="row",
+    )
+
+
+def test_manual_title_shown_and_indexed_as_source_0():
+    o = _title_lines(
+        [
+            (156, "title", None, " La Cité des enfants perdus ", "fix"),
+            (50, "exclude", None, None, "ignored here"),
+        ]
+    )
+    manual = sc.title_overrides(frame(), o)
+    assert manual == {1: "La Cité des enfants perdus"}
+    c = sc.build_catalog_json(frame(), manual)
+    assert c["title"][1] == "La Cité des enfants perdus"
+    assert c["title"][0] == "The Usual Suspects"  # other films untouched
+    idx = sc.build_title_index(frame(), manual)
+    post = dict(zip(idx["keys"], idx["post"], strict=True))
+    assert post["la cite des enfants perdus"] == [4 * 1 + sc.SRC_TMDB]  # was SRC_ML_ALT
+    assert post["the city of lost children"] == [4 * 1 + sc.SRC_ML]  # old keys kept
+
+
+def test_manual_title_keeps_the_tmdb_title_key():
+    o = _title_lines([(50, "title", None, "Suspects", "fix")])
+    idx = sc.build_title_index(frame(), sc.title_overrides(frame(), o))
+    post = dict(zip(idx["keys"], idx["post"], strict=True))
+    assert post["suspects"] == [sc.SRC_TMDB]
+    assert post["the usual suspects"] == [sc.SRC_TMDB]
+
+
+def test_manual_title_for_unknown_movie_is_refused():
+    with pytest.raises(ValueError):
+        sc.title_overrides(frame(), _title_lines([(999, "title", None, "X", "not in catalogue")]))

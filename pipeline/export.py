@@ -555,15 +555,18 @@ def write_compact_json(path: Path, obj) -> None:
 
 
 def cmd_catalog(out_dir: Path) -> dict:
-    """catalog.json + title-index.json (step 3, D2/D3), in the item order saved at training."""
+    """catalog.json + title-index.json (step 3, D2/D3), in the item order saved at training, with
+    the manual display titles (`title` action of manual_overrides.csv, step 5 D7)."""
     import site_catalog as sc
+    from build_catalog import load_manual_overrides
 
     catalog = ev.load_catalog()
     trained_movie_ids(catalog)  # refuses a catalogue whose item order moved since training
     cat = sc.load_catalog_frame(ev.CATALOG_PARQUET)
+    manual = sc.title_overrides(cat, load_manual_overrides())
     out_dir.mkdir(parents=True, exist_ok=True)
-    write_compact_json(out_dir / "catalog.json", sc.build_catalog_json(cat))
-    write_compact_json(out_dir / "title-index.json", sc.build_title_index(cat))
+    write_compact_json(out_dir / "catalog.json", sc.build_catalog_json(cat, manual))
+    write_compact_json(out_dir / "title-index.json", sc.build_title_index(cat, manual))
     sizes = file_sizes(out_dir)
     total = sum(v["gzip_bytes"] for v in sizes.values())
     report = {
@@ -572,6 +575,7 @@ def cmd_catalog(out_dir: Path) -> dict:
         "total_bytes": sum(v["bytes"] for v in sizes.values()),
         "total_gzip_bytes": total,
         "within_5mb_gzip": total <= WEB_DATA_GZIP_BUDGET,
+        "manual_titles": len(manual),
     }
     (RESULTS_DIR / "catalog_export_report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
@@ -579,8 +583,10 @@ def cmd_catalog(out_dir: Path) -> dict:
 
 
 def cmd_catalog_verify(out_dir: Path) -> dict:
-    """Re-read catalog.json / title-index.json: shapes, item references, every title findable."""
+    """Re-read catalog.json / title-index.json: shapes, item references, every title findable,
+    manual display titles shown and indexed as source 0."""
     import site_catalog as sc
+    from build_catalog import load_manual_overrides
     from titles import normalize_title
 
     cat_json = json.loads((out_dir / "catalog.json").read_text(encoding="utf-8"))
@@ -602,14 +608,22 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
         key = normalize_title(r["tmdb_title"]) if r["tmdb_title"] else None
         if key and where.get(r["item_idx"], {}).get(key) != sc.SRC_TMDB:
             missing += 1
+    manual = sc.title_overrides(cat, load_manual_overrides())
+    manual_bad = [
+        i
+        for i, t in manual.items()
+        if cat_json["title"][i] != t or where.get(i, {}).get(normalize_title(t)) != sc.SRC_TMDB
+    ]
     films_without_key = n - len(where)
     out = {
         "n": n,
         "keys": len(index["keys"]),
         "films_without_key": films_without_key,
         "tmdb_title_not_indexed_as_source_0": missing,
+        "manual_titles": len(manual),
+        "manual_titles_not_applied": manual_bad,
     }
-    assert films_without_key == 0 and missing == 0, out
+    assert films_without_key == 0 and missing == 0 and not manual_bad, out
     print(json.dumps(out, indent=2))
     return out
 

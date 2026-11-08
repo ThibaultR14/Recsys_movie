@@ -6,6 +6,10 @@ Pure functions on the catalogue frame (sorted by item_idx); writing, guard and s
 title-index.json: keys = normalised titles (titles.py, v2), sorted and unique; post[i] = sorted
 `4 * item_idx + source` for keys[i], source 0 tmdb_title, 1 ml_title (as is or cleaned),
 2 tmdb_original_title, 3 MovieLens alternate title; a film keeps its best (lowest) source per key.
+
+Manual display titles (`title` action of `manual_overrides.csv`, step 5 D7) replace the shown
+title in catalog.json and add their key to title-index.json as source 0 (the TMDB title keeps its
+key too). The model and catalog.parquet are untouched.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ SRC_TMDB, SRC_ML, SRC_ORIGINAL, SRC_ML_ALT = 0, 1, 2, 3
 NO_GENRE = "(no genres listed)"
 CATALOG_COLUMNS = [
     "item_idx",
+    "movie_id",
     "tmdb_title",
     "tmdb_original_title",
     "ml_title",
@@ -38,16 +43,30 @@ def load_catalog_frame(path) -> pl.DataFrame:
     return cat
 
 
+def title_overrides(cat: pl.DataFrame, overrides: pl.DataFrame) -> dict[int, str]:
+    """`title` lines of manual_overrides.csv -> {item_idx: display title}. Every movie_id must be a
+    catalogue movie (not excluded, not merged into another one)."""
+    lines = overrides.filter(pl.col("action") == "title")
+    idx = dict(cat.select("movie_id", "item_idx").iter_rows())
+    unknown = [m for m in lines["movie_id"].to_list() if m not in idx]
+    if unknown:
+        raise ValueError(f"manual_overrides: title for movie_id(s) not in the catalogue: {unknown}")
+    return {idx[m]: t.strip() for m, t in lines.select("movie_id", "title").iter_rows()}
+
+
 def display_title(tmdb_title: str | None, ml_title: str) -> str:
     """tmdb_title, else the cleaned MovieLens title (article back in front, no alternate title)."""
     return tmdb_title if tmdb_title else ml_title_variants(ml_title)
 
 
-def build_catalog_json(cat: pl.DataFrame) -> dict:
+def build_catalog_json(cat: pl.DataFrame, manual_titles: dict[int, str] | None = None) -> dict:
+    manual = manual_titles or {}
     rows = cat.to_dicts()
     genre_names = sorted({g for r in rows for g in (r["ml_genres"] or []) if g != NO_GENRE})
     gid = {g: i for i, g in enumerate(genre_names)}
-    titles = [display_title(r["tmdb_title"], r["ml_title"]) for r in rows]
+    titles = [
+        manual.get(i) or display_title(r["tmdb_title"], r["ml_title"]) for i, r in enumerate(rows)
+    ]
     return {
         "v": 1,
         "n": len(rows),
@@ -70,14 +89,17 @@ def build_catalog_json(cat: pl.DataFrame) -> dict:
     }
 
 
-def film_keys(tmdb_title: str | None, tmdb_original: str | None, ml_title: str) -> dict[str, int]:
-    """Normalised key -> best source for one film."""
+def film_keys(
+    tmdb_title: str | None, tmdb_original: str | None, ml_title: str, manual: str | None = None
+) -> dict[str, int]:
+    """Normalised key -> best source for one film (`manual`: display title set by hand)."""
     out: dict[str, int] = {}
 
     def add(key: str, src: int) -> None:
         if key and src < out.get(key, 99):
             out[key] = src
 
+    add(normalize_title(manual), SRC_TMDB)
     add(normalize_title(tmdb_title), SRC_TMDB)
     ml_main = {normalize_title(ml_title), normalize_title(ml_title_variants(ml_title))}
     for k in ml_main:
@@ -88,12 +110,14 @@ def film_keys(tmdb_title: str | None, tmdb_original: str | None, ml_title: str) 
     return out
 
 
-def build_title_index(cat: pl.DataFrame) -> dict:
+def build_title_index(cat: pl.DataFrame, manual_titles: dict[int, str] | None = None) -> dict:
+    manual = manual_titles or {}
     postings: dict[str, list[int]] = {}
     ml_year = {}
     for r in cat.iter_rows(named=True):
         i = r["item_idx"]
-        for key, src in film_keys(r["tmdb_title"], r["tmdb_original_title"], r["ml_title"]).items():
+        keys = film_keys(r["tmdb_title"], r["tmdb_original_title"], r["ml_title"], manual.get(i))
+        for key, src in keys.items():
             postings.setdefault(key, []).append(4 * i + src)
         if r["ml_year"] is not None and r["ml_year"] != r["year"]:
             ml_year[str(i)] = r["ml_year"]

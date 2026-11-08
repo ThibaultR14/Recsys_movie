@@ -53,13 +53,26 @@ def test_versioned_file_is_valid_and_documented():
     assert set(df["action"]) <= set(bc.MANUAL_ACTIONS)
 
 
+def test_title_lines_are_read():
+    df = bc.load_manual_overrides()
+    titles = dict(df.filter(pl.col("action") == "title").select("movie_id", "title").iter_rows())
+    assert titles[7099] == "Nausicaä of the Valley of the Wind"
+
+
+H = "movie_id,action,target_movie_id,title,reason\n"
+
+
 @pytest.mark.parametrize(
     "content",
     [
-        "movie_id,action,target_movie_id,reason\n1,drop,,typo\n",  # unknown action
-        "movie_id,action,target_movie_id,reason\n1,merge_into,,no target\n",
-        "movie_id,action,target_movie_id,reason\n1,exclude,,a\n1,exclude,,b\n",  # duplicate
-        "movie_id,action,target_movie_id,reason\n1,exclude,,\n",  # no reason
+        H + "1,drop,,,typo\n",  # unknown action
+        H + "1,merge_into,,,no target\n",
+        H + "1,exclude,,,a\n1,exclude,,,b\n",  # duplicate
+        H + "1,exclude,,,\n",  # no reason
+        H + "1,title,,,no title\n",
+        H + "1,title,,  ,blank title\n",
+        H + "1,exclude,,Some Title,title on another action\n",
+        H + "1,title,2,Some Title,target on a title line\n",
     ],
 )
 def test_invalid_files_are_rejected(tmp_path, content):

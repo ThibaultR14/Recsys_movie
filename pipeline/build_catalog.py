@@ -9,7 +9,9 @@ Outputs (in `data/processed/`, never shipped as is):
 
 Manual corrections live in `manual_overrides.csv` (versioned, one documented line per decision):
 `exclude` drops a movie; `merge_into` merges a duplicate into `target_movie_id`, only if both have
-the same normalized MovieLens title and years within 1 year (otherwise refused and reported).
+the same normalized MovieLens title and years within 1 year (otherwise refused and reported);
+`title` sets the website display title (column `title`): applied by `site_catalog.py` only, the
+model and `catalog.parquet` are untouched.
 
 Steps, in order:
 1. threshold on raw MovieLens rating counts (before any merge), then manual exclusions;
@@ -40,7 +42,7 @@ CATALOG_PARQUET = PROCESSED / "catalog.parquet"
 RATINGS_FILTERED_PARQUET = PROCESSED / "ratings_filtered.parquet"
 MERGES_PARQUET = PROCESSED / "movie_id_merges.parquet"
 MANUAL_OVERRIDES_CSV = PIPELINE_DIR / "manual_overrides.csv"
-MANUAL_ACTIONS = ("exclude", "merge_into")
+MANUAL_ACTIONS = ("exclude", "merge_into", "title")
 
 EXCLUDED_TITLE_TYPES = ("tvSeries", "tvEpisode", "tvMiniSeries")
 MAX_DUPLICATE_YEAR_GAP = 1  # two movieIds sharing a tmdbId are the same film if years differ <= 1
@@ -187,6 +189,7 @@ def load_manual_overrides(path=MANUAL_OVERRIDES_CSV) -> pl.DataFrame:
             "movie_id": pl.Int32,
             "action": pl.String,
             "target_movie_id": pl.Int32,
+            "title": pl.String,
             "reason": pl.String,
         },
     )
@@ -195,6 +198,15 @@ def load_manual_overrides(path=MANUAL_OVERRIDES_CSV) -> pl.DataFrame:
         raise ValueError(f"manual_overrides: unknown action(s) {bad['action'].to_list()}")
     if df.filter(pl.col("action") == "merge_into")["target_movie_id"].null_count():
         raise ValueError("manual_overrides: merge_into needs a target_movie_id")
+    if df.filter(
+        (pl.col("action") != "merge_into") & pl.col("target_movie_id").is_not_null()
+    ).height:
+        raise ValueError("manual_overrides: target_movie_id is only for merge_into")
+    is_title = pl.col("action") == "title"
+    if df.filter(is_title & (pl.col("title").str.strip_chars().fill_null("") == "")).height:
+        raise ValueError("manual_overrides: title needs a non-empty title")
+    if df.filter(~is_title & pl.col("title").is_not_null()).height:
+        raise ValueError("manual_overrides: the title column is only for the title action")
     if not df["movie_id"].is_unique().all():
         raise ValueError("manual_overrides: one line per movie_id")
     if df["reason"].null_count():

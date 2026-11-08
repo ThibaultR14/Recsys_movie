@@ -306,6 +306,38 @@ Fait le 8 novembre 2026. Tous les critères sont atteints.
   - Vitest 126/126 (les 125 tests existants + le test de fumée) ; `tsc`, ESLint et Prettier verts ; `npm run build` OK (CSS de 2,4 Ko gzip, hors polices).
 
 ### G1
+
+Code fait le 8 novembre 2026 ; **en attente de la validation de la liste des titres** (arrêt prévu).
+
+- **Action `title`** :
+  - `manual_overrides.csv` reçoit une colonne `title` (vide pour `exclude` et `merge_into`) ;
+  - validation dans `build_catalog.load_manual_overrides` : titre non vide pour `title`, colonne `title` interdite pour les autres actions, `target_movie_id` réservé à `merge_into`, raison obligatoire, une ligne par `movie_id` ;
+  - `site_catalog.title_overrides` refuse un `movie_id` absent du catalogue (exclu ou fusionné dans un autre) ;
+  - le titre manuel remplace le titre affiché dans `catalog.json` ; sa clé entre dans `title-index.json` en source 0, et la clé du titre TMDB est gardée (un export qui utilise l'ancien titre reste reconnu) ;
+  - `build_catalog.py`, le modèle et `catalog.parquet` ne sont pas touchés.
+- **Contrôles** :
+  - `export.py catalog-verify` vérifie aussi que chaque titre manuel est affiché et indexé en source 0 ;
+  - `title_fixtures.py catalog-keys` ajoute les titres manuels aux cas du test TypeScript exhaustif.
+- **Première ligne écrite** : Nausicaä (`movie_id` 7099, TMDB 81), décidée en D7.
+- **Résultats** :
+  - pytest 231/231 (+ 3 tests `site_catalog`, + 1 test de lecture, + 4 cas de fichier invalide) ; `ruff` vert ;
+  - `export.py catalog` et `catalog-verify` OK, pour la relecture comme pour `web` : 23 019 films, 34 723 clés, `manual_titles_not_applied` vide, 3,06 Mo gzip au total ;
+  - Vitest 126/126 avec le nouveau catalogue.
+- **Relecture des titres divergents** (titre TMDB différent de tous les titres MovieLens et du titre original : 728 films, dont 8 à ≥ 2 000 notes et 20 à ≥ 1 000) :
+  - à ≥ 1 000 notes, un seul titre est faux : « Warriors of the Wind ». Les 19 autres sont les titres anglais d'usage (*The Intouchables*, *Oldboy*, *Castle in the Sky*, *The Raid*, *Police Story 3: Super Cop*, *Arrietty*, *District B13*, *Fantastic Planet*, *Mirror*, *Children of Heaven*…) ;
+  - une recherche en plus, sur tout le catalogue, des titres affichés en écriture non latine ou tout en majuscules fait ressortir 4 cas douteux (moins de 300 notes chacun) : voir la liste proposée.
+- **Liste proposée à Thibault** (seul Nausicaä est déjà écrit) :
+
+  | movie_id | TMDB | titre affiché aujourd'hui | proposé | raison |
+  |---|---|---|---|---|
+  | 7099 | 81 | Warriors of the Wind | Nausicaä of the Valley of the Wind | ancien montage américain (D7) |
+  | 2292 | 25723 | 愛情快遞 | Overnight Delivery | film américain (langue originale `en`) ; TMDB n'a qu'un titre chinois |
+  | 40337 | 15083 | האושפיזין | Ushpizin | titre en hébreu seulement ; le film est sorti sous le nom *Ushpizin* |
+  | 243208 | 638597 | YES DAY | Yes Day | capitales TMDB ; MovieLens écrit « Yes Day » |
+  | 211966 | 528491 | WHAT DID JACK DO? | *(à trancher)* What Did Jack Do? | capitales voulues par Lynch ? à garder si oui |
+
+  Les autres titres en capitales sont des graphies voulues (*WALL·E*, *C.R.A.Z.Y.*, *BLAME!*, *GANTZ:O*…) et ne sont pas proposés.
+
 ### G2
 ### G3
 ### G4
