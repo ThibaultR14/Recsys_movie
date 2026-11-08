@@ -56,7 +56,7 @@ export function Contact({ navigate = (href) => window.location.assign(href) }: C
   };
 
   return (
-    <div className="flex max-w-[680px] flex-col gap-12 pt-4">
+    <div className="flex max-w-[65ch] flex-col gap-12 pt-4">
       <PageTitle>{T.titre}</PageTitle>
       <div className="flex flex-col gap-3 text-[16px] leading-relaxed">
         <Paragraphs items={T.intro} />

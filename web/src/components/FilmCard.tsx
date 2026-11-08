@@ -79,8 +79,11 @@ export function FilmCard({ film, stamp = false, seriesOf, because }: FilmCardPro
         </HandNote>
       )}
       {stamp && (
+        // top right of the poster (step 6b, R9), on a small surface label: readable on any poster
+        // and never over the explanation below
         <span
-          className="absolute right-[-14px] bottom-9 font-hand text-[24px] font-bold text-pen"
+          data-testid="pepite-stamp"
+          className="absolute top-5 right-[-8px] rounded-[3px] bg-surface px-1.5 font-hand text-[24px] leading-tight font-bold text-pen shadow-photo"
           style={{ transform: 'rotate(-12deg)' }}
         >
           ✱ pépite

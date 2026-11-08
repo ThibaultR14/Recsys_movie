@@ -78,7 +78,7 @@ export function Analyse({ summary, unrecognized, onSubmit, busy = false, error }
   };
 
   return (
-    <div className="flex flex-col gap-12 pt-10">
+    <div className="flex max-w-[760px] flex-col gap-12 pt-10">
       <h1 className="m-0 text-[clamp(26px,3.4vw,38px)] leading-[1.35] font-normal">
         on a lu tes {films(summary.nEntries)}.
         <br />

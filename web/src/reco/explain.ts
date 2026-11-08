@@ -14,7 +14,7 @@ export const LIKED_PERCENTILE = 0.7;
 export const MIN_COSINE = 0;
 export const MAX_CITED = 2;
 /** Candidates kept per film for the diversity rule of the grid (R6, option A). */
-export const CANDIDATES = 5;
+export const CANDIDATES = 20;
 
 export interface Explanation {
   kind: 'liked' | 'seen';

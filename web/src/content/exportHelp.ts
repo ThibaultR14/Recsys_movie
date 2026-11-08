@@ -7,7 +7,7 @@ export const EXPORT_HELP = {
   letterboxd: {
     onglet: 'letterboxd',
     etapes: [
-      "sur letterboxd.com (c'est plus simple depuis un ordi), ouvre tes réglages : « {en:settings} ».",
+      "sur letterboxd.com (c'est plus simple depuis un ordi), passe sur ton nom en haut de la page et ouvre « {en:settings} ».",
       "va dans l'onglet « {en:data} », puis clique sur « {en:export your data} ».",
       "tu reçois un .zip. pas besoin de l'ouvrir : glisse-le tel quel ici.",
     ],

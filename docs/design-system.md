@@ -133,7 +133,7 @@ Mentions obligatoires (ne pas reformuler) :
 - Affiche au format **2:3**.
 - Dessous : titre en gras 16 px, puis « réalisateur, année » en encre pâle 13 px, puis la note du public « ★ 3,9 · 1 240 notes » (encre pâle 13 px ; étape 6b).
 - Annotation Caveat « (parce que t'as aimé « X » et « Y ») » (étape 6b), ou « (même série que « X », que t'as vu) » qui la remplace ; titres de plus de 32 caractères coupés avec « … ».
-- Si c'est une pépite : « ✱ pépite » en Caveat gras, stylo bleu, incliné à −12°, qui déborde un peu du bord droit de la carte.
+- Si c'est une pépite : « ✱ pépite » en Caveat gras, stylo bleu, incliné à −12°, **en haut à droite de l'affiche**, sur une petite étiquette couleur surface, qui déborde un peu du bord droit (étape 6b, R9 : il ne chevauche plus l'explication).
 - Toute la carte est un lien vers la fiche du film.
 
 ### Grille de résultats
@@ -156,7 +156,7 @@ Mentions obligatoires (ne pas reformuler) :
 
 ## 6. Mise en page
 
-- Colonne étroite pour l'accueil (**max 820 px**), plus large pour les résultats (**max 1100 px**). Marges latérales 24 px.
+- Un seul conteneur de **1 200 px** au plus pour tous les écrans (étape 6b, R9), aligné sur l'en-tête ; marges latérales 24 px. Les paragraphes gardent une largeur de lecture (**~65 caractères**), les titres des écrans 760 px au plus ; la grille des résultats prend toute la largeur. (Avant : 820 px pour l'accueil, 1 100 px pour les résultats, centrés.)
 - Beaucoup de vide, **une action principale par écran**.
 - Tout s'aligne à gauche (pas de centrage façon landing page).
 - Doit fonctionner sur téléphone : la grille passe à 1 colonne, la flèche « c'est là » passe sous la zone de dépôt.

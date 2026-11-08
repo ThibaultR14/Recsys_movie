@@ -57,12 +57,15 @@ export const COMMENT_CA_MARCHE = {
       'le modèle ne connaît que les goûts des gens qui ont noté sur MovieLens : si tes goûts sont rares chez eux, il aura plus de mal',
     ],
   },
+  // one link per item, new tab (R9); `{a-en:…}` = link with an English label
   inspirations: {
     titre: 'inspirations',
-    paragraphes: [
-      "{en:letterboxd recommendations}, de sam learner : le premier site à faire des recos à partir d'un profil letterboxd. il est souvent hors ligne, et c'est un peu pour ça que ce site existe.",
-      "criticker, qui compare les goûts en percentiles depuis 2005 : c'est de là que vient l'idée pour tes notes.",
-      'les travaux de recherche sur le biais de popularité et sur la nouveauté des recommandations, qui ont donné le curseur.',
+    liste: [
+      "{a-en:https://letterboxd.samlearner.com|letterboxd recommendations}, de sam learner : le premier site à recommander des films à partir d'un profil letterboxd. il récupère les profils lui-même et il est souvent hors ligne : c'est un peu pour ça que ce site existe.",
+      "{a:https://www.criticker.com|criticker} : compare les goûts en percentiles depuis 2005. c'est de là que vient l'idée pour tes notes.",
+      'la méthode du modèle : Y. Hu, Y. Koren, C. Volinsky, « {a-en:https://doi.org/10.1109/ICDM.2008.22|Collaborative Filtering for Implicit Feedback Datasets} », ICDM 2008.',
+      'le curseur : les travaux sur le biais de popularité, par exemple H. Abdollahpouri, R. Burke, B. Mobasher, « {a-en:https://doi.org/10.1145/3109859.3109912|Controlling Popularity Bias in Learning-to-Rank Recommendation} », RecSys 2017.',
+      'les données : F. M. Harper, J. A. Konstan, « {a-en:https://doi.org/10.1145/2827872|The MovieLens Datasets: History and Context} », ACM TiiS 2015.',
       'et tous les gens qui notent leurs films, sans qui rien de tout ça ne marcherait.',
     ],
   },

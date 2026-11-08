@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { EXPORT_HELP as T } from '../content/exportHelp';
+import { APROPOS } from '../content/apropos';
+import { COMMENT_CA_MARCHE } from '../content/commentCaMarche';
 import { plainText, textParts } from '../content/richText';
+import { CommentCaMarche } from '../pages/CommentCaMarche';
 import { ExportHelp } from './ExportHelp';
 import * as drawings from './help/illustrations';
 
@@ -88,5 +91,58 @@ describe('richText', () => {
     ]);
     expect(plainText(t)).toBe('va dans « data », puis « export your data ».');
     expect(textParts('rien')).toEqual([{ text: 'rien', en: false }]);
+  });
+});
+
+describe('richText links (R9)', () => {
+  it('{a:url|label} and {a-en:url|label}; https only', () => {
+    expect(textParts('le code : {a:https://x.org/y|le code est sur github}.')).toEqual([
+      { text: 'le code : ', en: false },
+      { text: 'le code est sur github', en: false, href: 'https://x.org/y' },
+      { text: '.', en: false },
+    ]);
+    expect(textParts('« {a-en:https://doi.org/1|A Title} »')[1]).toEqual({
+      text: 'A Title',
+      en: true,
+      href: 'https://doi.org/1',
+    });
+    expect(plainText('« {a-en:https://doi.org/1|A Title} », {en:data}')).toBe('« A Title », data');
+    expect(() => textParts('{a:javascript:alert(1)|x}')).toThrow();
+    expect(() => textParts('{a:https://x.org}')).toThrow();
+  });
+
+  it('every link of the content is well formed (https, label)', () => {
+    const all = [
+      ...APROPOS.intro,
+      ...APROPOS.pourquoi,
+      ...COMMENT_CA_MARCHE.inspirations.liste,
+      ...T.letterboxd.etapes,
+      ...T.imdb.etapes,
+    ];
+    const links = all.flatMap((t) => textParts(t).filter((p) => p.href));
+    expect(links.map((l) => l.href)).toEqual([
+      'https://github.com/ThibaultR14/Recsys_movie',
+      'https://letterboxd.samlearner.com',
+      'https://www.criticker.com',
+      'https://doi.org/10.1109/ICDM.2008.22',
+      'https://doi.org/10.1145/3109859.3109912',
+      'https://doi.org/10.1145/2827872',
+    ]);
+  });
+
+  it('rendered: new tab, rel noopener, English titles with lang="en"', () => {
+    render(<CommentCaMarche />);
+    const region = screen.getByRole('region', { name: 'inspirations' });
+    const links = within(region).getAllByRole('link');
+    expect(links).toHaveLength(5);
+    for (const a of links) {
+      expect(a).toHaveAttribute('target', '_blank');
+      expect(a).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(a).toHaveTextContent('(nouvel onglet)');
+    }
+    const hu = within(region).getByRole('link', { name: /Collaborative Filtering/ });
+    expect(hu).toHaveAttribute('lang', 'en');
+    expect(within(region).getByRole('link', { name: /^criticker/ })).not.toHaveAttribute('lang');
+    expect(within(region).getAllByRole('listitem')).toHaveLength(6);
   });
 });

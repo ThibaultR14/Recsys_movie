@@ -219,14 +219,20 @@ describe('App (fake worker)', () => {
     expect(screen.getByLabelText(/glisse ton fichier ici/)).toBeInTheDocument();
   });
 
-  it('« je sais pas où trouver mon export » unfolds the export help', async () => {
+  it('the export help is open by default, right under the drop zone; the button folds it', async () => {
     render(<App client={fakeClient()} />);
     const btn = screen.getByRole('button', { name: 'je sais pas où trouver mon export' });
+    expect(btn).toHaveAttribute('aria-expanded', 'true');
+    const tabs = screen.getByRole('tablist', { name: 'où trouver ton export' });
+    expect(tabs).toBeVisible();
+    // order in the page: drop zone, then the help, then the promises
+    const zone = screen.getByTestId('drop-zone');
+    const promise = screen.getByText('on garde rien : tout se passe dans ton navigateur');
+    expect(zone.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tabs.compareDocumentPosition(promise) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await userEvent.click(btn);
     expect(btn).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
-    await userEvent.click(btn);
-    expect(btn).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('tablist', { name: 'où trouver ton export' })).toBeVisible();
   });
 });
 

@@ -277,7 +277,7 @@ test.describe('phone (375 × 812)', () => {
     });
     expect(rows, 'lignes de navigation').toBeLessThanOrEqual(2);
     const helpBtn = page.getByRole('button', { name: 'je sais pas où trouver mon export' });
-    await helpBtn.click();
+    await expect(helpBtn).toHaveAttribute('aria-expanded', 'true'); // open by default (R9)
     await expect(page.getByRole('tablist', { name: 'où trouver ton export' })).toBeVisible();
     expect(await noHScroll(), 'accueil, aide ouverte').toBe(true);
     expect(await violationsBothThemes(page), 'axe: aide').toEqual([]);
@@ -336,6 +336,60 @@ test.describe('phone (375 × 812)', () => {
     expect(net.blocked).toEqual([]);
   });
 });
+
+for (const [label, viewport] of [
+  ['téléphone', { width: 375, height: 812 }],
+  ['tablette', { width: 768, height: 1024 }],
+  ['grand écran', { width: 1440, height: 900 }],
+] as const) {
+  test(`layout (${label}): left-aligned 1 200 px container, pépite stamp clear of the explanation, both themes`, async ({
+    page,
+    baseURL,
+  }) => {
+    const net = await guardNetwork(page, baseURL!);
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    const left = (sel: string) =>
+      page
+        .locator(sel)
+        .first()
+        .evaluate((e) => Math.round(e.getBoundingClientRect().left));
+    const noHScroll = () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+    // home: the help is open under the drop zone
+    await expect(page.getByRole('tablist', { name: 'où trouver ton export' })).toBeVisible();
+    expect(await noHScroll(), 'accueil').toBe(true);
+    expect(await left('h1'), 'titre aligné sur le logo').toBe(await left('header a'));
+
+    await exampleToResults(page);
+    await page.getByRole('slider').focus();
+    await page.keyboard.press('Home'); // ∞: the notch with a stamp in the example
+    await expect(page.getByTestId('pepite-stamp')).toHaveCount(1);
+    expect(await noHScroll(), 'résultats').toBe(true);
+    expect(await left('h1')).toBe(await left('header a'));
+    const width = await page.locator('main').evaluate((e) => e.getBoundingClientRect().width);
+    expect(width).toBeLessThanOrEqual(1200);
+    expect(await violationsBothThemes(page), `axe ${label}`).toEqual([]);
+    for (const theme of ['sombre', 'clair'] as const) {
+      if (theme === 'clair') await page.getByRole('button', { name: 'passer en clair' }).click();
+      // the stamp sits on the poster, never over the explanation or the texts below it
+      const card = cards(page).filter({ has: page.getByTestId('pepite-stamp') });
+      const stamp = (await card.getByTestId('pepite-stamp').boundingBox())!;
+      const poster = (await card.locator('img, [data-testid=no-poster]').first().boundingBox())!;
+      expect(stamp.y + stamp.height, 'tampon sur l’affiche').toBeLessThanOrEqual(
+        poster.y + poster.height,
+      );
+      expect(await noHScroll(), `résultats, ${theme}`).toBe(true);
+      await settle(page);
+      await page.screenshot({
+        path: `${SHOTS}/5-${label.replace(' ', '-')}-${theme}.png`,
+        fullPage: true,
+      });
+    }
+    await page.getByRole('button', { name: 'passer en sombre' }).click();
+    expect(net.blocked).toEqual([]);
+  });
+}
 
 const median = (xs: number[]) => {
   const v = [...xs].sort((a, b) => a - b);

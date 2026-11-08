@@ -99,6 +99,7 @@
 - Aide des exports : carrousel à onglets, schémas SVG au trait, aucune capture ni logo de marque — `é6b` D4.
 - Note du public sur les cartes : moyenne MovieLens sur 5 + nombre de notes (`catalog.json` v2, +55 Ko gzip) — `é6b` D5.
 - **« (parce que t'as aimé X et Y) »** (explications avancées de l'étape 8) : cosinus des vecteurs, films notés de percentile ≥ 0,7, repli « vu » sans aucune note ; pas sur une carte de série ni aux crans « loin de tes goûts » ; **2 cartes au plus par film cité et par rangée de 8** — sinon un même film était cité sur 7-8 cartes sur 8 — `é6b` D6, R6.
+- R9 : tampon « ✱ pépite » en haut à droite de l'affiche ; 20 voisins candidats pour les explications (le plafond de diversité n'en laisse plus aucune vide) ; aide des exports ouverte par défaut sous la zone de dépôt ; conteneur unique de 1 200 px aligné à gauche, paragraphes à ~65 caractères ; liens externes dans les textes (`{a:…}`, nouvel onglet) — `é6b` R9.
 - Changement de cran : 50 ms **sur la médiane** de 21 mesures, pire cas journalisé seulement — les pointes viennent du rendu des affiches sur une machine chargée — `é6b` R6.
 
 ## Confidentialité

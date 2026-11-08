@@ -22,7 +22,7 @@ const PROMISES = [
 
 /** Screen 1: home and drop zone (mockup C, exact texts). */
 export function Accueil({ onFile, onExample, status, error, busy = false }: AccueilProps) {
-  const [help, setHelp] = useState(false);
+  const [help, setHelp] = useState(true);
   const helpId = useId();
   return (
     <div className="flex flex-col gap-10 pt-10">
@@ -39,31 +39,32 @@ export function Accueil({ onFile, onExample, status, error, busy = false }: Accu
           {error ? <span role="alert">{error}</span> : status}
         </p>
       </div>
-      <NoList items={PROMISES} />
-      <div className="flex flex-wrap gap-x-8 gap-y-3 text-[16px]">
-        <a
-          href="#exemple"
-          onClick={(e) => {
-            e.preventDefault();
-            if (!busy) onExample();
-          }}
-          className="inline-flex min-h-11 items-center font-bold text-ink underline hover:text-pen"
-        >
-          montre-moi un exemple →
-        </a>
+      {/* export help: open by default, right under the drop zone (step 6b, R9) */}
+      <div className="flex flex-col gap-4">
         <button
           type="button"
           aria-expanded={help}
           aria-controls={helpId}
           onClick={() => setHelp((h) => !h)}
-          className="min-h-11 cursor-pointer bg-transparent p-0 text-left text-[16px] text-muted underline hover:text-pen"
+          className="min-h-11 w-fit cursor-pointer bg-transparent p-0 text-left text-[16px] text-muted underline hover:text-pen"
         >
           je sais pas où trouver mon export
         </button>
+        <div id={helpId} hidden={!help} className="max-w-[620px]">
+          {help && <ExportHelp />}
+        </div>
       </div>
-      <div id={helpId} hidden={!help} className="max-w-[620px]">
-        {help && <ExportHelp />}
-      </div>
+      <NoList items={PROMISES} />
+      <a
+        href="#exemple"
+        onClick={(e) => {
+          e.preventDefault();
+          if (!busy) onExample();
+        }}
+        className="inline-flex min-h-11 w-fit items-center text-[16px] font-bold text-ink underline hover:text-pen"
+      >
+        montre-moi un exemple →
+      </a>
     </div>
   );
 }

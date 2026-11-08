@@ -1,6 +1,6 @@
 # Étape 6b — Retouches de l'interface
 
-> Version 0.2 (8 novembre 2026). Mini-étape insérée entre l'étape 6 (adaptateur IMDb) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026**, avec ses réponses aux questions de la section 7 (v0.2) : cartes sombres un cran plus claires que le fond, scotch gardé (D7) ; sombre par défaut même si le système est en clair (D7) ; l'annotation de série remplace l'explication, pas d'explication sur les cartes « loin de tes goûts », repli « parce que t'as vu » pour un historique sans notes (D6) ; « qui on est » → « à propos », pied de page inchangé (D1, D2) ; adresse de contact décidée en R8 (D3).
+> Version 0.3 (8 novembre 2026) : sous-étape R9 ajoutée après l'essai de Thibault. Version 0.2 : Mini-étape insérée entre l'étape 6 (adaptateur IMDb) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026**, avec ses réponses aux questions de la section 7 (v0.2) : cartes sombres un cran plus claires que le fond, scotch gardé (D7) ; sombre par défaut même si le système est en clair (D7) ; l'annotation de série remplace l'explication, pas d'explication sur les cartes « loin de tes goûts », repli « parce que t'as vu » pour un historique sans notes (D6) ; « qui on est » → « à propos », pied de page inchangé (D1, D2) ; adresse de contact décidée en R8 (D3).
 > Décisions de départ données par Thibault le 8 novembre 2026 (D1-D7). Les **textes de l'interface** viennent de Claude Web : le code prévoit des emplacements (D8), remplis en R7.
 
 ---
@@ -8,7 +8,7 @@
 ## 0. Mode d'emploi (pour Claude Code)
 
 - Relis ce document au début de chaque sous-étape. Les décisions de la section 3 ne changent pas sans accord.
-- Une sous-étape à la fois (R0 → R8), en suivant « Quand s'arrêter » de `CLAUDE.md`. **Arrêts obligatoires** :
+- Une sous-étape à la fois (R0 → R9), en suivant « Quand s'arrêter » de `CLAUDE.md`. **Arrêts obligatoires** :
   - en **R7**, pour recevoir les textes de Claude Web (Thibault peut les donner plus tôt : ils sont intégrés dès qu'ils arrivent, R7 ne fait alors que vérifier qu'il n'en manque aucun) ;
   - en **R8**, si l'adresse de contact n'est pas confirmée (D3) ;
   - en **R8**, pour l'essai sur un vrai téléphone (deux thèmes) et la relecture.
@@ -220,6 +220,14 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - **Essai sur un vrai téléphone par Thibault**, dans les deux thèmes (**arrêt**).
 - Section 5 complète ; `CLAUDE.md` (stockage, arborescence), `docs/design-system.md`, `docs/stack-technique.md` (§9), `contexte/` (état, décisions — exception de stockage —, feuille de route : étape 6b, explications avancées) dans le même commit ; **arrêt** pour relecture.
 
+### R9 — Retouches après l'essai de Thibault (ajoutée le 8 novembre 2026)
+
+1. Tampon « ✱ pépite » en haut à droite de l'affiche (il ne chevauche plus l'explication) ; téléphone et deux thèmes.
+2. Explications absentes aux crans bas : **diagnostic d'abord** (par cran, sur l'exemple et sur l'export de Thibault : cartes expliquées, et pourquoi pas les autres). Plafond de diversité → renvoyer plus de voisins (20) et remesurer ; cosinus ≤ 0 → **arrêt** et proposition de la décomposition du score de Hu, Koren et Volinsky (2008).
+3. Aide des exports ouverte par défaut, juste sous la zone de dépôt.
+4. Site élargi : conteneur ~1 200 px, titres et contenu alignés à gauche sur l'en-tête, paragraphes à ~65 caractères ; téléphone, tablette, grand écran, deux thèmes.
+5. Nouveaux textes : `apropos.intro` (lien vers le code), `ccm.inspirations` en liste de liens (nouvel onglet, `rel="noopener"`, titres d'articles en `lang="en"`).
+
 ### Critères de réussite
 
 | Critère | Seuil |
@@ -335,6 +343,18 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
   2. **noms des menus Letterboxd** de l'aide (« settings », onglet « data », « export your data ») : la confirmation de Thibault est restée à remplir ;
   3. **essai sur un vrai téléphone** dans les deux thèmes (`npm run dev -- --host`).
 
+### R9 — Retouches après l'essai de Thibault (8 novembre 2026)
+
+- **Tampon « ✱ pépite »** : en haut à droite de l'affiche (`top-5`, déborde de 8 px), sur une petite étiquette `surface` pour rester lisible sur n'importe quelle affiche. Playwright (téléphone, tablette, grand écran ; sombre et clair) : le bas du tampon reste au-dessus du bas de l'affiche, aucun défilement horizontal. Un premier essai à −14 px, avec une marge de 16 px sur téléphone, débordait de l'écran : marge de 24 px gardée, tampon à −8 px.
+- **Diagnostic des explications** (`reco-report`, 16 premières cartes par cran ; comptes seulement) avec 5 candidats : **aucune carte sans explication à cause du cosinus**. Causes : plafond de diversité épuisé (export de Thibault : 2, 2 et 1 cartes aux crans 2 000, 1 000 et 500 ; exemple : 1 au cran 200), cartes de série (1 à 5 000 et à 500), et surtout **le cran 200 de l'export de Thibault entier (16/16) masqué** parce qu'il est « loin de tes goûts » (score relatif 0,020 < 0,04, règle Q4). Pas d'arrêt (ce n'est pas le cosinus).
+- **20 candidats** (`CANDIDATES = 20`) : plus aucune carte bloquée par le plafond ; toutes les cartes sont expliquées sauf les séries et le cran « loin de tes goûts ». Coût (`reco-bench`, médiane de 7) : explications **8,2 ms** (export de Thibault), 12,4 ms (225 films), 25,6 ms (1 000), **49,5 ms (3 000)** ; plafond de +100 ms respecté.
+- ⚠️ **À noter pour Thibault** : tout à droite sur son export, l'absence d'explication vient de la règle Q4 (« pas d'explication sur les cartes loin de tes goûts »), pas du calcul. La lever est une décision (§6).
+- **Aide des exports** : ouverte par défaut (`aria-expanded="true"`), juste sous la zone de dépôt, avant les promesses et le lien d'exemple ; le bouton la replie.
+- **Mise en page** : un seul conteneur **1 200 px** (marges 24 px) pour tous les écrans, aligné sur l'en-tête ; paragraphes des pages à **65ch** ; titre et curseur des résultats, écran d'analyse à 760 px ; la grille des résultats prend toute la largeur (4 colonnes sur grand écran). Playwright : téléphone 375, tablette 768, grand écran 1 440, deux thèmes : pas de défilement horizontal, titre aligné sur le logo, `main` ≤ 1 200 px, axe 0.
+- **Textes** : `apropos.intro` (4 paragraphes, lien « le code est sur github »), `ccm.inspirations` devenue une **liste** de 6 éléments avec 5 liens. Marquage étendu : `{a:url|libellé}` et `{a-en:url|libellé}` (lien externe, nouvel onglet, `rel="noopener noreferrer"`, « (nouvel onglet) » pour les lecteurs d'écran, `https` obligatoire) ; titres d'articles en `lang="en"`. `aide.letterboxd.1` précisé (« passe sur ton nom en haut de la page et ouvre « settings » »), menus Letterboxd confirmés par Thibault (« settings » → « data » → « export your data »).
+- Qualité : Vitest **254**, Playwright **11** (dont 3 de mise en page), `typecheck`, `lint`, `format:check`, `build` verts ; changement de cran : médiane 33 ms, pire cas 35-48 ms.
+- **Reste pour clore** : l'adresse de contact et l'essai sur un vrai téléphone (Thibault, après R9).
+
 ---
 
 ## 6. À reporter
@@ -342,6 +362,8 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - **Explication exacte de l'ALS** (contribution de chaque film de l'historique au score) : plus fidèle que le cosinus, à comparer avec la fiche film (étape 8).
 - **Règle de diversité des films cités** (éviter le même film sur toutes les cartes), si la mesure de R6 le demande sans justifier un arrêt.
 - **Suivre le thème du système** (`prefers-color-scheme`) quand rien n'est choisi : écarté (Q2, sombre par défaut même si le système est en clair).
+- **Explications aux crans « loin de tes goûts »** : masquées par Q4 ; sur l'export de Thibault, tout le cran 200 l'est (R9). À rediscuter avec les volontaires.
+- **Décomposition du score de l'ALS** (Hu, Koren, Volinsky 2008) : non nécessaire au diagnostic de R9 (aucune carte sans voisin à cosinus > 0) ; reste une option pour la fiche film.
 - **Seuils des explications** (percentile ≥ 0,7, cosinus > 0) : à recaler avec les retours des volontaires (étape 7) (Q4).
 - **Formulaire de contact relié à un service** (envoi sans application de mail) : demanderait un service tiers ou un Worker ; à rediscuter avec « forme du retour des volontaires » (étape 7).
 

@@ -1,11 +1,12 @@
 import { NoList } from '../components/NoList';
 import { PageSection, PageTitle, Paragraphs } from '../components/PageSection';
+import { RichText } from '../components/RichText';
 import { COMMENT_CA_MARCHE as T } from '../content/commentCaMarche';
 
 /** « comment ça marche », detailed (docs/etape-6b-retouches.md, D2). Texts: Claude Web (D8). */
 export function CommentCaMarche() {
   return (
-    <div className="flex max-w-[680px] flex-col gap-12 pt-4">
+    <div className="flex max-w-[65ch] flex-col gap-12 pt-4">
       <PageTitle>{T.titre}</PageTitle>
       <PageSection id="modele" title={T.modele.titre}>
         <Paragraphs items={T.modele.paragraphes} />
@@ -27,7 +28,14 @@ export function CommentCaMarche() {
         <NoList items={T.limites.liste} />
       </PageSection>
       <PageSection id="inspirations" title={T.inspirations.titre}>
-        <Paragraphs items={T.inspirations.paragraphes} />
+        <ul className="m-0 flex list-none flex-col gap-3 p-0">
+          {T.inspirations.liste.map((item) => (
+            <li key={item}>
+              <span aria-hidden="true">→ </span>
+              <RichText text={item} />
+            </li>
+          ))}
+        </ul>
       </PageSection>
     </div>
   );

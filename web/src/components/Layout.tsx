@@ -6,7 +6,8 @@ import { ThemeToggle } from './ThemeToggle';
 
 interface LayoutProps {
   children: ReactNode;
-  /** 820 px column (home, analysis, pages) or 1 100 px (results). */
+  /** Kept for the callers; since step 6b R9 every screen uses the same 1 200 px container, aligned
+   * on the header, and text blocks keep a reading width of ~65 characters. */
   width?: 'narrow' | 'wide';
   /** Analysis and results: « ← changer de fichier » at the top of the content (and the logo). */
   onBack?: () => void;
@@ -24,8 +25,8 @@ const NAV_LINKS: { page: Page; label: string }[] = [
 
 /** Page frame (step 6b, D2): header with the logo, the navigation and the theme button on every
  * screen; main column; footer with the TMDB notice. */
-export function Layout({ children, width = 'narrow', onBack, page }: LayoutProps) {
-  const col = `mx-auto w-full px-6 ${width === 'wide' ? 'max-w-[1100px]' : 'max-w-[820px]'}`;
+export function Layout({ children, onBack, page }: LayoutProps) {
+  const col = 'mx-auto w-full max-w-[1200px] px-6';
   return (
     <div className="flex min-h-screen flex-col bg-paper text-ink">
       <header

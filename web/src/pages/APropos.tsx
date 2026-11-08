@@ -6,7 +6,7 @@ const TMDB_LOGO = `${import.meta.env.BASE_URL}tmdb-logo.svg`;
 /** « à propos »: first person, no school name (D1), and the mandatory TMDB / MovieLens notices. */
 export function APropos() {
   return (
-    <div className="flex max-w-[680px] flex-col gap-12 pt-4">
+    <div className="flex max-w-[65ch] flex-col gap-12 pt-4">
       <PageTitle>{T.titre}</PageTitle>
       <div className="flex flex-col gap-3 text-[16px] leading-relaxed">
         <Paragraphs items={T.intro} />

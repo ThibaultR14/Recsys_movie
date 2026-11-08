@@ -70,6 +70,29 @@ async function main() {
         `${far ? ' (cran « loin de tes goûts » : explications masquées)' : ''}`,
     );
   }
+
+  // Why a card has no explanation (step 6b, R9), on the first 16 cards (2 rows) of each notch.
+  console.log('\n── cartes sans explication : pourquoi (16 premières cartes par cran) ──');
+  for (const pos of reco.positions) {
+    const shown = pos.films.slice(0, 16);
+    const far = pos.relativeScore < FAR_FROM_TASTE;
+    const picks = citationPicks(shown.map((f) => (far ? undefined : f.because?.items)));
+    const why = { expliquée: 0, série: 0, loin: 0, 'cosinus ≤ 0': 0, plafond: 0 };
+    shown.forEach((f, i) => {
+      if (f.seriesOf) why.série++;
+      else if (far) why.loin++;
+      else if (!f.because) why['cosinus ≤ 0']++;
+      else if (picks[i]!.length === 0) why.plafond++;
+      else why.expliquée++;
+    });
+    console.log(
+      `${String(pos.cap === null ? '∞' : pos.cap).padStart(6)} (score relatif ` +
+        `${pos.relativeScore.toFixed(3)}) : ` +
+        Object.entries(why)
+          .map(([k, v]) => `${k} ${v}`)
+          .join(', '),
+    );
+  }
   console.log(`temps des explications : ${(reco.explainMs ?? 0).toFixed(1)} ms`);
 }
 
