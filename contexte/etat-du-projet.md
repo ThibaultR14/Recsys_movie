@@ -96,6 +96,5 @@ Chaque spec d'étape suit le même plan : décisions (D1, D2…), sous-étapes e
 
 - **Réponse de GroupLens** sur la licence MovieLens (mail envoyé le 6 novembre 2026). **Elle bloque la mise en ligne** (étape 7) et le versionnement de `web/public/data/`, mais pas le développement en local.
 - **Exports de 10 à 20 cinéphiles volontaires** (étape 7). Ils serviront à mesurer la correspondance des titres et à recaler les seuils de l'interface : « loin de tes goûts » et tampon « ✱ pépite ».
-- **Relecture de l'étape 6** : chemin exact de l'export sur imdb.com (aide de l'accueil) et résultat de la vérification à la main du fichier de contrôle IMDb (taux seulement).
 - **Un vrai historique IMDb** (export d'un proche ou d'un volontaire) : pour mesurer les taux de correspondance, et vérifier les libellés français probables de `Title Type` (mini-série, jeu vidéo).
 - **Le nom définitif** du site (plus tard). Il ne doit contenir ni « Letterboxd » ni « IMDb ».

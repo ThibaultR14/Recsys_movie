@@ -186,6 +186,13 @@ test.describe('phone (375 × 812)', () => {
     const noHScroll = () =>
       page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
     expect(await noHScroll(), 'accueil').toBe(true);
+    const helpBtn = page.getByRole('button', { name: 'je sais pas où trouver mon export' });
+    await helpBtn.click();
+    await expect(page.getByText(/ton profil → évaluations → actions → exporter/)).toBeVisible();
+    expect(await noHScroll(), 'accueil, aide ouverte').toBe(true);
+    await settle(page);
+    await page.screenshot({ path: `${SHOTS}/1-aide-telephone.png`, fullPage: true });
+    await helpBtn.click();
     const zone = await page.getByTestId('drop-zone').boundingBox();
     const note = await page.getByText("c'est là").boundingBox();
     expect(note!.y).toBeGreaterThanOrEqual(zone!.y + zone!.height);

@@ -5,7 +5,7 @@
 
 ## Prochaine étape à lancer : 7, mise en ligne et volontaires
 
-L'étape 6 (adaptateur IMDb) est close le 8 novembre 2026 (`é6`), en attente de relecture. Restent de l'étape 6, à boucler à la relecture : le chemin exact de l'export sur imdb.com pour l'aide de l'accueil, et le résultat de la vérification à la main de `imdb_thibault_verification.csv` (taux seulement). L'étape 7 reste **bloquée par la réponse de GroupLens** pour la mise en ligne ; les tests avec des volontaires peuvent se préparer en local.
+L'étape 6 (adaptateur IMDb) est close et relue le 8 novembre 2026 (`é6`). L'étape 7 reste **bloquée par la réponse de GroupLens** pour la mise en ligne ; les tests avec des volontaires peuvent se préparer en local.
 
 Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 novembre 2026 (repli par titre toujours dans « à vérifier »). G1-G3 faits sur fixtures synthétiques. G0 fait sur un export IMDb fabriqué par Thibault : `Title Type` est traduit dans la langue du compte (`Film`, `Série télévisée`) ; corrigé en **v0.3** (repli refusé seulement aux types non-films connus, anglais et français ; type inconnu = film). Second export (libellé `Épisode télévisé` ajouté) et watchlist réelle (bien détectée comme liste) traités. Libellés de mini-série et de jeu ajoutés comme probables, non vérifiés. G4 : rapport de bout en bout seulement, mesure des taux reportée à l'étape 7. G5 : clôture.
 
@@ -40,10 +40,8 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 
 ## Points « à reporter » des specs, par étape cible
 
-### Relecture de l'étape 6
+### Suivi de l'étape 6
 
-- **Aide de l'accueil** : intitulés réels du chemin d'export sur imdb.com (compte en français), à fournir par Thibault (`é6` §6).
-- **Vérification de `imdb_thibault_verification.csv`** : résultat de Thibault, taux seulement (`é6` §6).
 - Ids inventés `tt99000001`-`tt99000005` de `imdb-exemple.csv` : à revérifier de temps en temps, IMDb pourrait les attribuer un jour (`é6` §6).
 
 ### Étape 7 (mise en ligne, volontaires)

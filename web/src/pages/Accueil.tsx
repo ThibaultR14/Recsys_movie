@@ -66,7 +66,8 @@ export function Accueil({ onFile, onExample, status, error, busy = false }: Accu
           glisse-le ici tel quel, pas besoin de l'ouvrir.
         </p>
         <p className="m-0 mt-3">
-          sur imdb : tes notes (« your ratings ») → menu ⋯ → exporter. tu reçois un .csv : glisse-le
+          sur imdb : ton profil → évaluations → actions → exporter. le fichier se prépare sur une
+          page à part : attends quelques minutes, recharge, puis télécharge le .csv et glisse-le
           ici.
         </p>
       </div>

@@ -227,6 +227,9 @@ describe('App (fake worker)', () => {
     await userEvent.click(btn);
     expect(btn).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText(/réglages → import & export → exporter tes données/)).toBeVisible();
+    expect(
+      screen.getByText(/ton profil → évaluations → actions → exporter. le fichier se prépare/),
+    ).toBeVisible();
   });
 });
 
