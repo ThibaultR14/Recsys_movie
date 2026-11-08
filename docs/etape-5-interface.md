@@ -1,6 +1,6 @@
 # Étape 5 — Interface (direction C · Fanzine)
 
-> Version 0.1 (8 novembre 2026). Spécification de l'étape 5 de l'ordre de construction (`stack-technique.md` §8).
+> Version 0.2 (8 novembre 2026 ; 0.2 : ajustements de Thibault sur D5, D6, D8 et G6). Spécification de l'étape 5 de l'ordre de construction (`stack-technique.md` §8).
 > Plan validé par Thibault le 8 novembre 2026. **Document autonome** : une nouvelle session qui lit `CLAUDE.md` puis ce fichier doit pouvoir démarrer sans autre contexte.
 
 ---
@@ -140,11 +140,11 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
 ### D5. Écran 3 — recommandations (maquette)
 
 - **Titre** : « on a lu tes N films. » suivi d'une phrase qui dépend de la position du curseur. On reprend les trois textes de la maquette :
-  - début du curseur : « voilà des classiques qui devraient te plaire. » ;
-  - milieu : « voilà un mélange de classiques et de découvertes. » ;
-  - fin : « voilà huit films que t'as sûrement jamais vus. ».
+  - ∞, 20 000, 10 000 : « voilà des classiques qui devraient te plaire. » ;
+  - 5 000, 2 000 : « voilà un mélange de classiques et de découvertes. » ;
+  - 1 000, 500, 200 : « voilà huit films que t'as sûrement jamais vus. ».
 
-  « huit » reste juste tant que 8 cartes sont affichées ; on adapte le nombre quand on en ajoute.
+  Le nombre (« huit ») suit le nombre de cartes affichées : il change quand « encore des films » en ajoute (« seize », « vingt-quatre »…).
 - **Annotation de profil** : « (t'aimes bien X, Y et Z, non ?) », en Caveat, inclinée. X, Y, Z sont les 3 réalisateurs les plus fréquents parmi les films de l'historique utilisé (fold-in) notés au-dessus de leur médiane (percentile > 0,5), d'après `catalog.json`. Avec moins de 2 réalisateurs, l'annotation est masquée.
 - **Curseur** :
   - `<input type="range">` natif, **8 crans** (positions de `model-meta.json`, de ∞ à 200), `accent-color` stylo bleu, zone tactile de 44 px ;
@@ -153,7 +153,9 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
   - position de départ : 2 000 (milieu-droit, comme la maquette qui démarre à 70 %).
 - **Mise à jour en direct** : les 8 positions sont calculées par **un seul** `recommend({ n: 48 })` après l'analyse. Glisser le curseur ne fait qu'afficher une autre liste, sans nouveau calcul (≤ 50 ms visé).
 - **Grille** : 8 cartes, puis le bouton « encore des films » en ajoute 8 (jusqu'à 48).
-- **Indicateur « loin de tes goûts »** : si le score relatif de la position est **< 0,10**, une annotation en Caveat « (là, on s'éloigne pas mal de tes goûts habituels) » sous le curseur. Seuil tiré des mesures (§2.3) : on l'atteint vers 1 000 notes.
+- **Indicateur « loin de tes goûts »** : si le score relatif de la position est **< 0,04**, une annotation en Caveat « (là, on s'éloigne pas mal de tes goûts habituels) » sous le curseur.
+  - Seuil choisi par Thibault (ajustement du 8 novembre 2026). À 0,10, l'annotation s'afficherait pour tout le monde dès 1 000 notes, y compris sur des listes cohérentes. Mesures : Thibault 0,05 à 500 avec une liste cohérente ; un profil grand public 0,028 avec une liste incohérente.
+  - À recalibrer avec les exports des volontaires (voir section 6).
 - **Films récents** : sous la grille, « on connaît moins bien les films sortis après 2023, désolé. ».
 - « dis-nous si on s'est planté, ça nous aide » : annotation sans lien pour l'instant (le formulaire viendra avec la mise en ligne, étape 7).
 - Les boutons « ça me tente » / « pas pour moi » ne sont **pas** dans l'étape 5 : sans serveur, il n'y a rien à enregistrer.
@@ -166,7 +168,7 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
   - bout de scotch de 72 × 22 px ;
   - affiche au format 2:3 depuis `https://image.tmdb.org/t/p/w342<poster_path>`, en `loading="lazy"`, avec un `alt` (titre). Sans affiche : un cadre uni encre pâle ;
   - titre en gras 16 px, puis « réalisateur, année » en encre pâle 13 px.
-- **« ✱ pépite »** (Caveat gras, stylo bleu, incliné à −12°, qui déborde du bord droit) si la popularité du film est **≤ 1 000**.
+- **« ✱ pépite »** (Caveat gras, stylo bleu, incliné à −12°, qui déborde du bord droit) si la popularité du film est **≤ 1 000 et** que le plafond courant du curseur est **> 1 000** (∞ à 2 000). Aux plafonds 1 000, 500 et 200, toutes les cartes seraient tamponnées et le tampon ne distinguerait plus rien : il n'apparaît pas.
 - **Documentaires** : la mention « documentaire » sous le titre si le film a le genre MovieLens « Documentary ». Une case « sans les documentaires » sous le curseur filtre la liste déjà calculée (côté client), sans nouveau calcul.
 - **Spectacles** : heuristique à mesurer en G4 (titre de la forme « Prénom Nom: … » et genre unique « Comedy »). La liste détectée sur le catalogue est montrée à Thibault en G6. La mention « spectacle » n'est ajoutée que s'il la juge fiable ; sinon c'est reporté (enrichissement TMDB des genres).
 - **Suites et versions** : si le film a le même titre principal (avant « : » ou « - ») et un réalisateur en commun avec un film de l'historique, une annotation en Caveat « (même série que « X », que t'as vu) ».
@@ -189,7 +191,8 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
   - comment ça marche, en mots simples (on lit ton export dans ton navigateur, on compare tes goûts à ceux de milliers de cinéphiles, le curseur choisit entre films connus et pépites) ;
   - « on garde rien » ;
   - les limites (films après 2023, séries, films très peu vus) ;
-  - « compatible avec les exports Letterboxd et IMDb ».
+  - « compatible avec les exports Letterboxd et IMDb » ;
+  - les affiches, honnêtement : « les affiches viennent de tmdb : leurs serveurs voient passer les affiches affichées, rien d'autre. ».
 - **Mentions obligatoires**, à ne pas reformuler :
   - **logo TMDB** (fichier local, selon les règles d'usage de TMDB) + « This product uses the TMDB API but is not endorsed or certified by TMDB. » ;
   - **MovieLens** : citation F. Maxwell Harper and Joseph A. Konstan. 2015. *The MovieLens Datasets: History and Context.* ACM Transactions on Interactive Intelligent Systems (TiiS) 5, 4, Article 19. Sans laisser croire à un soutien de l'Université du Minnesota ni de GroupLens.
@@ -238,7 +241,7 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
 - **Fichiers** : `web/src/pages/Resultats.tsx`, `APropos.tsx`, `web/public/tmdb-logo.svg`.
 - **Critères** :
   - un seul `recommend` pour les 8 positions ; changement de cran sans nouveau calcul ;
-  - phrase du titre selon la position ; annotation de profil ; indicateur < 0,10 ; filtre documentaires ; annotation « même série que » ; note sur les films récents ; « encore des films » (8 par 8, 48 au plus) ;
+  - phrase du titre selon la position ; annotation de profil ; indicateur < 0,04 ; tampon pépite seulement si plafond > 1 000 ; filtre documentaires ; annotation « même série que » ; note sur les films récents ; « encore des films » (8 par 8, 48 au plus) ;
   - mentions TMDB et MovieLens exactes ;
   - liste des « spectacles » détectés par l'heuristique sur le catalogue, préparée pour G6 (dans le compte rendu : ce sont des titres du catalogue, pas de données personnelles).
 
@@ -257,6 +260,7 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
 ### G6 — Contrôle avec l'export de Thibault, relecture
 
 - `npm run dev`, avec l'export de Thibault (`web/test-data/exports/`) : parcours complet, captures montrées **à Thibault seulement**.
+- **Lien Letterboxd** : vérifier à la main, sur 3 films, que `https://letterboxd.com/tmdb/<tmdb_id>/` redirige bien vers la fiche du film. Sinon : **arrêt**.
 - Test sur un vrai téléphone : `npm run dev -- --host`, fait à la main par Thibault ; résultat noté en section 5.
 - **Arrêt obligatoire** :
   - relecture (captures, temps, critères) ;
@@ -294,4 +298,6 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
 
 ## 6. À reporter
 
-*(Vide pour l'instant : y noter ce qui est vu pendant l'étape et relève d'une étape suivante.)*
+*(Y noter ce qui est vu pendant l'étape et relève d'une étape suivante.)*
+
+- **Seuil de l'indicateur « loin de tes goûts »** (D5, 0,04) : à recalibrer avec les exports des volontaires (étape 7), d'après la distribution des scores relatifs par position et le ressenti (liste cohérente ou non).
