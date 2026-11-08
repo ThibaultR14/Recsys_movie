@@ -45,7 +45,7 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   await expect(slider).toHaveValue('4');
   await expect(cards(page)).toHaveCount(8);
   await expect(page.getByTestId('public-rating')).toHaveCount(8);
-  await expect(page.getByTestId('public-rating').first()).toContainText(/^★ d,d · [ds]+ notes/);
+  await expect(page.getByTestId('public-rating').first()).toContainText(/^★ \d,\d · [\d\s]+ notes/);
   await expect(
     page.getByText("(t'aimes bien andrei tarkovsky, wim wenders et wong kar-wai, non ?)"),
   ).toBeVisible();
