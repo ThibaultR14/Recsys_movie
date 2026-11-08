@@ -340,6 +340,31 @@ Fait le 8 novembre 2026. Liste des titres validée par Thibault le même jour (l
 - **Après validation** : `export.py catalog` (relecture et `web`) puis `catalog-verify` OK, avec 5 titres manuels et `manual_titles_not_applied` vide ; `catalog_title_keys.json` régénéré ; pytest 231/231 ; Vitest 126/126.
 
 ### G2
+
+Fait le 8 novembre 2026. Tous les critères sont atteints.
+
+- **Composants** (`web/src/components/`) :
+  - `Layout` : en-tête avec le logo, « (nom provisoire) » et la navigation (« comment ça marche » → `#comment-ca-marche`, « qui on est » → `#a-propos`) ; sur les résultats, « ← changer de fichier » est un vrai `<button>` ; pied de page avec les deux mentions ; colonne de 820 ou 1 100 px ;
+  - `DropZone` : `<label>` lié à `<input type="file" accept=".zip,.csv">` (masqué visuellement mais focalisable, contour stylo bleu au focus), glisser-déposer, flèche « c'est là » qui passe sous la zone quand la place manque ;
+  - `HandNote`, `Underline`, `ArrowNote`, `PrimaryButton` (48 px), `NoList` ;
+  - `FilmCard`, `FilmGrid` (`<ul>` « films recommandés »), `Slider`.
+- **Règles de la carte** (`cardRules.ts`, hors des composants pour être testées seules) :
+  - rotation tirée de `item_idx` seul, dans [−1,8° ; +1,8°] ; scotch dans [−4° ; +4°] ;
+  - tampon « ✱ pépite » si popularité ≤ 1 000 **et** plafond > 1 000 (∞ compris), comme ajusté en D6 ;
+  - lien `https://letterboxd.com/tmdb/<tmdb_id>/`, nouvel onglet, `rel="noopener noreferrer"`, avec un texte pour lecteur d'écran « (s'ouvre sur letterboxd, dans un nouvel onglet) » ; sans `tmdb_id`, la carte n'est pas un lien ;
+  - « réalisateur, année » : deux réalisateurs au plus, joints par « et » ;
+  - « documentaire » si le genre MovieLens « Documentary » est présent ;
+  - annotation « (même série que « X », que t'as vu) » si la page la fournit.
+- **`FilmCard` du moteur** : deux champs d'affichage en plus, `tmdbId` et `genres` (noms MovieLens), lus dans `catalog.json` par `workerCore.filmCard`. Le calcul n'est pas touché, et `reco.test.ts` reste vert.
+- **Tests** : `components.test.tsx`, 24 tests (rôles accessibles, libellés, clavier, rotation déterministe, tampon, lien Letterboxd, documentaire, affiche ou cadre uni, série, curseur).
+  - Configuration jsdom : `@testing-library/jest-dom` et un nettoyage entre les tests (`src/test/setupDom.ts`).
+  - Le test de fumée de G0 est retiré, puisque ces tests le remplacent.
+  - Vitest 149/149 ; `tsc`, ESLint, Prettier et le build verts.
+- **Limites des tests** :
+  - jsdom ne simule ni les flèches du clavier sur un `<input type="range">` ni la mise en page ;
+  - les zones tactiles ≥ 44 px sont donc vérifiées ici par les classes (`h-11`, `h-12`, `min-h-11`) ;
+  - le clavier sur le curseur et les mesures réelles se feront dans Playwright (G5).
+
 ### G3
 ### G4
 ### G5

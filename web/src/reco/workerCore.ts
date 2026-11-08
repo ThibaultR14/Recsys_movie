@@ -38,6 +38,10 @@ export interface FilmCard {
   posterPath: string | null;
   /** Slider popularity (MovieLens ratings, raised with TMDB votes for recent films). */
   popularity: number;
+  /** TMDB id (card link), null when unknown. */
+  tmdbId: number | null;
+  /** MovieLens genre names (e.g. "Documentary"). */
+  genres: string[];
 }
 
 export interface Unrecognized {
@@ -77,6 +81,8 @@ export function filmCard(engine: Engine, item: number): FilmCard {
     directors: c.directors[item] ?? [],
     posterPath: c.poster_path[item] ?? null,
     popularity: engine.model.popularity[item] ?? 0,
+    tmdbId: c.tmdb_id[item] ?? null,
+    genres: (c.genres[item] ?? []).map((g) => c.genre_names[g] ?? ''),
   };
 }
 
