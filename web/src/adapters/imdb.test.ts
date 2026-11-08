@@ -197,6 +197,8 @@ describe('title types and encoding', () => {
       'tvEpisode',
       'Série télévisée', // French account (real export)
       'Épisode télévisé',
+      'Mini-série télévisée', // probable label, not verified
+      'Jeu vidéo', // probable label, not verified
     ]) {
       expect(isFilmType(normalizeTitleType(t)), t).toBe(false);
     }

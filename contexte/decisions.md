@@ -1,7 +1,7 @@
 # Décisions
 
-> Toutes les décisions prises du 6 au 8 novembre 2026 (étapes 1 à 5), une ligne chacune : décision — raison — où c'est détaillé. Les décisions **écartées** importantes sont marquées ✗.
-> Abréviations : `projet` = `docs/projet-reco-films.md`, `stack` = `docs/stack-technique.md`, `é2` à `é5` = `docs/etape-2-modele.md` … `docs/etape-5-interface.md`, `DS` = `docs/design-system.md`.
+> Toutes les décisions prises du 6 au 8 novembre 2026 (étapes 1 à 6), une ligne chacune : décision — raison — où c'est détaillé. Les décisions **écartées** importantes sont marquées ✗.
+> Abréviations : `projet` = `docs/projet-reco-films.md`, `stack` = `docs/stack-technique.md`, `é2` à `é6` = `docs/etape-2-modele.md` … `docs/etape-6-imdb.md`, `DS` = `docs/design-system.md`.
 
 ## Données et licences
 
@@ -56,6 +56,18 @@
 - Exclus des recommandations : films vus, non recommandables, candidats `ambiguous` et candidat principal `probable_fuzzy` — recommander un film déjà vu coûte plus cher que d'en masquer un — `é4` D4.
 - Un candidat choisi par l'utilisateur devient **`confirmed`** et entre dans le fold-in ; rien n'est coché par défaut — l'utilisateur garde la main — `é5` D4.
 - ✗ IA pour les listes faites main au MVP — coût, clé à cacher ; Fuse.js suffit pour commencer — `projet` §9.
+
+## Import IMDb
+
+- **CSV des notes IMDb** lu dans le navigateur ; colonnes lues par nom (`Const`, `Your Rating`, `Date Rated`, `Title`, `Original Title`, `Title Type`, `Year`), tout le reste ignoré ; notes 1-10, percentiles communs — même format interne que Letterboxd — `é6` D1.
+- **Source détectée par l'en-tête**, jamais par le nom du fichier ; UTF-8 strict puis Windows-1252 — IMDb et Letterboxd appellent tous deux leur fichier `ratings.csv`, le vrai export IMDb s'appelle `<uuid>.csv` — `é6` D5, §2.
+- **Liste ou watchlist IMDb** (colonne `Position`) : message, pas d'import ; watchlist hors MVP — il faut des films vus et notés ; la watchlist réelle a une colonne `Your Rating` vide — `é6` D6, §2.
+- **Rapprochement par `imdb_id`** puis `imdb_id_aliases` (partie numérique de l'id) → `exact` — tous les films du catalogue ont un id distinct — `é6` D2.
+- **Repli par titre** (`Title` puis `Original Title`, matcher de l'étape 3) **toujours envoyé dans « à vérifier »**, jamais dans le fold-in sans choix de l'utilisateur — un titre trouvé sans l'id est le plus souvent un homonyme — `é6` D3 (v0.2).
+- **`Title Type` est traduit** dans la langue du compte (`Film`, `Série télévisée`, `Épisode télévisé`) : seuls les types **connus comme non-films** (anglais, français ; « Mini-série télévisée » et « Jeu vidéo » probables, non vérifiés) sont sans repli et comptés à part ; tout type inconnu est un film — sans risque puisque le repli va dans « à vérifier » — `é6` D3-D4 (v0.3), G0.
+- ✗ **Liste des types film** (v0.2) : avec un compte en français, `Film` était classé non-film, et aucun film non trouvé par id n'avait de repli — `é6` G0.
+- Export d'exemple IMDb **synthétique**, types en français (cas le plus probable pour notre public), pas de second lien « exemple » à l'accueil — `é6` D8.
+- Mesure des taux sur un vrai historique IMDb **reportée à l'étape 7** — l'export de Thibault (compte créé pour l'occasion) est trop petit et fabriqué — `é6` G4.
 
 ## Calcul dans le navigateur
 

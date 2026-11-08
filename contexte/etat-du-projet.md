@@ -1,17 +1,17 @@
 # État du projet
 
-> Mis à jour le 8 novembre 2026, à la clôture de l'étape 5. Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
+> Mis à jour le 8 novembre 2026, à la clôture de l'étape 6. Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
 > Dépôt : https://github.com/ThibaultR14/Recsys_movie
 
 ## Le projet en 5 lignes
 
 - **Pépite** (nom de travail) : un site gratuit qui recommande à un cinéphile des films qu'il n'a pas encore vus.
-- **Cible** : les cinéphiles qui tiennent un journal sur Letterboxd ou IMDb. Ils déposent leur export (ZIP Letterboxd, CSV IMDb à l'étape 6).
+- **Cible** : les cinéphiles qui tiennent un journal sur Letterboxd ou IMDb. Ils déposent leur export (ZIP ou CSV Letterboxd, CSV des notes IMDb).
 - **Curseur « connu ↔ pépite »** : il fait glisser les recommandations des classiques vers des films très peu vus mais proches du goût de l'utilisateur.
 - **Tout se passe dans le navigateur** : site 100 % statique, sans serveur, sans compte ni stockage. Les films et les notes de l'utilisateur ne quittent jamais sa machine.
 - Projet étudiant (M2, ECE Paris), **non commercial** : MovieLens, TMDB et les datasets IMDb l'imposent.
 
-## Où on en est : étapes 1 à 5 faites
+## Où on en est : étapes 1 à 6 faites
 
 | Étape | Résultat | Chiffres clés | Détail |
 |---|---|---|---|
@@ -21,12 +21,13 @@
 | 3. Import Letterboxd et correspondance des titres | adaptateur ZIP/CSV, normalisation identique en Python et en TypeScript | **100 % des films du catalogue reconnus** sur un export réel (précision vérifiée à la main sur 100), 3 000 entrées en ~100 ms | `docs/etape-3-letterboxd.md` |
 | 4. Calcul dans le navigateur | moteur TypeScript dans un Web Worker | reproduit le Python à 10⁻¹⁵ près (22 vecteurs, 66 listes) ; recommandations en 19-42 ms | `docs/etape-4-navigateur.md` |
 | 5. Interface | style « C · Fanzine » : accueil, analyse du fichier, résultats et curseur, « à propos » | modèle prêt en 0,8-0,9 s, analyse 11-30 ms, changement de cran ≤ 40 ms ; aucune requête hors du site sauf les affiches TMDB ; validée sur un vrai téléphone | `docs/etape-5-interface.md` |
+| 6. Import IMDb | CSV des notes détecté par l'en-tête, rapprochement par `imdb_id` (+ alias), repli par titre seulement proposé dans « à vérifier », séries et épisodes à part, watchlist refusée avec un message | export fabriqué de Thibault (compte en français, 42 lignes) : 35 films trouvés par id ; 3 000 lignes en 22 ms ; mesure sur un vrai historique reportée à l'étape 7 | `docs/etape-6-imdb.md` |
 
 Données embarquées par le site (`web/public/data/`) : **~3 Mo gzip** au total. Elles se composent des vecteurs int8, de la popularité, du catalogue et de l'index des titres.
 
 ## Ce qui tourne aujourd'hui
 
-- **Le site complet en local**, avec l'export Letterboxd de l'utilisateur ou l'export d'exemple synthétique (« montre-moi un exemple »).
+- **Le site complet en local**, avec l'export Letterboxd ou le CSV des notes IMDb de l'utilisateur, ou l'export d'exemple synthétique (« montre-moi un exemple »). Un exemple IMDb synthétique (`web/public/exemple/imdb-exemple.csv`) sert aux tests.
 - **Pas encore en ligne** : il faut d'abord la réponse de GroupLens (voir « En attente »).
 - Les fichiers de `web/public/data/` ne sont pas versionnés. Pour les obtenir, il faut faire tourner le pipeline (MovieLens 32M, plus une clé TMDB dans `.env` pour l'enrichissement).
 
@@ -66,6 +67,7 @@ Les commandes complètes, avec les scripts de mesure, sont dans `CLAUDE.md` (sec
 | Import Letterboxd, correspondance des titres | `docs/etape-3-letterboxd.md` |
 | Moteur dans le navigateur, biais des films récents | `docs/etape-4-navigateur.md` |
 | Interface, textes, tests navigateur | `docs/etape-5-interface.md` |
+| Import IMDb (format réel, types traduits, repli par titre) | `docs/etape-6-imdb.md` |
 | Direction visuelle (couleurs, polices, composants, ton) | `docs/design-system.md`, `docs/maquette-C-fanzine.html` |
 | Concurrents, positionnement | `docs/etat-de-l-art.md` |
 | Décisions résumées, feuille de route | `contexte/decisions.md`, `contexte/feuille-de-route.md` |
@@ -94,5 +96,6 @@ Chaque spec d'étape suit le même plan : décisions (D1, D2…), sous-étapes e
 
 - **Réponse de GroupLens** sur la licence MovieLens (mail envoyé le 6 novembre 2026). **Elle bloque la mise en ligne** (étape 7) et le versionnement de `web/public/data/`, mais pas le développement en local.
 - **Exports de 10 à 20 cinéphiles volontaires** (étape 7). Ils serviront à mesurer la correspondance des titres et à recaler les seuils de l'interface : « loin de tes goûts » et tampon « ✱ pépite ».
-- **Un vrai export IMDb**, nécessaire pour l'adaptateur de l'étape 6 : il faut vérifier les colonnes exactes.
+- **Relecture de l'étape 6** : chemin exact de l'export sur imdb.com (aide de l'accueil) et résultat de la vérification à la main du fichier de contrôle IMDb (taux seulement).
+- **Un vrai historique IMDb** (export d'un proche ou d'un volontaire) : pour mesurer les taux de correspondance, et vérifier les libellés français probables de `Title Type` (mini-série, jeu vidéo).
 - **Le nom définitif** du site (plus tard). Il ne doit contenir ni « Letterboxd » ni « IMDb ».

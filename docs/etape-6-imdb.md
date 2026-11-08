@@ -58,6 +58,7 @@
   - **`Title` localisé** : `Title` ≠ `Original Title` sur 23/40 lignes (toutes des films) ; `Original Title` toujours rempli ; seule colonne parfois vide : `Directors` (2, les séries).
   - **`Title Type` localisé lui aussi** : `Film` 38, `Série télévisée` 2. **Aucun épisode dans le fichier.** ⚠️ Contredit D3-D4 et les fixtures (qui attendent `Movie`, `TV Series`…) : voir section 5, G0 (corrigé en v0.3).
 - **Second export de notes** (même compte, remplace le premier) : mêmes 14 colonnes, UTF-8 sans BOM, LF ; 42 lignes = les 40 précédentes + **2 `Épisode télévisé`**. `Title Type` : `Film` 38, `Série télévisée` 2, `Épisode télévisé` 2. **Aucune ligne de mini-série, de jeu, de court métrage ni de téléfilm** dans le fichier, alors qu'il devait en contenir : leurs libellés français restent inconnus.
+  - **Libellés probables, non vérifiés** (ajoutés aux non-films le 8 novembre 2026, décision de Thibault) : « Mini-série télévisée » (`minisérietélévisée`), « Jeu vidéo » (`jeuvidéo`). Sans risque : un libellé faux ne correspond à rien, et le type reste traité comme un film (repli par titre, « à vérifier »). Vérification reportée aux exports des volontaires (§6).
 - **Export de la watchlist** (`<uuid>.csv`) : 3 lignes, **18 colonnes** : `Position, Const, Created, Modified, Description, Title, Original Title, URL, Title Type, IMDb Rating, Runtime (mins), Year, Genres, Num Votes, Release Date, Directors, Your Rating, Date Rated`. **`Your Rating` et `Date Rated` sont présentes, mais vides** : c'est `Position` qui distingue la watchlist (règle D5). Détectée `imdb-list` → message, aucun import (vérifié sur le vrai fichier).
 
 ---
@@ -95,7 +96,7 @@
 
 - **Types non film (v0.3)** : `Title Type` est **traduit dans la langue du compte** (G0 : `Film`, `Série télévisée` pour un compte en français). Le repli par titre est donc refusé **seulement aux types connus comme non-films** (liste `NON_FILM_TITLE_TYPES` dans `web/src/adapters/imdb.ts`, normalisée par `normalizeTitleType` : minuscules, sans espaces, tirets ni soulignés, accents gardés) :
   - anglais : `tvseries`, `tvminiseries`, `tvepisode`, `videogame`, `podcastseries`, `podcastepisode`, `musicvideo` ;
-  - français : `sérietélévisée`, `épisodetélévisé` (libellés constatés au 8 novembre 2026 ; mini-série, jeu vidéo, podcast… seront ajoutés quand on les verra dans un vrai export, section 5) ;
+  - français constatés : `sérietélévisée`, `épisodetélévisé` ; français **probables, non vérifiés** : `minisérietélévisée`, `jeuvidéo` (section 2 ; vérification en §6) ;
   - **tout autre type, inconnu ou absent, est traité comme un film** (`Film`, `Movie`, un libellé allemand…). C'est sûr : un résultat par titre va toujours dans « à vérifier », jamais dans le fold-in.
   - *v0.2, remplacée* : une liste des six types film anglais ; elle classait `Film` comme non-film.
 - Le repli est **le matcher de l'étape 3, inchangé** (normalisation v2, année ±1 TMDB ou ML, variantes) : d'abord sur `Title`, puis, si `Title` ne donne ni `exact` ni `probable_variant`, sur `Original Title`. On garde le meilleur résultat (`exact` > `probable_variant` > `ambiguous` > `probable_fuzzy` > `not_found`).
@@ -211,12 +212,13 @@
 
 ## 5. Résultats
 
-G1 à G3 faits le 8 novembre 2026 **sur fixtures synthétiques** (exception de la section 0). G0 fait le 8 novembre 2026 sur l'export fabriqué de Thibault : `Title Type` localisé, arrêt, puis **correction v0.3 validée et faite** (voir G0). Second export (épisodes) et watchlist réelle traités le 8 novembre 2026 ; restent inconnus les libellés français de mini-série et de jeu (non présents dans l'export). G4 : rapport de bout en bout seulement, mesure reportée.
+**Étape close le 8 novembre 2026 (G5), arrêt pour relecture.** G1 à G3 faits le 8 novembre 2026 **sur fixtures synthétiques** (exception de la section 0). G0 fait le 8 novembre 2026 sur l'export fabriqué de Thibault : `Title Type` localisé, arrêt, puis **correction v0.3 validée et faite** (voir G0). Second export (épisodes) et watchlist réelle traités le 8 novembre 2026 ; restent inconnus les libellés français de mini-série et de jeu (non présents dans l'export). G4 : rapport de bout en bout seulement, mesure représentative reportée à l'étape 7.
 
 | Critère | Résultat |
 |---|---|
-| G0 — format réel | ✅ colonnes, encodage, dates, notes, `Title` localisé : conformes ; `Title Type` localisé : corrigé en v0.3 ; `Épisode télévisé` ajouté ; watchlist réelle détectée `imdb-list` ✅ ; ⏳ libellés de mini-série et de jeu jamais vus (absents du second export ; court et téléfilm sont de toute façon des films) |
-| Films reconnus par id (≥ 98 %), échecs (≤ 1 %), précision par id, candidats par titre | ⏳ **mesure reportée** : export trop petit et fabriqué (voir G4) |
+| G0 — format réel | ✅ colonnes, encodage, dates, notes, `Title` localisé : conformes ; `Title Type` localisé : corrigé en v0.3 ; `Épisode télévisé` ajouté ; watchlist réelle détectée `imdb-list` ✅ ; libellés de mini-série et de jeu jamais vus : ajoutés comme **probables, non vérifiés** (§6) |
+| Films reconnus par id (≥ 98 %), échecs (≤ 1 %), précision par id, candidats par titre | ⏳ **mesure représentative reportée à l'étape 7** : export trop petit et fabriqué (voir G4) ; contrôle automatique 33/35, 2 lignes à vérifier |
+| Vérification à la main par Thibault (`imdb_thibault_verification.csv`) | ⏳ résultat non transmis à la clôture (§6) |
 | Types non film | ✅ types non-films connus (anglais, français) jamais envoyés au repli par titre, comptés à part ; type inconnu (allemand) traité comme un film (tests unitaires) ; exemple : 3/3 (2 séries, 1 épisode) à part ; second export réel : 4/4 (2 séries, 2 épisodes) à part, 3/3 films récents non trouvés dans « trop récents » |
 | Repli par titre dans « à vérifier », non coché | ✅ Vitest (moteur, worker, écran) et Playwright |
 | Letterboxd inchangé | ✅ tests existants verts, 22 cas de `foldin_cases.json` rejoués à l'identique, exemple Letterboxd : mêmes comptes (61 `exact`, 1 `ambiguous`, 1 `probable_fuzzy`, 3 `not_found`) |
@@ -242,7 +244,8 @@ Comptes et colonnes en section 2. Conforme aux décisions, sauf un point :
 - `imdb-exemple.csv` en types français : 67 lignes (63 par id, la ligne du repli par titre, 1 film de 2024, 2 séries) ; la ligne d'épisode est retirée tant que son libellé français n'est pas connu. **Remise après le second export** (`Épisode télévisé`) : 68 lignes. La mini-série reste en `Série télévisée` tant que son libellé n'est pas vu.
 - Export réel relu : 35 par id, 2 séries dans « séries, épisodes ou jeux », 3 films récents non trouvés → « trop récents » (au lieu de `non_film`).
 - **Second export et watchlist (8 novembre 2026)** : `épisodetélévisé` ajouté à `NON_FILM_TITLE_TYPES` et aux fixtures ; ligne d'épisode remise dans l'exemple ; en-tête réel de la watchlist ajouté aux fixtures de détection (noms de colonnes seulement). Rapport sur le second export (`imdb_thibault_2.json`, ignoré) : 42 lignes, 35 par id, 4 `non_film`, 3 `not_found`.
-- **Encore ouvert** : libellés français de mini-série et de jeu vidéo (pas dans l'export) ; un export avec le compte en anglais (facultatif : les libellés anglais documentés sont déjà dans la liste). Sans ces libellés, une mini-série ou un jeu non trouvé par id est traité comme un film : repli par titre (« à vérifier »), sinon « pas dans notre catalogue ». Gêne mineure, rien n'entre dans le fold-in.
+- **Libellés probables (8 novembre 2026, décision de Thibault)** : « Mini-série télévisée » et « Jeu vidéo » ajoutés aux non-films, marqués « probables, non vérifiés » dans le code et en section 2 ; Vitest les teste. Vérification des vrais libellés : §6.
+- **Encore ouvert (avant ces libellés probables)** : libellés français de mini-série et de jeu vidéo (pas dans l'export) ; un export avec le compte en anglais (facultatif : les libellés anglais documentés sont déjà dans la liste). Sans ces libellés, une mini-série ou un jeu non trouvé par id est traité comme un film : repli par titre (« à vérifier »), sinon « pas dans notre catalogue ». Gêne mineure, rien n'entre dans le fold-in.
 
 **Ce qui devait changer (proposé avant la v0.3)** :
 1. **D3-D4** — proposition : inverser la règle. Le repli par titre est refusé seulement pour les types **connus comme non film** (séries, mini-séries, épisodes, jeux, podcasts…, en anglais **et** dans les langues d'interface d'IMDb que l'on sait lire : au minimum le français), et tout type **inconnu** est traité comme un film. C'est sans risque depuis la v0.2 : un résultat par titre va toujours dans « à vérifier », jamais dans le fold-in. Autre option : une table de traduction des types film (`Film`, `Téléfilm`, `Court métrage`, `Vidéo`, `Spécial TV`…), mais un type film non prévu tomberait encore dans « séries ».
@@ -253,9 +256,16 @@ Comptes et colonnes en section 2. Conforme aux décisions, sauf un point :
 ### G4 — Rapport sur l'export fabriqué (8 novembre 2026)
 
 - `npm run match-report` marche de bout en bout sur le vrai CSV (lecture, détection par l'en-tête, rapprochement, rapport `web/test-data/reports/imdb_thibault.json`, ignoré) : 40 lignes, **35 trouvées par id** (`imdb_id`, 0 alias), 5 `non_film` (2 séries + 3 films classés à tort, voir G0) ; 35 films dans le fold-in ; 0,5 ms de rapprochement. **Après la v0.3** : 35 par id, 2 `non_film` (les séries), 3 `not_found` (films de 2024 et après, sans candidat par titre).
-- Vérification de `imdb_thibault_verification.csv` par Thibault : ⏳ (taux seulement). Le fichier date d'avant la v0.3 : ses 3 lignes « not found (non_film) » de type film sont désormais de simples `not_found`.
+- Vérification de `imdb_thibault_verification.csv` par Thibault : ⏳ **résultat non transmis à la clôture** (le message de clôture contenait encore le gabarit « [OK, ou les lignes fausses] ») ; à reporter ici, taux seulement (§6). Le fichier date d'avant la v0.3 : ses 3 lignes « not found (non_film) » de type film sont désormais de simples `not_found`.
 - Contrôle automatique des 35 correspondances par id (titre ou titre original et année ±1 comparés au catalogue) : 33 concordent, 1 a une année qui diffère, 1 un titre qui diffère. Ces 2 lignes et les 5 non reconnues sont dans `web/test-data/reports/imdb_thibault_verification.csv` (ignoré), à vérifier par Thibault.
 - **Mesure des taux reportée** : cet export est trop petit (40 lignes) et fabriqué pour l'occasion, ses taux ne sont pas représentatifs. La mesure sur un vrai historique IMDb se fera sur **l'export d'un proche** si Thibault en obtient un, **sinon à l'étape 7** (volontaires). Taux seulement, fichier supprimé après la mesure.
+
+### G5 — Clôture (8 novembre 2026)
+
+- G4 fini avec ce qu'on a : `match-report` vérifié de bout en bout sur deux exports réels (40 puis 42 lignes) ; 35 films trouvés par id, 0 alias ; contrôle automatique 33/35 ; vérification à la main de Thibault non transmise ; **mesure représentative reportée à l'étape 7** (ou à l'export d'un proche).
+- Mise à jour de `CLAUDE.md`, `docs/stack-technique.md` (§2.3, §4, §7, §8, §9) et `contexte/` dans le même commit.
+- **Aide de l'accueil** : le chemin réel sur imdb.com n'a pas été transmis (gabarit non rempli) ; la ligne actuelle (« tes notes (« your ratings ») → menu ⋯ → exporter ») est gardée telle quelle, à corriger à la relecture (§6).
+- Tests à la clôture : `npm test` 213, `typecheck`, `lint`, `format:check`, `e2e` 5, verts.
 
 ### G1 — Adaptateur et détection
 
@@ -288,4 +298,7 @@ Comptes et colonnes en section 2. Conforme aux décisions, sauf un point :
 - **Export mélangeant Letterboxd et IMDb** (dépôt de deux fichiers) : non prévu.
 - **Exports IMDb des volontaires** (étape 7) : mêmes taux, taux seulement, fichiers supprimés ensuite.
 - **Mesure sur un vrai historique IMDb** (critères de la section 4 : reconnus par id ≥ 98 %, échecs ≤ 1 %, précision par id, part d'homonymes parmi les candidats par titre) : l'export de Thibault (G4) est trop petit et fabriqué. À faire sur **l'export d'un proche** si Thibault en obtient un, **sinon à l'étape 7** avec les volontaires.
+- **Libellés français probables, non vérifiés** (« Mini-série télévisée », « Jeu vidéo ») : à vérifier sur les exports des volontaires (étape 7) ; corriger `NON_FILM_TITLE_TYPES` et les fixtures s'ils diffèrent. Idem pour d'autres langues de compte si un volontaire en utilise une.
+- **Aide de l'accueil** : remplacer le chemin de l'export IMDb par les intitulés réels d'imdb.com (compte en français), à fournir par Thibault.
+- **Vérification de `imdb_thibault_verification.csv`** (2 correspondances par id qui ne concordent pas automatiquement, lignes non reconnues) : résultat de Thibault à reporter en section 5, taux seulement.
 - **Ids inventés de `imdb-exemple.csv`** (`tt99000001` à `tt99000005`) : IMDb pourrait un jour les attribuer à de vrais titres (les ids à 8 chiffres avancent). À revérifier : ils doivent rester absents du catalogue (sinon les tests de l'exemple changent) ; `npm run make-example -- --check` le montre.

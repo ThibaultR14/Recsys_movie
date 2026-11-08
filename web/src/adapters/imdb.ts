@@ -14,7 +14,8 @@ export const IMDB_SCALE_MAX = 10;
  * Title types known NOT to be films (docs/etape-6-imdb.md, D3-D4, v0.3), normalized: they get no
  * title fallback and are counted apart. IMDb translates `Title Type` into the account's language,
  * so the list holds English and French labels; any other type, unknown or absent, is a film (safe:
- * a title match always goes to review). French labels: only the ones seen in a real export.
+ * a title match always goes to review). French labels: seen in a real export, plus two probable
+ * ones (not verified): a wrong label matches nothing and the type simply stays a film.
  */
 export const NON_FILM_TITLE_TYPES: ReadonlySet<string> = new Set([
   // English (IMDb's documented values, old camelCase exports normalize to the same keys)
@@ -28,6 +29,10 @@ export const NON_FILM_TITLE_TYPES: ReadonlySet<string> = new Set([
   // French (seen in real exports, 8 November 2026)
   'sérietélévisée',
   'épisodetélévisé',
+  // French, probable labels, NOT verified (absent from the test export; to check on the
+  // volunteers' exports, step 7)
+  'minisérietélévisée', // « Mini-série télévisée »
+  'jeuvidéo', // « Jeu vidéo »
 ]);
 
 /** "TV Movie", "tvMovie", "tv-movie" -> "tvmovie". */

@@ -54,10 +54,10 @@
 | Source | Format | Identifiant disponible | Échelle de notes |
 |---|---|---|---|
 | **Letterboxd** | ZIP d'export : on lit `ratings.csv`, `watched.csv`, `diary.csv` (jamais `profile.csv`) | ❌ Pas d'id IMDb/TMDB : seulement titre + année + lien `boxd.it` (celui du journal désigne l'entrée, pas le film) | 0,5 à 5 |
-| **IMDb** | CSV d'export des notes | ✅ Id IMDb (`tt…`) : correspondance directe | 1 à 10 |
+| **IMDb** | CSV d'export des notes (« your ratings ») ; liste et watchlist refusées (colonne `Position`) | ✅ Id IMDb (`tt…`) : correspondance directe (+ alias) ; titres et `Title Type` traduits dans la langue du compte | 1 à 10 |
 | **Liste faite main** (plus tard) | Texte libre | ❌ Titre (et parfois année) | Variable ou absente |
 
-> Colonnes de l'export Letterboxd vérifiées sur un vrai export (étape 3, `docs/etape-3-letterboxd.md` §2). Export IMDb : à vérifier à l'étape 6.
+> Colonnes de l'export Letterboxd vérifiées sur un vrai export (étape 3, `docs/etape-3-letterboxd.md` §2). Export IMDb vérifié sur des exports réels d'un compte en français (étape 6, `docs/etape-6-imdb.md` §2) : 14 colonnes, UTF-8 sans BOM, nom de fichier = UUID ; watchlist : 18 colonnes dont `Position`.
 
 ---
 
@@ -173,6 +173,8 @@ Les **cas de test du fold-in** (`foldin_cases.json`, 22 historiques, vecteur et 
 | Polices | **Courier Prime** + **Caveat**, **auto-hébergées** (`@fontsource`, décidé, étape 5) | Direction « C · Fanzine », aucune requête vers Google |
 | Lecture des CSV | **PapaParse** | Robuste, gère les virgules dans les titres, les encodages |
 | Lecture du ZIP Letterboxd | **fflate** | Petit et rapide, dézippe dans le navigateur |
+| Source d'un CSV | **En-tête** (`adapters/detect.ts`), jamais le nom de fichier ; UTF-8 strict puis Windows-1252 | IMDb et Letterboxd appellent tous deux leur fichier `ratings.csv` |
+| Correspondance IMDb | `imdb_id` + `imdb_id_aliases` de `catalog.json` (`matching/imdbIds.ts`) ; repli par titre toujours « à vérifier » | Tous les films du catalogue ont un id distinct : un titre trouvé sans l'id est le plus souvent un homonyme |
 | Correspondance des titres | Index précalculé (`title-index.json`) + **Fuse.js** en dernier recours (préfiltre par trigrammes, par année) | Titre + année ±1, variantes ; le flou ne sert qu'à proposer des candidats |
 | Calcul des scores | TypeScript pur sur des `Float32Array` | Produit scalaire sur ~23 000 films = quelques millisecondes |
 | Calcul lourd sans bloquer la page | **Web Worker** | L'interface reste fluide pendant le calcul |
@@ -255,20 +257,20 @@ projet/
 │   └── data/                 # raw/, processed/, cache/tmdb/ : contenu ignoré par git
 ├── web/                      # site statique : Vite + React + TypeScript (npm, Vitest, ESLint, Prettier)
 │   ├── src/
-│   │   ├── adapters/         # types.ts (format commun), letterboxd.ts, normalizeRatings.ts (percentiles) ; imdb.ts (étape 6)
-│   │   ├── matching/         # normalize.ts, titleIndex.ts, match.ts, history.ts
+│   │   ├── adapters/         # types.ts (format commun), letterboxd.ts, imdb.ts, detect.ts (source d'un CSV), normalizeRatings.ts (percentiles)
+│   │   ├── matching/         # normalize.ts, titleIndex.ts, match.ts, imdbIds.ts, history.ts (matchEntry)
 │   │   ├── reco/             # modelFiles, foldIn, recommend, engine, workerCore, worker, client
 │   │   ├── components/       # Layout, DropZone, FilmCard, FilmGrid, Slider, HandNote… + cardRules.ts
 │   │   ├── pages/            # Accueil, Analyse, Resultats, APropos (+ textes et règles testés à part)
 │   │   └── styles/           # index.css : polices, Tailwind, jetons de la direction C
 │   ├── e2e/                  # tests Playwright (parcours, téléphone, réseau, stockage, axe, temps)
 │   ├── public/data/          # fichiers produits par le pipeline (non versionnés)
-│   ├── public/exemple/       # export Letterboxd d'exemple synthétique (versionné)
+│   ├── public/exemple/       # exports d'exemple synthétiques, Letterboxd (ZIP) et IMDb (CSV, types en français) (versionnés)
 │   ├── scripts/              # match-report, reco-report, reco-bench, make-example, spectacles (terminal seulement)
 │   └── test-data/            # ignoré par git, jamais servi : cas de test du fold-in, titres du catalogue, exports réels, rapports
 ├── shared/fixtures/          # cas de normalisation des titres partagés Python / TypeScript (versionnés)
 ├── .github/workflows/        # mise à jour mensuelle TMDB (à venir)
-├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md à etape-5-interface.md, maquette, figures/
+├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md à etape-6-imdb.md, maquette, figures/
 └── CLAUDE.md                 # instructions pour Claude Code
 ```
 
@@ -330,13 +332,13 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 3. ✅ **Adaptateur Letterboxd** + correspondance des titres (fait, `docs/etape-3-letterboxd.md` : sur l'export de Thibault, 188/188 films du catalogue reconnus, précision vérifiée à la main 100/100, 0 échec ; les 37 autres films sont hors catalogue, sortis après 2023 ou séries). L'index de correspondance utilise `tmdb_title`, `tmdb_original_title` et `ml_title` nettoyé (article replacé : « Usual Suspects, The » → « The Usual Suspects »), plus le titre alternatif entre parenthèses, tous normalisés (casse, accents, ponctuation, comme `pipeline/titles.py`), avec les deux années (TMDB et ML) acceptées à ±1 an. Mesuré en B4 : 28,6 % des titres TMDB diffèrent du titre ML brut normalisé, 6,7 % après nettoyage.
 4. ✅ **Calcul dans le navigateur** : fold-in, scores, curseur, dans un Web Worker (fait : 22 vecteurs et 66 listes top 10 rejoués à l'identique ; 19 ms par recommandation pour un export réel). Diagnostic du biais des films récents : `docs/etape-4-navigateur.md` §6, décision en attente.
 5. ✅ **Interface** (fait, `docs/etape-5-interface.md`) : accueil et dépôt, analyse du fichier (à vérifier, trop récents, hors catalogue), résultats avec le curseur à 8 crans, page « à propos » ; aucune requête hors du site sauf les affiches TMDB, rien de stocké ; modèle prêt en moins d'1 s, changement de cran ≤ 40 ms ; validé sur un vrai téléphone. La fiche film passe à l'étape 8.
-6. **Adaptateur IMDb**.
+6. ✅ **Adaptateur IMDb** (fait, `docs/etape-6-imdb.md`) : CSV des notes détecté par l'en-tête, rapprochement par `imdb_id` (+ alias), repli par titre seulement proposé dans « à vérifier », séries/épisodes/jeux comptés à part (`Title Type` traduit : liste de non-films en anglais et en français, tout type inconnu = film) ; watchlist refusée avec un message ; sur un export fabriqué de Thibault, 35 films trouvés par id ; 3 000 lignes en 22 ms. Mesure sur un vrai historique IMDb reportée à l'étape 7.
 7. Mise en ligne, tests avec 10-20 cinéphiles.
 8. Ensuite seulement : explications, dispo en France, liste faite main, scraping.
 
 ---
 
-## 9. Décisions prises (6-8 novembre 2026, étapes 1-5)
+## 9. Décisions prises (6-8 novembre 2026, étapes 1-6)
 
 | Sujet | Décision |
 |---|---|
@@ -352,6 +354,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 | Framework | **React** + Vite + TypeScript |
 | Correspondance des titres | Normalisation v2 identique Python / TypeScript ; titre + année ±1 (TMDB ou ML), variantes ; **flou (Fuse.js) jamais utilisé automatiquement** (séries rattachées à des films), seulement proposé dans l'écran « films non reconnus » |
 | Export Letterboxd | Lu dans le navigateur ; `ratings.csv`, `watched.csv`, `diary.csv` seulement ; journal rattaché par (titre, année) |
+| Export IMDb | CSV des notes lu dans le navigateur, source détectée par l'en-tête ; liste/watchlist refusées ; `imdb_id` puis alias → `exact` ; repli titre (`Title`, `Original Title`) **jamais automatique** (« à vérifier ») ; types non-films connus (anglais, français) sans repli et comptés à part, type inconnu = film |
 | Dataset Letterboxd 10M | **Non utilisé** (collecte probablement par scraping, pas de vérité terrain) |
 | Calcul des recos | Moteur TypeScript unique (Web Worker + scripts), identique au Python ; exclus : vus, non recommandables, candidats ambigus, candidat flou principal |
 | IA pour les listes faites main | **Pas d'IA au MVP** (Fuse.js) ; API + Cloudflare Worker plus tard |
