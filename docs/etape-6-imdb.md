@@ -1,6 +1,6 @@
 # Étape 6 — Adaptateur IMDb
 
-> Version 0.1 (8 novembre 2026). Spécification de l'étape 6 de l'ordre de construction (`stack-technique.md` §8). **À valider par Thibault avant de coder.**
+> Version 0.2 (8 novembre 2026). Spécification de l'étape 6 de l'ordre de construction (`stack-technique.md` §8). **Validée par Thibault le 8 novembre 2026**, avec une modification de D3 (v0.2) : le repli par titre n'entre jamais automatiquement dans le fold-in, il passe par « à vérifier ».
 > Décisions de départ données par Thibault le 8 novembre 2026 ; les points marqués « à confirmer en G0 » dépendent du vrai export, **absent de `web/test-data/exports/` au moment de la rédaction**.
 
 ---
@@ -11,7 +11,7 @@
 - Une sous-étape à la fois (G0 → G5), en suivant « Quand s'arrêter » de `CLAUDE.md`. **Arrêts obligatoires** :
   - **avant G0 si l'export IMDb de Thibault manque** dans `web/test-data/exports/` (c'est le cas au 8 novembre 2026) ;
   - en G0, si le vrai fichier contredit une décision de la section 3 (colonnes, encodage, types, titre localisé) ;
-  - en G4, pour que Thibault vérifie à la main l'échantillon et les correspondances par titre ;
+  - en G4, pour que Thibault vérifie à la main l'échantillon par id et les candidats par titre ;
   - en fin d'étape, pour la relecture.
 - Résultats dans la section 5 : chiffres exacts.
 - **Données personnelles** (comme à l'étape 3, D6) :
@@ -24,7 +24,7 @@
 ## 1. Objectifs
 
 1. Lire le CSV des notes IMDb dans le navigateur et produire le même format interne (`HistoryEntry`) que l'adaptateur Letterboxd.
-2. Relier chaque film au catalogue **d'abord par `imdb_id`**, puis par titre + année en repli pour les seuls types « film », sans aucun appel réseau contenant les films de l'utilisateur.
+2. Relier chaque film au catalogue **par `imdb_id`** ; pour les seuls types « film » non trouvés par id, proposer des candidats par titre + année dans « à vérifier » (jamais automatiquement). Aucun appel réseau contenant les films de l'utilisateur.
 3. Reconnaître automatiquement la source déposée (ZIP ou CSV Letterboxd, CSV IMDb) et retirer les messages « imdb arrive bientôt ».
 4. Mesurer les mêmes taux qu'à l'étape 3 sur l'export réel de Thibault.
 
@@ -76,17 +76,24 @@
 - Ordre, pour chaque entrée :
   1. `imdbId` dans les `imdb_id` → `exact`, `via: "imdb_id"` ;
   2. sinon dans les `imdb_id_aliases` → `exact`, `via: "imdb_alias"` ;
-  3. sinon repli par titre (D3), **seulement si le type est un type film**.
+  3. sinon repli par titre (D3), **seulement si le type est un type film**, et seulement pour proposer des candidats à vérifier.
 - Un film trouvé par id est gardé **quel que soit son `Title Type`** : l'id fait foi (le catalogue ne contient que des films, cf. section 2).
-- Les statuts restent ceux de l'étape 3 (`MatchStatus` inchangé) ; le champ `via` distingue l'id, l'alias et le titre pour la mesure. `RECOMMENDATION_STATUSES` est inchangé.
+- Les statuts restent ceux de l'étape 3 (`MatchStatus` inchangé) ; le champ `via` distingue l'id, l'alias et le titre pour la mesure. `RECOMMENDATION_STATUSES` est inchangé : seuls les ids (`exact`) et les choix de l'utilisateur (`confirmed`) d'un export IMDb entrent dans le fold-in.
 - La correspondance passe par une fonction unique `matchEntry(entry)` (id puis titre), utilisée par `matchHistory` pour toutes les sources ; pour Letterboxd (pas d'id) elle revient exactement à l'étape 3.
 
-### D3. Repli par titre + année, types film seulement
+### D3. Repli par titre + année, types film seulement, jamais dans le fold-in automatiquement
+
+**Modifié en v0.2 (décision de Thibault, 8 novembre 2026).** Raison : tous les films du catalogue ont un `imdb_id` distinct et les alias sont inclus. Une ligne dont l'id n'est pas dans le catalogue correspond donc presque toujours à un film **hors catalogue** (moins de 20 notes MovieLens, ou sorti après 2023), et un titre + année trouvé est le plus souvent un **homonyme**. Le repli ne rattrape vraiment que les ids fusionnés absents des alias.
 
 - **Types film** : `movie`, `tvmovie`, `short`, `video`, `tvspecial`, `tvshort` (les six types présents dans le catalogue, section 2), plus une ligne **sans** `Title Type`. Liste à ajuster en G0 d'après les valeurs réelles (arrêt si une valeur inattendue apparaît en nombre).
 - Le repli est **le matcher de l'étape 3, inchangé** (normalisation v2, année ±1 TMDB ou ML, variantes) : d'abord sur `Title`, puis, si `Title` ne donne ni `exact` ni `probable_variant`, sur `Original Title`. On garde le meilleur résultat (`exact` > `probable_variant` > `ambiguous` > `probable_fuzzy` > `not_found`).
-- **Le flou (Fuse.js) n'est jamais automatique** : comme à l'étape 3, `probable_fuzzy` n'entre pas dans le fold-in ; il ne sert qu'à proposer des candidats dans « à vérifier ».
-- **Risque connu** : un film absent par id mais trouvé par titre peut être un **autre film** du même nom (le film de l'utilisateur a moins de 20 notes MovieLens, un homonyme ±1 an est dans le catalogue). La mesure G4 compte ces cas à part (`via: "title"`) et Thibault les vérifie **tous**. Si leur précision est sous le seuil (section 4), arrêt : on proposera de les envoyer dans « à vérifier » au lieu du fold-in.
+- **Tout résultat obtenu par le titre, y compris `exact` ou `probable_variant`, est présenté dans « à vérifier »**, comme un `ambiguous` :
+  - implémentation : statut **`ambiguous` avec `via: "title"`** (le statut d'origine du matcher est gardé dans un champ `titleStatus` pour la mesure G4) ; `probable_fuzzy` reste `probable_fuzzy` ;
+  - le candidat est **exclu des recommandations** (é4 D4 : les candidats `ambiguous` sont exclus) ;
+  - **rien n'est coché par défaut** ; s'il est choisi, il devient `confirmed` et entre dans le fold-in (é5 D4) ;
+  - `RECOMMENDATION_STATUSES` et le comportement de Letterboxd **ne changent pas** (le passage en `ambiguous` ne s'applique qu'aux entrées `source: "imdb"`).
+- **Le flou (Fuse.js) n'est jamais automatique** (inchangé).
+- **Mesure (G4), informative** : parmi les candidats par titre de l'export de Thibault, part de vrais films (même film que la ligne IMDb) et d'homonymes, vérifiée par Thibault. Pas de seuil, pas d'arrêt.
 
 ### D4. Séries, épisodes, jeux et autres types
 
@@ -121,7 +128,7 @@
 ### D8. Export d'exemple IMDb synthétique
 
 - `web/public/exemple/imdb-exemple.csv`, versionné, généré par `npm run make-example` (même script que l'exemple Letterboxd) : **films connus du catalogue, notes et dates inventées**, colonnes de la section 2 (ajustées en G0), `Const` = `imdb_id` du catalogue (issu de MovieLens `links.csv`, permis).
-- Il contient aussi, pour les tests : une série et un épisode (ids inventés, hors catalogue), une ligne dont l'id n'est pas dans le catalogue mais dont le titre l'est (repli D3), un titre localisé avec `Original Title`, une ligne sans note.
+- Il contient aussi, pour les tests : une série et un épisode (ids inventés, hors catalogue), une ligne dont l'id n'est pas dans le catalogue mais dont le titre l'est (repli D3 : elle doit arriver dans « à vérifier », non cochée, et ne pas entrer dans le fold-in tant qu'elle n'est pas choisie ; testé par Vitest et Playwright), un titre localisé avec `Original Title`, une ligne sans note.
 - Les colonnes IMDb (`IMDb Rating`, `Num Votes`, `Genres`, `Directors`…) y sont **vides** : on n'y met rien qui vienne des datasets IMDb.
 - Utilisé par Vitest et Playwright ; **pas de second lien « exemple » à l'accueil** (celui de Letterboxd suffit pour démontrer le site).
 
@@ -149,19 +156,19 @@
 ### G2 — Rapprochement par id et repli
 
 - Index des ids (`web/src/matching/`), `matchEntry`, repli D3, raison `non_film` D4 ; `readExport`, `summarize`, worker.
-- Tests : id, alias, id inconnu de type film (repli `Title` puis `Original Title`), id inconnu non film (pas de repli), Letterboxd inchangé (les 22 cas de `foldin_cases.json` et les tests existants restent verts) ; performance ; test `fetch`.
+- Tests : id, alias, id inconnu de type film (repli `Title` puis `Original Title`, résultat `ambiguous` + `via: "title"`, exclu du fold-in, `confirmed` s'il est choisi), id inconnu non film (pas de repli), Letterboxd inchangé (les 22 cas de `foldin_cases.json` et les tests existants restent verts) ; performance ; test `fetch`.
 
 ### G3 — Interface et exemple
 
 - `readUpload.ts` (D5, D6), groupe « séries, épisodes ou jeux » (D4), `APropos.tsx` et accueil (D7), `make-example` (D8).
-- Vitest (composants) et Playwright : parcours complet avec `imdb-exemple.csv` (dépôt → analyse → résultats), message de la watchlist, réseau (aucune requête hors du site sauf les affiches TMDB), stockage (rien), axe (0 violation grave), téléphone. Le test qui attend aujourd'hui « les exports imdb arrivent bientôt » est remplacé.
+- Vitest (composants) et Playwright : parcours complet avec `imdb-exemple.csv` (dépôt → analyse avec la ligne du repli par titre dans « à vérifier », non cochée → résultats), message de la watchlist, réseau (aucune requête hors du site sauf les affiches TMDB), stockage (rien), axe (0 violation grave), téléphone. Le test qui attend aujourd'hui « les exports imdb arrivent bientôt » est remplacé.
 
 ### G4 — Mesure sur l'export de Thibault
 
-- `npm run match-report` accepte le CSV IMDb ; le rapport (`web/test-data/reports/`, ignoré) distingue : trouvés par id, par alias, par titre (`exact`, `probable_variant`), à vérifier (`ambiguous`, `probable_fuzzy`), types non film, films non trouvés (après 2023, dans MovieLens sous le seuil, absents de MovieLens : `match_diagnostics.py`, via `links.csv`).
+- `npm run match-report` accepte le CSV IMDb ; le rapport (`web/test-data/reports/`, ignoré) distingue : trouvés par id, par alias, candidats par titre (selon `titleStatus` : `exact`, `probable_variant`, `ambiguous`), `probable_fuzzy`, types non film, films non trouvés (après 2023, dans MovieLens sous le seuil, absents de MovieLens : `match_diagnostics.py`, via `links.csv`).
 - Contrôle automatique des correspondances par id : titre/année de l'export comparés au catalogue (normalisation v2, `Title` ou `Original Title`, année ±1) ; écarts listés pour Thibault.
-- Fichier de vérification (`web/test-data/reports/<nom>_verification.csv`, ignoré) : 100 correspondances par id tirées au hasard (graine fixe ; toutes s'il y en a moins), **toutes** les correspondances par titre, tous les échecs.
-- **Arrêt** : Thibault vérifie le fichier ; section 5 avec les taux seulement.
+- Fichier de vérification (`web/test-data/reports/<nom>_verification.csv`, ignoré) : 100 correspondances par id tirées au hasard (graine fixe ; toutes s'il y en a moins), **tous** les candidats par titre (vrai film ou homonyme ?), tous les échecs.
+- **Arrêt** : Thibault vérifie le fichier ; section 5 avec les taux seulement (dont la part d'homonymes parmi les candidats par titre, informative).
 
 ### G5 — Clôture
 
@@ -171,11 +178,12 @@
 
 | Critère | Seuil |
 |---|---|
-| Films reconnus (`exact` + `probable_variant`, par id ou par titre) parmi ceux présents dans le catalogue | ≥ 98 % |
+| Films reconnus **par id** (`imdb_id` ou alias) parmi ceux présents dans le catalogue | ≥ 98 % |
 | Échecs de correspondance (film du catalogue non trouvé) | ≤ 1 % des films de l'export, chacun listé |
 | Précision des correspondances par id (100 tirées au hasard, vérifiées par Thibault) | ≤ 1 % d'erreurs |
-| Précision des correspondances par titre (toutes vérifiées) | ≤ 1 % d'erreurs ; sinon arrêt (D3) |
+| Candidats par titre (tous vérifiés par Thibault) | mesure informative : part de vrais films et d'homonymes ; aucun n'entre dans le fold-in sans choix de l'utilisateur |
 | Types non film | aucun envoyé au repli par titre ; tous comptés à part |
+| Repli par titre | exemple : la ligne « id hors catalogue, titre dans le catalogue » dans « à vérifier », non cochée (Vitest et Playwright) |
 | Letterboxd | inchangé : tests existants verts, 22 cas de `foldin_cases.json` rejoués à l'identique |
 | Performance | 3 000 lignes IMDb lues et rapprochées en ≤ 300 ms (Node) |
 | Réseau | **0 requête nouvelle** : test `fetch` et Playwright (seules les affiches TMDB hors du site) |
