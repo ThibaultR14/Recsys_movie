@@ -5,7 +5,7 @@
 
 ## Prochaine étape à lancer : 6, adaptateur IMDb
 
-Première action : rédiger la spec `docs/etape-6-imdb.md` et la faire valider par Thibault. Il faut aussi récupérer un vrai export IMDb, celui de Thibault, à ranger dans `web/test-data/exports/`. L'étape 7 (mise en ligne) reste bloquée par GroupLens. L'étape 6 ne l'est pas.
+Spec `docs/etape-6-imdb.md` rédigée le 8 novembre 2026, **en attente de validation** par Thibault. Il faut aussi récupérer un vrai export IMDb, celui de Thibault, à ranger dans `web/test-data/exports/`. L'étape 7 (mise en ligne) reste bloquée par GroupLens. L'étape 6 ne l'est pas.
 
 ## Étapes restantes
 
