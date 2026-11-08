@@ -19,10 +19,15 @@ export function App() {
   };
 
   return (
-    <main>
-      <h1>pépite</h1>
-      <p>en construction : le site arrive bientôt.</p>
-      <button type="button" onClick={() => void testEngine()}>
+    <main className="mx-auto max-w-[820px] px-6 py-10 text-[16px]">
+      <h1 className="text-[22px] font-bold">pépite</h1>
+      <p className="text-muted">en construction : le site arrive bientôt.</p>
+      <p className="font-hand text-[22px] text-pen -rotate-2">(c'est écrit à la main)</p>
+      <button
+        type="button"
+        className="min-h-11 border-2 border-ink bg-white px-5 font-bold"
+        onClick={() => void testEngine()}
+      >
         tester le moteur
       </button>
       <p aria-live="polite">{status}</p>

@@ -1,0 +1,40 @@
+/* Self-hosted fonts (OFL): no request to Google (step 5, D1). Per-weight files declare every subset
+   with a unicode-range, so the browser only downloads the subsets a page actually uses. */
+@import '@fontsource/courier-prime/400.css';
+@import '@fontsource/courier-prime/700.css';
+@import '@fontsource/courier-prime/400-italic.css';
+@import '@fontsource/caveat/500.css';
+@import '@fontsource/caveat/700.css';
+
+@import 'tailwindcss';
+
+/* Design tokens: docs/design-system.md §2–3. One accent only: the blue pen. */
+@theme {
+  --color-*: initial;
+  --color-paper: #fbfaf7;
+  --color-white: #ffffff;
+  --color-ink: #1b1b1b;
+  --color-muted: #555049;
+  --color-rule: #b9b4aa;
+  --color-pen: #2546b8;
+  --color-tape: rgba(214, 208, 196, 0.75);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-*: initial;
+  --font-mono: 'Courier Prime', 'Courier New', monospace;
+  --font-hand: 'Caveat', cursive;
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-paper);
+  }
+}

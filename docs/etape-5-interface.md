@@ -287,6 +287,24 @@ Le premier appel écrit aussi `web/test-data/foldin_cases.json`.
 *À remplir à la fin de chaque sous-étape.*
 
 ### G0
+
+Fait le 8 novembre 2026. Tous les critères sont atteints.
+
+- **Tailwind CSS v4** (`tailwindcss`, `@tailwindcss/vite`). Jetons de D1 dans `@theme` (`web/src/styles/index.css`) :
+  - couleurs `paper`, `white`, `ink`, `muted`, `rule`, `pen`, `tape` ; la palette par défaut de Tailwind est retirée (`--color-*: initial`), donc aucune autre couleur n'est possible par erreur ;
+  - polices `font-mono` (Courier Prime) et `font-hand` (Caveat).
+- **Polices auto-hébergées** : `@fontsource/courier-prime` (400, 700, 400 italique) et `@fontsource/caveat` (500, 700).
+  - On importe les fichiers par graisse, qui déclarent chaque sous-ensemble avec un `unicode-range` : le navigateur ne télécharge que ce qu'une page utilise (latin ; latin-ext pour un titre polonais, par exemple).
+  - Les fichiers `latin-*.css` ont été écartés : ils n'ont pas d'`unicode-range`, et les combiner avec latin-ext aurait masqué le latin de base.
+  - `docs/design-system.md` §3 : le lien Google Fonts est remplacé par les paquets.
+- **Tests de composants** : `jsdom`, `@testing-library/react`, `@testing-library/user-event` et `@testing-library/dom`.
+  - Vitest est découpé en deux projets : `node` (`*.test.ts`) et `dom` (`*.test.tsx`, jsdom). `environmentMatchGlobs` n'existe plus dans Vitest 5.
+  - Test de fumée : `src/styles/theme.test.tsx`.
+- **Vérifications** :
+  - page provisoire rendue dans Edge sans interface : fond papier, Courier Prime, annotation Caveat en stylo bleu ;
+  - `dist/` ne contient aucune référence à `googleapis` ; la vérification réseau dans un vrai navigateur reste prévue en G5 ;
+  - Vitest 126/126 (les 125 tests existants + le test de fumée) ; `tsc`, ESLint et Prettier verts ; `npm run build` OK (CSS de 2,4 Ko gzip, hors polices).
+
 ### G1
 ### G2
 ### G3

@@ -52,10 +52,11 @@ Accessibilité : `#1B1B1B` et `#555049` sur `#FBFAF7` passent le contraste AA. L
 | Logo « pépite » | Courier Prime | 700 | 22 px |
 | Annotations manuscrites | **Caveat** | 500 / 700 | 20–26 px, toujours en stylo bleu |
 
-Chargement (Google Fonts) :
-```
-https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Caveat:wght@500;700&display=swap
-```
+Chargement : **polices auto-hébergées**, aucune requête vers Google (décision de l'étape 5, D1). Paquets npm sous licence OFL, sous-ensemble latin :
+- `@fontsource/courier-prime` : 400, 700, 400 italique ;
+- `@fontsource/caveat` : 500, 700.
+
+Ils sont importés dans `web/src/styles/index.css`. (La maquette `maquette-C-fanzine.html` charge encore Google Fonts : c'est une maquette, pas le site.)
 
 Règles :
 - Titres en **minuscules**, sans majuscule de début (« salut. »).
