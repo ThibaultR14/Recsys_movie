@@ -261,6 +261,12 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - **Écart de mise en œuvre** : en ouvrant une page, l'écran des résultats était démonté et perdait le cran du curseur. L'état d'affichage (cran, nombre de cartes, « sans les documentaires ») est désormais gardé par `App` (`web/src/pages/resultsView.ts`) : retour au même cran, mêmes cartes, sans recalcul.
 - Vitest : ancres, lien direct au chargement, retour au même cran. Playwright : les trois pages par-dessus les résultats (axe deux thèmes), précédent / suivant, « ← retour » → 16 cartes au même cran, liens directs `/#contact` et `/#on-garde-rien` (section visible) ; téléphone : navigation et bouton de thème sur **2 lignes** sous le logo, aucun défilement horizontal. Temps : changement de cran ≤ 46 ms.
 
+### R3 — Contact (8 novembre 2026)
+
+- `web/src/pages/Contact.tsx`, `contactMail.ts` (`mailtoHref`). Adresse en `<code>` sélectionnable (`select-all`) + « copier » (`navigator.clipboard`, sinon sélection de l'adresse), message dans une zone `aria-live`. Formulaire : `<fieldset>` de 4 radios (aucun coché), `<textarea>` 2 000 caractères avec compteur ; erreurs (« choisis un sujet. », « écris-nous un message. ») en `role="alert"` ; envoi = `window.location.assign(mailto:…)`, sujet `[pépite] <sujet>`, corps = le message seul.
+- Vitest (5) : encodage (accents, `&`, `?`, `#`, retours à la ligne en `%0D%0A`, 2 000 caractères), copie et repli, champs obligatoires, aucun `fetch`. Playwright : copie relue dans le presse-papiers, envoi du formulaire sans aucune requête hors du site, rien de stocké ; axe 0 dans les deux thèmes.
+- Adresse : toujours `[ADRESSE À CONFIRMER]` (décision en R8).
+
 ---
 
 ## 6. À reporter

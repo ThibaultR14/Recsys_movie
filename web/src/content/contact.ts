@@ -25,4 +25,6 @@ export const CONTACT = {
   aideMessage: pending('contact.aideMessage'),
   bouton: pending('contact.bouton'),
   pasDeMail: pending('contact.pasDeMail'),
+  erreurSujet: 'choisis un sujet.',
+  erreurMessage: 'écris-nous un message.',
 };

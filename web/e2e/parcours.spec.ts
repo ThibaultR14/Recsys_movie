@@ -204,6 +204,28 @@ test('direct links: a page anchor or a section anchor opens its page at load', a
   expect(net.blocked).toEqual([]);
 });
 
+test('contact: copy, form -> mailto:, no request, nothing stored', async ({
+  page,
+  baseURL,
+  context,
+}) => {
+  const net = await guardNetwork(page, baseURL!);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/#contact');
+  const address = await page.locator('main code').textContent();
+  await page.getByRole('button', { name: 'copier' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(address);
+
+  // the mailto: opens the mail application (none in the test browser): the page stays
+  await page.getByRole('radio', { name: 'film mal reconnu' }).check();
+  await page.getByRole('textbox').fill('« Ran » (1985) pas reconnu');
+  await page.getByRole('form', { name: 'écrire un mail' }).getByRole('button').click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('contact.');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(net.blocked, 'requêtes hors du site').toEqual([]);
+  expect(await readStorage(page)).toEqual(NOTHING_STORED);
+});
+
 test('drop zone: keyboard and a real file; IMDb watchlist message', async ({ page, baseURL }) => {
   const net = await guardNetwork(page, baseURL!);
   await page.goto('/');
