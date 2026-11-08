@@ -5,7 +5,9 @@ import {
   exampleToResults,
   guardNetwork,
   PHONE,
-  seriousViolations,
+  NOTHING_STORED,
+  readStorage,
+  violationsBothThemes,
   settle,
   SHOTS,
 } from './helpers';
@@ -19,7 +21,7 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
 
   // home
   await expect(page.getByRole('heading', { level: 1 })).toContainText('pas encore vus.');
-  expect(await seriousViolations(page), 'axe: accueil').toEqual([]);
+  expect(await violationsBothThemes(page), 'axe: accueil').toEqual([]);
   await settle(page);
   await page.screenshot({ path: `${SHOTS}/1-accueil.png`, fullPage: true });
 
@@ -30,7 +32,7 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   await expect(
     page.getByText('2 films sont sortis après 2023 : trop récents pour nous, désolé.'),
   ).toBeVisible();
-  expect(await seriousViolations(page), 'axe: analyse').toEqual([]);
+  expect(await violationsBothThemes(page), 'axe: analyse').toEqual([]);
   await settle(page);
   await page.screenshot({ path: `${SHOTS}/2-analyse.png`, fullPage: true });
   const milk = page.getByRole('group', { name: 'dans ton fichier : « Milk » (2008)' });
@@ -45,7 +47,7 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   await expect(
     page.getByText("(t'aimes bien andrei tarkovsky, wim wenders et wong kar-wai, non ?)"),
   ).toBeVisible();
-  expect(await seriousViolations(page), 'axe: résultats').toEqual([]);
+  expect(await violationsBothThemes(page), 'axe: résultats').toEqual([]);
   await settle(page);
   await page.screenshot({ path: `${SHOTS}/3-resultats.png`, fullPage: true });
 
@@ -94,20 +96,14 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
       .first(),
   ).toBeVisible();
   await expect(page.getByRole('img', { name: 'TMDB' })).toBeVisible();
-  expect(await seriousViolations(page), 'axe: à propos').toEqual([]);
+  expect(await violationsBothThemes(page), 'axe: à propos').toEqual([]);
   await settle(page);
   await page.screenshot({ path: `${SHOTS}/4-a-propos.png`, fullPage: true });
 
   // privacy: nothing outside the site but posters, nothing stored
   expect(net.blocked, 'requêtes hors du site').toEqual([]);
   expect(net.posters.length).toBeGreaterThan(0);
-  const storage = await page.evaluate(async () => ({
-    local: localStorage.length,
-    session: sessionStorage.length,
-    idb: (await indexedDB.databases()).length,
-    cookies: document.cookie,
-  }));
-  expect(storage).toEqual({ local: 0, session: 0, idb: 0, cookies: '' });
+  expect(await readStorage(page)).toEqual(NOTHING_STORED);
   expect(await page.context().cookies()).toEqual([]);
 });
 
@@ -132,7 +128,7 @@ test('IMDb example CSV: title fallback to verify (unticked), series apart, resul
   await expect(
     page.getByText('1 film est sorti après 2023 : trop récent pour nous, désolé.'),
   ).toBeVisible();
-  expect(await seriousViolations(page), 'axe: analyse imdb').toEqual([]);
+  expect(await violationsBothThemes(page), 'axe: analyse imdb').toEqual([]);
   await settle(page);
   await page.screenshot({ path: `${SHOTS}/2-analyse-imdb.png`, fullPage: true });
 
@@ -143,13 +139,40 @@ test('IMDb example CSV: title fallback to verify (unticked), series apart, resul
   await expect(cards(page)).toHaveCount(8);
 
   expect(net.blocked, 'requêtes hors du site').toEqual([]);
-  const storage = await page.evaluate(async () => ({
-    local: localStorage.length,
-    session: sessionStorage.length,
-    idb: (await indexedDB.databases()).length,
-    cookies: document.cookie,
-  }));
-  expect(storage).toEqual({ local: 0, session: 0, idb: 0, cookies: '' });
+  expect(await readStorage(page)).toEqual(NOTHING_STORED);
+});
+
+test('theme: dark by default, light remembered under one key, removed when back to dark', async ({
+  page,
+  baseURL,
+}) => {
+  const net = await guardNetwork(page, baseURL!);
+  await page.emulateMedia({ colorScheme: 'light' }); // dark even when the system is light (Q2)
+  await page.goto('/');
+  const html = page.locator('html');
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+  const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(await bg()).toBe('rgb(22, 23, 27)');
+  expect(await readStorage(page)).toEqual(NOTHING_STORED);
+
+  await page.getByRole('button', { name: 'passer en clair' }).click();
+  await expect(html).toHaveAttribute('data-theme', 'light');
+  expect(await bg()).toBe('rgb(251, 250, 247)');
+  expect(await readStorage(page)).toEqual({
+    ...NOTHING_STORED,
+    local: { 'pepite-theme': 'light' },
+  });
+  await settle(page);
+  await page.screenshot({ path: `${SHOTS}/1-accueil-clair.png`, fullPage: true });
+
+  await page.reload();
+  await expect(html).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: 'passer en sombre' }).click();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+  expect(await readStorage(page)).toEqual(NOTHING_STORED);
+  await page.reload();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+  expect(net.blocked).toEqual([]);
 });
 
 test('drop zone: keyboard and a real file; IMDb watchlist message', async ({ page, baseURL }) => {
@@ -159,6 +182,7 @@ test('drop zone: keyboard and a real file; IMDb watchlist message', async ({ pag
   await page.keyboard.press('Tab'); // logo
   await page.keyboard.press('Tab'); // comment ça marche
   await page.keyboard.press('Tab'); // qui on est
+  await page.keyboard.press('Tab'); // theme
   await page.keyboard.press('Tab');
   await expect(input).toBeFocused();
   await input.setInputFiles({

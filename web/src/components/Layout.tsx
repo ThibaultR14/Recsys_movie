@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { HandNote } from './HandNote';
+import { ThemeToggle } from './ThemeToggle';
 
 export const ABOUT_HASH = '#a-propos';
 export const HOW_HASH = '#comment-ca-marche';
@@ -34,24 +35,27 @@ export function Layout({ children, width = 'narrow', onBack }: LayoutProps) {
             </HandNote>
           )}
         </span>
-        {onBack ? (
-          <button
-            type="button"
-            onClick={onBack}
-            className={`min-h-11 cursor-pointer bg-transparent p-0 text-[15px] ${linkClass}`}
-          >
-            ← changer de fichier
-          </button>
-        ) : (
-          <nav aria-label="navigation" className="flex gap-6 text-[15px]">
-            <a href={HOW_HASH} className={`inline-flex min-h-11 items-center ${linkClass}`}>
-              comment ça marche
-            </a>
-            <a href={ABOUT_HASH} className={`inline-flex min-h-11 items-center ${linkClass}`}>
-              qui on est
-            </a>
-          </nav>
-        )}
+        <span className="flex flex-wrap items-center gap-x-6">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className={`min-h-11 cursor-pointer bg-transparent p-0 text-[15px] ${linkClass}`}
+            >
+              ← changer de fichier
+            </button>
+          ) : (
+            <nav aria-label="navigation" className="flex gap-6 text-[15px]">
+              <a href={HOW_HASH} className={`inline-flex min-h-11 items-center ${linkClass}`}>
+                comment ça marche
+              </a>
+              <a href={ABOUT_HASH} className={`inline-flex min-h-11 items-center ${linkClass}`}>
+                qui on est
+              </a>
+            </nav>
+          )}
+          <ThemeToggle />
+        </span>
       </header>
       <main className={`${col} flex grow flex-col pb-16`}>{children}</main>
       <footer className={col}>

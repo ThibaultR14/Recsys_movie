@@ -1,6 +1,6 @@
 # Design system — direction « C · Fanzine »
 
-> Version 0.1 (6 novembre 2026). Référence visuelle : `maquette-C-fanzine.html` (ouvrir dans un navigateur).
+> Version 0.2 (8 novembre 2026 : thème sombre, étape 6b). Version 0.1 : 6 novembre 2026. Référence visuelle : `maquette-C-fanzine.html` (ouvrir dans un navigateur).
 > Nom de travail du site : **Pépite** (temporaire).
 
 ---
@@ -27,7 +27,7 @@ Ce qu'on refuse :
 | Rôle | Nom | Valeur | Usage |
 |---|---|---|---|
 | Fond | papier | `#FBFAF7` | Fond de toutes les pages |
-| Fond secondaire | blanc | `#FFFFFF` | Zone de dépôt, cartes « photo » des affiches |
+| Surface | surface (`surface`, ex-`white`) | `#FFFFFF` | Zone de dépôt, bouton principal, cartes « photo » des affiches |
 | Texte | encre | `#1B1B1B` | Tout le texte principal, bordures fortes |
 | Texte secondaire | encre pâle | `#555049` | Descriptions, réalisateur/année, liens secondaires |
 | Filets | trait | `#B9B4AA` | Pointillés de séparation (pied de page) |
@@ -40,6 +40,27 @@ Règles :
 - Variantes de stylo possibles plus tard : rouge `#B8322A` ou noir. Le bleu reste la valeur par défaut.
 
 Accessibilité : `#1B1B1B` et `#555049` sur `#FBFAF7` passent le contraste AA. Le bleu `#2546B8` aussi.
+
+### 2b. Thème sombre (par défaut depuis l'étape 6b)
+
+Le site s'ouvre en **sombre**, même si le système est réglé en clair ; un bouton de l'en-tête (« passer en clair ») bascule. Le choix du clair est la seule chose retenue par le navigateur (clé `pepite-theme`, `docs/etape-6b-retouches.md`, D7).
+
+| Rôle | Jeton | Sombre | Contraste (fond / surface) |
+|---|---|---|---|
+| Fond | `paper` | `#16171B` | — |
+| Surface (cartes, zone de dépôt, bouton) | `surface` | `#23242A` | un cran plus clair que le fond |
+| Texte | `ink` | `#ECE8DF` | 14,7 / 12,7 |
+| Texte secondaire | `muted` | `#ADA79C` | 7,5 / 6,5 |
+| Filets (décoratifs) | `rule` | `#5A574F` | 2,5 |
+| Accent : stylo bleu éclairci | `pen` | `#8EA6FF` | 7,7 / 6,7 |
+| Scotch | `tape` | `rgba(214, 208, 196, 0.35)` | — |
+
+Règles :
+- mêmes règles qu'en clair : un seul accent (le stylo), **jamais d'orange** ;
+- les cartes restent des « photos » : surface un cran plus claire que le fond, **scotch gardé** ; l'ombre, invisible, devient un filet 1 px `rule` (`--shadow-photo`) ;
+- toute bordure de composant est en `ink` (≥ 3:1) ; `rule` ne sert qu'aux séparations décoratives ;
+- `color-scheme: dark` pour les contrôles natifs ;
+- vérifié par `web/src/styles/contrast.test.ts` (AA pour chaque couple texte / fond, dans les deux thèmes).
 
 ---
 

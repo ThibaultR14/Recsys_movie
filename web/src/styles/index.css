@@ -8,11 +8,12 @@
 
 @import 'tailwindcss';
 
-/* Design tokens: docs/design-system.md §2–3. One accent only: the blue pen. */
+/* Design tokens: docs/design-system.md §2–3. One accent only: the blue pen. These are the light
+   theme values; the dark theme (default, step 6b D7) redefines them below. */
 @theme {
   --color-*: initial;
   --color-paper: #fbfaf7;
-  --color-white: #ffffff;
+  --color-surface: #ffffff;
   --color-ink: #1b1b1b;
   --color-muted: #555049;
   --color-rule: #b9b4aa;
@@ -24,6 +25,29 @@
   --font-*: initial;
   --font-mono: 'Courier Prime', 'Courier New', monospace;
   --font-hand: 'Caveat', cursive;
+}
+
+/* Dark theme (default): <html data-theme="dark">, set in index.html before the first paint. Cards
+   are one step lighter than the background, the tape stays (Q1). Never orange. */
+:root[data-theme='dark'] {
+  --color-paper: #16171b;
+  --color-surface: #23242a;
+  --color-ink: #ece8df;
+  --color-muted: #ada79c;
+  --color-rule: #5a574f;
+  --color-pen: #8ea6ff;
+  --color-tape: rgba(214, 208, 196, 0.35);
+  --shadow-photo: 0 0 0 1px #5a574f;
+  color-scheme: dark;
+}
+:root {
+  --shadow-photo: 0 1px 2px rgba(0, 0, 0, 0.12);
+  color-scheme: light;
+}
+
+/* Taped photo shadow: a soft shadow on paper, a thin rule on the dark background. */
+@utility shadow-photo {
+  box-shadow: var(--shadow-photo);
 }
 
 @layer base {

@@ -72,3 +72,26 @@ export async function settle(page: Page) {
     );
   });
 }
+
+/** axe in the dark theme (default), then in the light one, then back to dark (step 6b, D7). */
+export async function violationsBothThemes(page: Page): Promise<string[]> {
+  const dark = (await seriousViolations(page)).map((v) => `sombre: ${v}`);
+  await page.getByRole('button', { name: 'passer en clair' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  const light = (await seriousViolations(page)).map((v) => `clair: ${v}`);
+  await page.getByRole('button', { name: 'passer en sombre' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  return [...dark, ...light];
+}
+
+/** Everything the browser could keep: the theme key is the only one allowed (D7). */
+export function readStorage(page: Page) {
+  return page.evaluate(async () => ({
+    local: { ...localStorage },
+    session: sessionStorage.length,
+    idb: (await indexedDB.databases()).length,
+    cookies: document.cookie,
+  }));
+}
+
+export const NOTHING_STORED = { local: {}, session: 0, idb: 0, cookies: '' };

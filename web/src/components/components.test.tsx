@@ -12,6 +12,8 @@ import { Layout } from './Layout';
 import { NoList } from './NoList';
 import { PrimaryButton } from './PrimaryButton';
 import { Slider } from './Slider';
+import { ThemeToggle } from './ThemeToggle';
+import { THEME_KEY } from '../theme';
 import { Underline } from './Underline';
 import { byline, cardRotation, pepiteStamps, tapeRotation } from './cardRules';
 import { capLabel } from './sliderText';
@@ -318,5 +320,19 @@ describe('Slider', () => {
     expect(onChange).toHaveBeenLastCalledWith(0);
     expect(screen.getByTestId('cap-label')).toHaveTextContent('');
     expect(range).toHaveAttribute('aria-valuetext', 'les classiques');
+  });
+});
+
+describe('ThemeToggle', () => {
+  it('dark by default; light is stored under one key, removed when back to dark', async () => {
+    localStorage.clear();
+    delete document.documentElement.dataset.theme;
+    render(<ThemeToggle />);
+    await userEvent.click(screen.getByRole('button', { name: 'passer en clair' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect({ ...localStorage }).toEqual({ [THEME_KEY]: 'light' });
+    await userEvent.click(screen.getByRole('button', { name: 'passer en sombre' }));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.length).toBe(0);
   });
 });

@@ -30,7 +30,7 @@ export function DropZone({ onFile, disabled = false }: DropZoneProps) {
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
         data-testid="drop-zone"
-        className={`flex max-w-[520px] min-w-0 flex-[1_1_380px] cursor-pointer flex-col gap-2 rounded-[3px] border-2 border-dashed bg-white px-7 py-8 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-pen ${over ? 'border-pen' : 'border-ink'}`}
+        className={`flex max-w-[520px] min-w-0 flex-[1_1_380px] cursor-pointer flex-col gap-2 rounded-[3px] border-2 border-dashed bg-surface px-7 py-8 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-pen ${over ? 'border-pen' : 'border-ink'}`}
       >
         <span className="text-[18px] font-bold">glisse ton fichier ici</span>
         <span className="text-[15px] text-muted">

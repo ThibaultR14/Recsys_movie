@@ -18,7 +18,7 @@ interface FilmCardProps {
 }
 
 const CARD_CLASS =
-  'relative flex flex-col gap-3 bg-white px-3 pt-3 pb-[18px] text-ink no-underline shadow-[0_1px_2px_rgba(0,0,0,0.12)]';
+  'relative flex flex-col gap-3 bg-surface px-3 pt-3 pb-[18px] text-ink no-underline shadow-photo';
 
 /** « Taped photo » card (design system §5). The whole card links to the film on Letterboxd. */
 export function FilmCard({ film, stamp = false, seriesOf }: FilmCardProps) {
