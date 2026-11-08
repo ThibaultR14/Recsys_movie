@@ -185,9 +185,15 @@ Les **cas de test du fold-in** (`foldin_cases.json`, 22 historiques, vecteur et 
 1. Signal : pour chaque film vu, `r = 1 + β·p`, `p` = percentile de sa note dans l'historique de l'utilisateur (0,5 sans note).
 2. Vecteur de goût de l'utilisateur (« fold-in ») : résolution d'un système 64 × 64, `(YᵀY + reg·I + Σ (C − 1) y yᵀ) x = Σ C y` avec `C = alpha·r`, `YᵀY` lu dans `yty.bin`. Quelques millisecondes dans le navigateur.
 3. Score de chaque film = produit scalaire entre ce vecteur et le vecteur du film (déquantifié).
-4. On retire les films déjà vus et les films non recommandables (`model-meta.json`).
+4. On retire les films déjà vus, les films non recommandables (`model-meta.json`), et par prudence les candidats des correspondances ambiguës et le candidat principal d'une correspondance floue (films peut-être vus, jamais utilisés pour le fold-in).
 5. **Curseur** : on ne garde que les films dont la popularité (`popularity.bin`) est au plus le plafond de la position choisie (∞ = pas de filtre), classés par score.
 6. On affiche les 50 meilleurs.
+
+Mise en œuvre (étape 4, `docs/etape-4-navigateur.md`) :
+- `web/src/reco/` : `modelFiles.ts` (lecture et contrôles), `foldIn.ts` (Cholesky 64 × 64 en float64), `recommend.ts` (scores, curseur), `engine.ts` (moteur commun) ;
+- `workerCore.ts` + `worker.ts` (Web Worker) et `client.ts` (promesses pour l'interface) ;
+- rejoue à l'identique les listes du Python (écarts ~10⁻¹⁵) ;
+- temps mesurés dans Node : lecture des fichiers 133 ms, préparation de la correspondance 405 ms (une fois), recommandations 19 ms pour un export réel, 42 ms pour 3 000 films.
 
 Le score moyen de la liste par rapport à la position ∞ mesure l'éloignement du goût de l'utilisateur (0,17 en moyenne au plafond 2 000, 0,06 à 500, plus bas pour les profils grand public) : piste pour un avertissement dans l'interface (étape 5).
 
@@ -251,12 +257,12 @@ projet/
 │   ├── src/
 │   │   ├── adapters/         # types.ts (format commun), letterboxd.ts, normalizeRatings.ts (percentiles) ; imdb.ts (étape 6)
 │   │   ├── matching/         # normalize.ts, titleIndex.ts, match.ts, history.ts
-│   │   ├── reco/             # fold-in, scores, curseur (dans un Web Worker)
+│   │   ├── reco/             # modelFiles, foldIn, recommend, engine, workerCore, worker, client
 │   │   ├── components/       # composants React (Curseur, CarteFilm, ZoneDepot…)
 │   │   ├── pages/            # Accueil, Analyse, Resultats, Fiche
 │   │   └── styles/           # tokens de la direction C (design-system.md)
 │   ├── public/data/          # fichiers produits par le pipeline (non versionnés)
-│   ├── scripts/              # match-report.ts (mesure de la correspondance sur un export réel)
+│   ├── scripts/              # match-report.ts, reco-report.ts, reco-bench.ts (terminal seulement)
 │   └── test-data/            # ignoré par git, jamais servi : cas de test du fold-in, titres du catalogue, exports réels, rapports
 ├── shared/fixtures/          # cas de normalisation des titres partagés Python / TypeScript (versionnés)
 ├── .github/workflows/        # mise à jour mensuelle TMDB (à venir)
@@ -301,6 +307,8 @@ npm test                    # Vitest (cas partagés, adaptateur, correspondance�
 npm run typecheck && npm run lint && npm run format:check
 npm run build
 npm run match-report -- test-data/exports/<export> --name <nom>  # mesure sur un export réel
+npm run reco-report -- test-data/exports/<export>  # top 20 à ∞ / 2 000 / 500 (terminal)
+npm run reco-bench -- [--export <export>]          # temps du moteur
 ```
 
 Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB : relancer ensuite `enrich_tmdb.py` (il repart du cache).
@@ -315,7 +323,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 1. ✅ **Pipeline de données** : télécharger MovieLens + IMDb, construire le catalogue et les correspondances d'ids (fait : 23 019 films, enrichis par TMDB, voir §3).
 2. ✅ **Modèle** : ALS (et EASE pour comparer), évaluation hors ligne avec et sans curseur (fait : ALS 64 facteurs, NDCG@20 test 0,152, EASE 0,172 ; curseur = plafond de popularité ; export int8 de 1,57 Mo, voir §3 « Modèle »).
 3. ✅ **Adaptateur Letterboxd** + correspondance des titres (fait, `docs/etape-3-letterboxd.md` : sur l'export de Thibault, 188/188 films du catalogue reconnus, précision vérifiée à la main 100/100, 0 échec ; les 37 autres films sont hors catalogue, sortis après 2023 ou séries). L'index de correspondance utilise `tmdb_title`, `tmdb_original_title` et `ml_title` nettoyé (article replacé : « Usual Suspects, The » → « The Usual Suspects »), plus le titre alternatif entre parenthèses, tous normalisés (casse, accents, ponctuation, comme `pipeline/titles.py`), avec les deux années (TMDB et ML) acceptées à ±1 an. Mesuré en B4 : 28,6 % des titres TMDB diffèrent du titre ML brut normalisé, 6,7 % après nettoyage.
-4. **Calcul dans le navigateur** : fold-in, scores, curseur ; vérifié contre les cas de test du fold-in (`web/test-data/foldin_cases.json`).
+4. ✅ **Calcul dans le navigateur** : fold-in, scores, curseur, dans un Web Worker (fait : 22 vecteurs et 66 listes top 10 rejoués à l'identique ; 19 ms par recommandation pour un export réel). Diagnostic du biais des films récents : `docs/etape-4-navigateur.md` §6, décision en attente.
 5. **Interface** : dépôt du fichier, liste de recos, curseur.
 6. **Adaptateur IMDb**.
 7. Mise en ligne, tests avec 10-20 cinéphiles.
@@ -323,7 +331,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 
 ---
 
-## 9. Décisions prises (6-7 novembre 2026, étapes 1-3)
+## 9. Décisions prises (6-8 novembre 2026, étapes 1-4)
 
 | Sujet | Décision |
 |---|---|
@@ -340,6 +348,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 | Correspondance des titres | Normalisation v2 identique Python / TypeScript ; titre + année ±1 (TMDB ou ML), variantes ; **flou (Fuse.js) jamais utilisé automatiquement** (séries rattachées à des films), seulement proposé dans l'écran « films non reconnus » |
 | Export Letterboxd | Lu dans le navigateur ; `ratings.csv`, `watched.csv`, `diary.csv` seulement ; journal rattaché par (titre, année) |
 | Dataset Letterboxd 10M | **Non utilisé** (collecte probablement par scraping, pas de vérité terrain) |
+| Calcul des recos | Moteur TypeScript unique (Web Worker + scripts), identique au Python ; exclus : vus, non recommandables, candidats ambigus, candidat flou principal |
 | IA pour les listes faites main | **Pas d'IA au MVP** (Fuse.js) ; API + Cloudflare Worker plus tard |
 | Licences | **Contact direct** avec GroupLens et TMDB |
 

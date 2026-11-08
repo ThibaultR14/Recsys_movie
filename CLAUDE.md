@@ -27,6 +27,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - Films récents (après 2023) : **trou accepté au MVP**, à signaler honnêtement dans l'interface.
 - Import : architecture d'**adaptateurs** (un par source) qui produisent tous le même format interne `{ titre, annee, imdbId?, tmdbId?, noteNormalisee, date? }`. Notes normalisées en percentiles par utilisateur.
 - Pas d'IA au MVP pour les listes faites main : correspondance floue (Fuse.js).
+- Calcul des recos : **un seul moteur** (`web/src/reco/engine.ts`) utilisé par le Web Worker et par les scripts du terminal (`reco-report`, `reco-bench`) ; il doit rejouer `foldin_cases.json` à l'identique (listes) et à 10⁻⁹ près (vecteurs). L'historique du fold-in = `exact` + `probable_variant` ; sont exclus des recommandations les films vus, non recommandables, les candidats `ambiguous` et le candidat principal `probable_fuzzy`.
 - Correspondance des titres : normalisation « v2 » **identique** en Python (`pipeline/titles.py`) et en TypeScript (`web/src/matching/normalize.ts`), vérifiée par `shared/fixtures/` ; toute modification passe par les deux et par les cas partagés. Titre + année ±1 (TMDB ou ML), puis variantes ; le flou (Fuse.js) n'est **jamais** utilisé automatiquement pour les recommandations.
 - Dataset Letterboxd 10M : **non utilisé** (collecte probablement par scraping).
 - Scraping Letterboxd : **hors MVP**, option secondaire seulement (contraire aux conditions de Letterboxd).
@@ -58,7 +59,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 1. ✅ Pipeline de données : téléchargement MovieLens + IMDb, catalogue, correspondances d'ids (MovieLens ↔ IMDb ↔ TMDB via `links.csv`). Fait : 23 019 films (seuil 20 → 23 350, − 1 exclu à la main, − 315 séries/épisodes, − 15 fusions) ; TMDB : tmdb_id 99,96 %, titres/années 99,8 %, réalisateurs et affiches 99,7 % ; 51 films `recommendable = false`.
 2. ✅ Modèle ALS + évaluation hors ligne, avec et sans curseur. Fait (`docs/etape-2-modele.md`) : ALS 64 facteurs, NDCG@20 test **0,152** (EASE 0,172, −11 % ; populaire 0,084) ; curseur = plafond de popularité (8 positions) ; popularité hybride MovieLens/TMDB ; export int8 dans `web/public/data/` : `embeddings.bin` 1,57 Mo, `yty.bin`, `popularity.bin`, `model-meta.json` (1,57 Mo gzip au total) ; perte int8 < 0,08 % ; 22 cas de test du fold-in pour l'étape 4.
 3. ✅ Adaptateur Letterboxd + correspondance des titres. Fait (`docs/etape-3-letterboxd.md`) : `catalog.json` (1,12 Mo gzip) et `title-index.json` (0,37 Mo), total `web/public/data/` 3,06 Mo gzip ; sur l'export de Thibault, 188/188 films du catalogue reconnus (précision vérifiée à la main 100/100), les 37 autres hors catalogue (après 2023, séries) ; 3 000 entrées en ~100 ms.
-4. Calcul dans le navigateur : fold-in ALS, scores, curseur (plafond) ; à valider contre `web/test-data/foldin_cases.json` (régénérer avec `export.py export --out web` s'il manque).
+4. ✅ Calcul dans le navigateur. Fait (`docs/etape-4-navigateur.md`) : moteur TypeScript (`web/src/reco/` : lecture des fichiers, fold-in Cholesky, scores, curseur à plafond) dans un Web Worker ; reproduit les 22 vecteurs (écart 3·10⁻¹⁵) et les 66 listes top 10 de `foldin_cases.json` ; recommandations en 19 ms pour un export réel, 42 ms pour 3 000 films. Exclus des recos : films vus, non recommandables, candidats `ambiguous` et candidat principal `probable_fuzzy`. Diagnostic du biais des films récents en section 6 de la spec (décision en attente).
 5. Interface (style C) : accueil / dépôt, analyse du fichier, résultats + curseur, fiche film.
 6. Adaptateur IMDb.
 7. Mise en ligne (après la réponse de GroupLens), tests avec 10–20 cinéphiles.
@@ -134,4 +135,8 @@ npm run lint                # ESLint
 npm run format:check        # Prettier (npm run format pour corriger)
 npm run build
 npm run match-report -- test-data/exports/<export> --name <nom>  # rapport → test-data/reports/
+npm run reco-report -- test-data/exports/<export>  # top 20 à ∞ / 2 000 / 500, terminal seulement
+npm run reco-bench -- [--export <export>]          # temps du moteur
 ```
+
+Diagnostic popularité (pipeline) : `uv run python recency_diagnostics.py years | validation | user <rapport>` (titres dans le terminal seulement ; ne modifie pas `popularity.bin`).
