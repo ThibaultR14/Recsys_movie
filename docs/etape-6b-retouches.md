@@ -1,6 +1,6 @@
 # Étape 6b — Retouches de l'interface
 
-> Version 0.1 (8 novembre 2026). Mini-étape insérée entre l'étape 6 (adaptateur IMDb) et l'étape 7 (mise en ligne). **En attente de validation par Thibault** : voir les questions de la section 7.
+> Version 0.2 (8 novembre 2026). Mini-étape insérée entre l'étape 6 (adaptateur IMDb) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026**, avec ses réponses aux questions de la section 7 (v0.2) : cartes sombres un cran plus claires que le fond, scotch gardé (D7) ; sombre par défaut même si le système est en clair (D7) ; l'annotation de série remplace l'explication, pas d'explication sur les cartes « loin de tes goûts », repli « parce que t'as vu » pour un historique sans notes (D6) ; « qui on est » → « à propos », pied de page inchangé (D1, D2) ; adresse de contact décidée en R8 (D3).
 > Décisions de départ données par Thibault le 8 novembre 2026 (D1-D7). Les **textes de l'interface** viennent de Claude Web : le code prévoit des emplacements (D8), remplis en R7.
 
 ---
@@ -49,7 +49,7 @@
 - La page « à propos » passe au **« je »** (« je suis étudiant… »), **sans nom d'école** ni de formation précise. Le reste du site garde le « on » (accueil, analyse, résultats, comment ça marche, contact).
 - Elle garde les **mentions obligatoires** (`CLAUDE.md`) : logo TMDB + « This product uses the TMDB API but is not endorsed or certified by TMDB. », citation MovieLens (Harper & Konstan, 2015), phrase « ni soutenu ni approuvé par l'université du minnesota, grouplens ou tmdb ». Ces textes ne viennent pas de Claude Web : ils restent tels quels.
 - Textes : emplacements `apropos.*` (D8).
-- Le pied de page (« fait à la main par des gens qui regardent trop de films ») n'est pas touché, sauf si Claude Web en fournit un nouveau (question Q5).
+- Le pied de page (« fait à la main par des gens qui regardent trop de films ») **n'est pas touché** (Q5).
 
 ### D2. Trois pages par ancre, par-dessus la machine à états
 
@@ -59,7 +59,7 @@
   - **lien direct** : l'ancre est lue au chargement, donc `…/#contact` ouvre la page contact (l'écran dessous est l'accueil, rien n'étant stocké) ; précédent / suivant du navigateur fonctionnent (`hashchange`) ;
   - fermer une page : lien « ← retour » vers `#` (l'écran courant réapparaît, résultats et cran du curseur compris, sans recalcul).
 - **« comment ça marche »** : sections dans cet ordre, textes de Claude Web : le modèle (des goûts comparés, **pas de genres**), les percentiles (pourquoi un 3★ n'a pas le même sens pour tous), le curseur (plafond de popularité, 8 crans), les données (MovieLens, TMDB, d'où vient la note du public), on garde rien (D7), ce qu'on sait pas faire (films après 2023, séries, films très peu vus), inspirations. Une phrase sur l'explication des cartes (D6) dans la section du modèle.
-- **Navigation dans l'en-tête, sur tous les écrans** : logo, puis « comment ça marche », « à propos », « contact », puis le bouton de thème (D7). Le lien de la page ouverte porte `aria-current="page"`.
+- **Navigation dans l'en-tête, sur tous les écrans** : logo, puis « comment ça marche », « à propos » (ex-« qui on est », Q5), « contact », puis le bouton de thème (D7). Le lien de la page ouverte porte `aria-current="page"`.
   - « ← changer de fichier » quitte l'en-tête et passe en haut du contenu (analyse et résultats).
   - Téléphone : la navigation passe sur une deuxième ligne sous le logo ; zones tactiles ≥ 44 px, pas de menu repliable (trois liens tiennent sur 360 px en deux lignes au plus).
 - Fichiers : `web/src/pages/CommentCaMarche.tsx`, `APropos.tsx` (réduit), `Contact.tsx`, `pages.ts` (ancres), `Layout.tsx`, `App.tsx`.
@@ -75,7 +75,7 @@
   - **rien n'est ajouté automatiquement** : ni navigateur, ni films de l'utilisateur, ni résultats d'analyse. Pour « film mal reconnu », l'aide du champ suggère d'écrire le titre, l'année et la source (texte de Claude Web).
   - Sous le bouton, une phrase : si aucune application de mail ne s'ouvre, copier l'adresse.
 - **Aucun service tiers, aucune requête nouvelle** : pas de Formspree, pas de captcha, pas de `fetch`. Le formulaire n'est jamais envoyé à un serveur (`onSubmit` empêche l'envoi et navigue vers le `mailto:`).
-- Risque accepté : une adresse en clair attire du spam. Une adresse dédiée au projet est conseillée (question Q6).
+- Risque accepté : une adresse en clair attire du spam. **Adresse décidée par Thibault en R8** (adresse dédiée probable) ; d'ici là, l'emplacement `[ADRESSE À CONFIRMER]` reste (Q6).
 
 ### D4. Aide des exports : carrousel accessible
 
@@ -112,13 +112,15 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 
 - **Films cités** : parmi l'historique du fold-in (`exact`, `probable_variant`, `confirmed`) **avec une note** et un percentile **≥ 0,7** (seuil réglable, `LIKED_PERCENTILE`), les **2** dont le vecteur d'item est le plus proche du film recommandé (cosinus).
   - Vecteurs int8 : l'échelle par film se simplifie dans le cosinus ; on précalcule une fois les normes des vecteurs des films aimés.
-  - Un seul film aimé proche → « (parce que t'as aimé X) » ; aucun film aimé (export sans notes, ou tout sous le seuil) → pas d'annotation.
+  - Un seul film aimé proche → « (parce que t'as aimé X) » ; aucun → pas d'annotation.
+  - **Historique sans notes** (aucune entrée notée : tout à 0,5, par ex. `watched.csv` seul) : **repli sur tous les films vus**, annotation « (parce que t'as vu X et Y) » (texte final de Claude Web, `cartes.parceQueVu1`, `cartes.parceQueVu2`). Un historique avec au moins une note mais aucune ≥ 0,7 n'a pas de repli : pas d'annotation (v0.2).
   - Un film n'est cité que si le cosinus est **> 0** (seuil `MIN_COSINE`, réglable en R6).
   - Titre cité = titre affiché du catalogue (pas celui de l'export).
 - **Calcul** : une seule fois, dans le worker, **juste après `recommend({ n: 48 })`**, pour tous les films distincts des 8 crans (≤ 384). Fonction pure `explain()` dans `web/src/reco/explain.ts`, appelée par `workerCore.ts` et par `reco-report` (affichage dans le terminal). Le changement de cran n'ajoute **aucun** calcul.
 - **Temps** : ≤ +100 ms sur `recommend` pour 3 000 films (`reco-bench`), changement de cran toujours **≤ 50 ms** (Playwright). Estimation : 384 × ~900 films aimés × 64 ≈ 22 M multiplications, soit quelques dizaines de ms.
 - **Affichage** : annotation Caveat stylo bleu sous la ligne de note, comme l'annotation de série. Titres de plus de 32 caractères coupés avec « … » (titre complet dans le texte pour lecteur d'écran). **Pas de pourcentage de correspondance.**
-- Annotation de série et explication sur la même carte : question Q3.
+- **Annotation de série** : elle **remplace** l'explication sur la carte (Q3).
+- **Cartes « loin de tes goûts »** (score relatif < 0,04) : **pas d'explication** (Q4).
 - **Mesure informative en R6** (terminal seulement, export de Thibault) : nombre de films distincts cités sur les 8 premières cartes de chaque cran, part des cartes sans explication. Si un même film est cité sur presque toutes les cartes, **arrêt** pour décider d'une règle de diversité (hors des décisions écrites).
 - Alternative non retenue au MVP : l'explication exacte de l'ALS (contribution de chaque film de l'historique au score, via la matrice du fold-in), plus fidèle mais moins intuitive. Notée en §6.
 
@@ -138,7 +140,7 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 | Scotch `tape` | `rgba(214,208,196,0.75)` | `rgba(214,208,196,0.35)` | — |
 
   - **Jamais d'orange**, un seul accent (le stylo bleu), comme en clair.
-  - L'ombre des cartes, invisible sur fond sombre, est remplacée par un filet 1 px `rule`.
+  - **Cartes (Q1)** : sur la surface sombre, **un cran plus claire que le fond**, **scotch gardé** : on doit toujours lire une « photo ». L'ombre, invisible sur fond sombre, est remplacée par un filet 1 px `rule`.
   - `color-scheme: dark` pour les contrôles natifs (curseur, barres de défilement) ; `accent-color` = `pen`.
   - Le filet (`rule`) ne sert qu'aux séparations décoratives ; toute bordure de composant (zone de dépôt, boutons) utilise `ink` (≥ 3:1).
   - Logo TMDB : vérifier sa lisibilité sur fond sombre (version officielle adaptée si besoin, sans le modifier).
@@ -162,7 +164,7 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 | `contact.intro`, `contact.sujets` (4 libellés), `contact.aideMessage` (dont « film mal reconnu »), `contact.bouton`, `contact.copie`, `contact.copieEchec`, `contact.pasDeMail` | contact | D3 |
 | `aide.titre`, `aide.letterboxd.1-3`, `aide.imdb.1-4`, `aide.precedent`, `aide.suivant` | accueil | D4 (une à deux phrases par étape) |
 | `theme.versClair`, `theme.versSombre` | en-tête | D7 |
-| `cartes.parceQue1`, `cartes.parceQue2` | cartes | D6 (formulation pour 1 et 2 films ; par défaut « (parce que t'as aimé X et Y) ») |
+| `cartes.parceQue1`, `cartes.parceQue2`, `cartes.parceQueVu1`, `cartes.parceQueVu2` | cartes | D6 (1 et 2 films aimés ; repli « vu » sans notes) |
 | `nav.*` | en-tête | « comment ça marche », « à propos », « contact » (par défaut ces trois-là) |
 
 - Les mentions obligatoires (TMDB, MovieLens) et les libellés techniques (« ★ 3,9 · 1 240 notes ») ne sont pas dans cette liste.
@@ -247,16 +249,17 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 
 - **Explication exacte de l'ALS** (contribution de chaque film de l'historique au score) : plus fidèle que le cosinus, à comparer avec la fiche film (étape 8).
 - **Règle de diversité des films cités** (éviter le même film sur toutes les cartes), si la mesure de R6 le demande sans justifier un arrêt.
-- **Suivre le thème du système** (`prefers-color-scheme`) quand rien n'est choisi : écarté par D7 (sombre par défaut), voir Q2.
+- **Suivre le thème du système** (`prefers-color-scheme`) quand rien n'est choisi : écarté (Q2, sombre par défaut même si le système est en clair).
+- **Seuils des explications** (percentile ≥ 0,7, cosinus > 0) : à recaler avec les retours des volontaires (étape 7) (Q4).
 - **Formulaire de contact relié à un service** (envoi sans application de mail) : demanderait un service tiers ou un Worker ; à rediscuter avec « forme du retour des volontaires » (étape 7).
 
 ---
 
-## 7. Questions pour la validation
+## 7. Questions pour la validation — réponses de Thibault (8 novembre 2026)
 
-1. **Q1 — Cartes en thème sombre.** Proposé : surface sombre (`#23242A`) avec un filet, pour ne pas allumer 8 à 48 rectangles blancs. Autre possibilité : garder des « photos » claires scotchées sur un mur sombre (plus fanzine, mais très lumineux, et le stylo clair n'y est plus lisible : il faudrait le bleu actuel sur les cartes).
-2. **Q2 — Sombre même si le système est réglé en clair ?** D7 dit oui (proposé tel quel). Autre possibilité : suivre le réglage du système tant que rien n'est choisi (aucune clé de plus).
-3. **Q3 — Carte d'un film d'une série déjà vue** : proposé, l'annotation de série **remplace** l'explication (c'en est déjà une, et une seule annotation manuscrite par carte reste lisible).
-4. **Q4 — Seuils de D6** : percentile ≥ 0,7 et cosinus > 0, ajustés en R6 en regardant `reco-report` ; l'explication s'affiche aussi sur les cartes « loin de tes goûts ». D'accord ?
-5. **Q5 — Libellés** : « qui on est » devient « à propos » dans la navigation ; le pied de page garde « des gens qui regardent trop de films » sauf texte nouveau de Claude Web.
-6. **Q6 — Adresse de contact** : une adresse dédiée au projet (et pas l'adresse personnelle) limite le spam et ce qui reste visible après le projet. La clôture attend l'adresse.
+1. **Q1 — Cartes en thème sombre** : surface sombre, un cran plus claire que le fond, scotch gardé (on doit toujours lire une « photo »). → D7.
+2. **Q2 — Sombre même si le système est en clair** : oui. → D7.
+3. **Q3 — Film d'une série déjà vue** : l'annotation de série remplace l'explication. → D6.
+4. **Q4 — Seuils** : percentile ≥ 0,7 et cosinus > 0 au départ (à recaler avec les volontaires, §6) ; **pas d'explication sur les cartes « loin de tes goûts »** ; un seul film au-dessus du seuil → « parce que t'as aimé X » ; aucun → rien ; historique sans notes → repli sur tous les films vus, « parce que t'as vu X et Y ». → D6.
+5. **Q5 — Libellés** : « qui on est » devient « à propos » ; pied de page inchangé. → D1, D2.
+6. **Q6 — Adresse de contact** : décidée en R8 (adresse dédiée probable) ; l'emplacement reste. → D3.
