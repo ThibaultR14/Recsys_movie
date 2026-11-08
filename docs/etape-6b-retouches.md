@@ -353,7 +353,8 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - **Mise en page** : un seul conteneur **1 200 px** (marges 24 px) pour tous les écrans, aligné sur l'en-tête ; paragraphes des pages à **65ch** ; titre et curseur des résultats, écran d'analyse à 760 px ; la grille des résultats prend toute la largeur (4 colonnes sur grand écran). Playwright : téléphone 375, tablette 768, grand écran 1 440, deux thèmes : pas de défilement horizontal, titre aligné sur le logo, `main` ≤ 1 200 px, axe 0.
 - **Textes** : `apropos.intro` (4 paragraphes, lien « le code est sur github »), `ccm.inspirations` devenue une **liste** de 6 éléments avec 5 liens. Marquage étendu : `{a:url|libellé}` et `{a-en:url|libellé}` (lien externe, nouvel onglet, `rel="noopener noreferrer"`, « (nouvel onglet) » pour les lecteurs d'écran, `https` obligatoire) ; titres d'articles en `lang="en"`. `aide.letterboxd.1` précisé (« passe sur ton nom en haut de la page et ouvre « settings » »), menus Letterboxd confirmés par Thibault (« settings » → « data » → « export your data »).
 - Qualité : Vitest **254**, Playwright **11** (dont 3 de mise en page), `typecheck`, `lint`, `format:check`, `build` verts ; changement de cran : médiane 33 ms, pire cas 35-48 ms.
-- **Reste pour clore** : l'adresse de contact et l'essai sur un vrai téléphone (Thibault, après R9).
+- **Adresse de contact** : donnée par Thibault après R9, en place dans `CONTACT_EMAIL` (`web/src/content/contact.ts`).
+- **Reste pour clore** : l'essai sur un vrai téléphone dans les deux thèmes (Thibault).
 
 ---
 

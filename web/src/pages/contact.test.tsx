@@ -24,6 +24,10 @@ describe('mailtoHref', () => {
   });
 });
 
+it('the contact address is a real address, not the placeholder', () => {
+  expect(CONTACT_EMAIL).toMatch(/^[^@\s[\]]+@[^@\s]+\.[a-z]{2,}$/);
+});
+
 describe('Contact', () => {
   afterEach(() => vi.restoreAllMocks());
 

@@ -1,5 +1,5 @@
-/** Contact address, decided by Thibault in R8 (D3, Q6). */
-export const CONTACT_EMAIL = '[ADRESSE À CONFIRMER]';
+/** Contact address, given by Thibault at the end of step 6b (D3, Q6). */
+export const CONTACT_EMAIL = 'thibault.rabbe@outlook.fr';
 
 export const CONTACT_SUBJECTS = [
   { id: 'bug', label: 'un bug' },

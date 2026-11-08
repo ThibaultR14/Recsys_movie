@@ -5,7 +5,7 @@
 
 ## En cours : fin de l'étape 6b (retouches de l'interface)
 
-Spec `docs/etape-6b-retouches.md` v0.2 validée le 8 novembre 2026. R0-R7 faits (thème sombre, pages par ancre, contact, aide des exports, note du public, explications avec règle de diversité, textes de Claude Web), puis **R9** après l'essai de Thibault (tampon en haut de l'affiche, 20 voisins pour les explications, aide ouverte sous la zone de dépôt, site élargi à 1 200 px, textes avec liens). Menus Letterboxd confirmés. **Reste** : l'adresse de contact et l'essai sur un vrai téléphone dans les deux thèmes, puis la relecture.
+Spec `docs/etape-6b-retouches.md` v0.2 validée le 8 novembre 2026. R0-R7 faits (thème sombre, pages par ancre, contact, aide des exports, note du public, explications avec règle de diversité, textes de Claude Web), puis **R9** après l'essai de Thibault (tampon en haut de l'affiche, 20 voisins pour les explications, aide ouverte sous la zone de dépôt, site élargi à 1 200 px, textes avec liens). Menus Letterboxd confirmés. Adresse de contact en place. **Reste** : l'essai sur un vrai téléphone dans les deux thèmes, puis la relecture.
 
 ## Ensuite : 7, mise en ligne et volontaires
 
