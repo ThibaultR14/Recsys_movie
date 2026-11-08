@@ -189,12 +189,13 @@ describe('App (fake worker)', () => {
     await screen.findByText(/on a lu tes 10 films/);
   });
 
-  it('IMDb CSV, unreadable file, no film recognized: short messages, stays home', async () => {
+  it('IMDb list, unreadable file, no film recognized: short messages, stays home', async () => {
     const client = fakeClient();
     render(<App client={client} />);
     const input = screen.getByLabelText(/glisse ton fichier ici/);
-    await userEvent.upload(input, new File(['Const,Your Rating,Title\n'], 'ratings.csv'));
-    expect(await screen.findByRole('alert')).toHaveTextContent(MESSAGES.imdbSoon);
+    await userEvent.upload(input, new File(['Position,Const,Title\n'], 'WATCHLIST.csv'));
+    expect(await screen.findByRole('alert')).toHaveTextContent(MESSAGES.imdbList);
+    expect(client.importExport).not.toHaveBeenCalled();
 
     client.importExport.mockRejectedValueOnce(new Error('invalid zip data'));
     await userEvent.upload(input, zip());
@@ -285,6 +286,35 @@ describe.skipIf(!ready)('App on the real files, example export', () => {
 
     const milk = screen.getByRole('group', { name: 'dans ton fichier : « Milk » (2008)' });
     await userEvent.click(within(milk).getAllByRole('radio')[0]!);
+    await userEvent.click(screen.getByRole('button', { name: 'voir mes films' }));
+    const grid = await screen.findByRole('list', { name: 'films recommandés' }, { timeout: 10000 });
+    expect(within(grid).getAllByRole('listitem')).toHaveLength(8);
+  }, 30000);
+
+  it('IMDb example CSV dropped -> title fallback to verify, unticked; series apart -> results', async () => {
+    render(<App client={inProcessClient()} />);
+    const csv = readFileSync(join(process.cwd(), 'public/exemple/imdb-exemple.csv'));
+    await userEvent.upload(
+      screen.getByLabelText(/glisse ton fichier ici/),
+      new File([csv], 'ratings.csv', { type: 'text/csv' }),
+    );
+    const h1 = await screen.findByText(/on a lu tes 68 films/, {}, { timeout: 10000 });
+    expect(h1).toHaveTextContent('on en a reconnu 63.');
+    const verify = screen.getByRole('region', { name: 'à vérifier' });
+    const groups = within(verify).getAllByRole('group');
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toHaveAccessibleName(
+      'dans ton fichier : « Die Regenschirme von Cherbourg » (1964)',
+    );
+    for (const r of within(groups[0]!).getAllByRole('radio')) expect(r).not.toBeChecked();
+    expect(
+      screen.getByText('3 séries, épisodes ou jeux : on fait que les films.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('1 film est sorti après 2023 : trop récent pour nous, désolé.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/qu'on connaît pas/)).not.toBeInTheDocument();
+
     await userEvent.click(screen.getByRole('button', { name: 'voir mes films' }));
     const grid = await screen.findByRole('list', { name: 'films recommandés' }, { timeout: 10000 });
     expect(within(grid).getAllByRole('listitem')).toHaveLength(8);

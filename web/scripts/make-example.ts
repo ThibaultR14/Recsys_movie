@@ -1,6 +1,7 @@
 /**
- * Synthetic example export (step 5, D3): real, well-known films with invented ratings, no personal
- * data. Writes public/exemple/letterboxd-exemple.zip (ratings.csv + watched.csv, Letterboxd format).
+ * Synthetic example exports (step 5, D3; step 6, D8): real, well-known films with invented ratings,
+ * no personal data. Writes public/exemple/letterboxd-exemple.zip (ratings.csv + watched.csv) and
+ * public/exemple/imdb-exemple.csv (IMDb ratings format; needs public/data/ for the ids).
  *
  * It exercises the analysis screen: one ambiguous title (« Milk », two films of 2008-2009), one
  * approximate title (probable_fuzzy: « Dr. Strangelove », short for the full title), two films
@@ -115,12 +116,83 @@ console.log(
   `-> public/exemple/letterboxd-exemple.zip (${FILMS.length} films, ${zip.length} bytes)`,
 );
 
+// ---------------------------------------------------------------------------------------------
+// IMDb ratings example (docs/etape-6-imdb.md, D8): same films, ratings on 1-10, Const = the
+// catalogue's imdb_id (MovieLens links.csv). IMDb-only columns stay empty: nothing from the IMDb
+// datasets. Needs public/data/ (catalogue ids).
+
+const IMDB_HEADER =
+  'Const,Your Rating,Date Rated,Title,Original Title,URL,Title Type,IMDb Rating,Runtime (mins),Year,Genres,Num Votes,Release Date,Directors';
+
+/** Test rows (invented ids, not in the catalogue): [id, title, original, type, year, rating]. */
+const IMDB_SPECIAL: [string, string, string, string, number, number | null][] = [
+  // id not in the catalogue, title in it (via Original Title): « à vérifier », never automatic
+  ['tt99000001', 'Die Regenschirme von Cherbourg', 'Les Parapluies de Cherbourg', 'Movie', 1964, 9],
+  ['tt99000002', 'Anora', 'Anora', 'Movie', 2024, 8], // after 2023
+  ['tt99000003', 'Chernobyl', 'Chernobyl', 'TV Mini Series', 2019, 9], // not a film
+  ['tt99000004', 'Twin Peaks', 'Twin Peaks', 'TV Series', 1990, 9], // not a film
+  ['tt99000005', 'Pilot', 'Pilot', 'TV Episode', 1990, 8], // not a film
+];
+/** Localized titles (French account) and original titles, for films found by id. */
+const LOCALIZED: Record<string, [string, string]> = {
+  'Spirited Away': ['Le Voyage de Chihiro', 'Sen to Chihiro no kamikakushi'],
+  'Seven Samurai': ['Les Sept Samouraïs', 'Shichinin no samurai'],
+  'The 400 Blows': ['Les Quatre Cents Coups', 'Les quatre cents coups'],
+};
+/** Letterboxd test titles replaced by the film itself for IMDb (matched by id anyway). */
+const IMDB_TITLE: Record<string, string> = {
+  'Dr. Strangelove': 'Dr. Strangelove or: How I Learned to Stop Worrying and Love the Bomb',
+};
+
+const { loadEngine } = await import('../src/reco/engine');
+const DATA = new URL('../public/data/', import.meta.url);
+const engine = await loadEngine(
+  async (url) => new Response(readFileSync(new URL(url.replace('/data/', ''), DATA))),
+);
+
+const imdbRows = [IMDB_HEADER];
+let nById = 0;
+FILMS.forEach(([title, year, rating], i) => {
+  if (year >= 2024 || title === 'Chernobyl') return; // replaced by the IMDb test rows
+  const t = IMDB_TITLE[title] ?? title;
+  const r = engine.matcher.match(t, year);
+  const item = r.item ?? r.candidates[0]?.item; // « Milk »: the most popular of the two
+  const id = item === undefined ? null : engine.catalog.imdb_id[item];
+  if (!id) throw new Error(`pas d'imdb_id pour ${t} (${year})`);
+  const [shown, original] = LOCALIZED[title] ?? [t, t];
+  // IMDb ratings are 1-10: twice the Letterboxd rating; « The Matrix » stays unrated (test row),
+  // the other unrated films get an invented rating
+  const note =
+    title === 'The Matrix' ? '' : String(rating === null ? 7 : Math.max(1, Math.round(rating * 2)));
+  const url = `https://www.imdb.com/title/${id}/`;
+  const row = [id, note, day(i), shown, original, url, 'Movie'];
+  imdbRows.push([...row, '', '', String(year), '', '', '', ''].map(csvField).join(','));
+  nById++;
+});
+IMDB_SPECIAL.forEach(([id, title, original, type, year, rating], k) => {
+  const row = [id, rating === null ? '' : String(rating), day(FILMS.length + k), title, original];
+  const rest = [`https://www.imdb.com/title/${id}/`, type, '', '', String(year), '', '', '', ''];
+  imdbRows.push([...row, ...rest].map(csvField).join(','));
+});
+writeFileSync(new URL('imdb-exemple.csv', OUT_DIR), imdbRows.join('\n') + '\n');
+console.log(
+  `-> public/exemple/imdb-exemple.csv (${imdbRows.length - 1} rows, ${nById} with a catalogue id)`,
+);
+
 if (process.argv.includes('--check')) {
-  const { loadEngine } = await import('../src/reco/engine');
-  const DATA = new URL('../public/data/', import.meta.url);
-  const engine = await loadEngine(
-    async (url) => new Response(readFileSync(new URL(url.replace('/data/', ''), DATA))),
-  );
+  const { importExport } = await import('../src/reco/engine');
+  const { matched } = importExport(engine, {
+    kind: 'imdb',
+    name: 'imdb-exemple.csv',
+    text: imdbRows.join('\n'),
+  });
+  const imdbCounts: Record<string, number> = {};
+  for (const m of matched) {
+    const k = [m.result.status, m.result.matchedBy, m.result.reason].filter(Boolean).join(' / ');
+    imdbCounts[k] = (imdbCounts[k] ?? 0) + 1;
+    if (m.result.matchedBy !== 'imdb_id') console.log(`  imdb: ${k.padEnd(28)} ${m.entry.title}`);
+  }
+  console.log(imdbCounts);
   const counts: Record<string, number> = {};
   for (const [title, year] of FILMS) {
     const r = engine.matcher.match(title, year);

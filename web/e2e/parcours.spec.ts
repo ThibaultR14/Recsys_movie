@@ -111,7 +111,48 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   expect(await page.context().cookies()).toEqual([]);
 });
 
-test('drop zone: keyboard and a real file; IMDb CSV message', async ({ page, baseURL }) => {
+test('IMDb example CSV: title fallback to verify (unticked), series apart, results; privacy', async ({
+  page,
+  baseURL,
+}) => {
+  const net = await guardNetwork(page, baseURL!);
+  await page.goto('/');
+  await page.getByLabel(/glisse ton fichier ici/).setInputFiles('public/exemple/imdb-exemple.csv');
+  const h1 = page.getByRole('heading', { level: 1 });
+  await expect(h1).toContainText('on a lu tes 68 films.');
+  await expect(h1).toContainText('on en a reconnu 63.');
+  const verify = page.getByRole('region', { name: 'à vérifier' });
+  await expect(verify.getByRole('group')).toHaveCount(1);
+  const cherbourg = verify.getByRole('group', {
+    name: 'dans ton fichier : « Die Regenschirme von Cherbourg » (1964)',
+  });
+  for (const radio of await cherbourg.getByRole('radio').all())
+    await expect(radio).not.toBeChecked();
+  await expect(page.getByText('3 séries, épisodes ou jeux : on fait que les films.')).toBeVisible();
+  await expect(
+    page.getByText('1 film est sorti après 2023 : trop récent pour nous, désolé.'),
+  ).toBeVisible();
+  expect(await seriousViolations(page), 'axe: analyse imdb').toEqual([]);
+  await settle(page);
+  await page.screenshot({ path: `${SHOTS}/2-analyse-imdb.png`, fullPage: true });
+
+  // choosing the candidate counts it, then results
+  await cherbourg.getByRole('radio').first().check();
+  await expect(h1).toContainText('on en a reconnu 64.');
+  await page.getByRole('button', { name: 'voir mes films' }).click();
+  await expect(cards(page)).toHaveCount(8);
+
+  expect(net.blocked, 'requêtes hors du site').toEqual([]);
+  const storage = await page.evaluate(async () => ({
+    local: localStorage.length,
+    session: sessionStorage.length,
+    idb: (await indexedDB.databases()).length,
+    cookies: document.cookie,
+  }));
+  expect(storage).toEqual({ local: 0, session: 0, idb: 0, cookies: '' });
+});
+
+test('drop zone: keyboard and a real file; IMDb watchlist message', async ({ page, baseURL }) => {
   const net = await guardNetwork(page, baseURL!);
   await page.goto('/');
   const input = page.getByLabel(/glisse ton fichier ici/);
@@ -121,13 +162,13 @@ test('drop zone: keyboard and a real file; IMDb CSV message', async ({ page, bas
   await page.keyboard.press('Tab');
   await expect(input).toBeFocused();
   await input.setInputFiles({
-    name: 'ratings.csv',
+    name: 'WATCHLIST.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(
-      'Const,Your Rating,Date Rated,Title,URL,Title Type\ntt0111161,9,2024-01-01,X,u,Movie\n',
+      'Position,Const,Created,Modified,Description,Title,URL,Title Type\n1,tt0111161,2024-01-01,,,X,u,Movie\n',
     ),
   });
-  await expect(page.getByRole('alert')).toHaveText('les exports imdb arrivent bientôt.');
+  await expect(page.getByRole('alert')).toContainText("ça, c'est une liste imdb");
   await input.setInputFiles('public/exemple/letterboxd-exemple.zip');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('on a lu tes 66 films.');
   expect(net.blocked).toEqual([]);

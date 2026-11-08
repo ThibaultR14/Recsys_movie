@@ -8,7 +8,7 @@ interface AccueilProps {
   onExample: () => void;
   /** « on prépare nos fiches… » / « on lit ton fichier… » while busy. */
   status?: string;
-  /** Short message in the site's tone (invalid file, IMDb export…). */
+  /** Short message in the site's tone (invalid file, IMDb list…). */
   error?: string;
   busy?: boolean;
 }
@@ -64,6 +64,10 @@ export function Accueil({ onFile, onExample, status, error, busy = false }: Accu
         <p className="m-0">
           sur letterboxd : réglages → import & export → exporter tes données. tu reçois un .zip :
           glisse-le ici tel quel, pas besoin de l'ouvrir.
+        </p>
+        <p className="m-0 mt-3">
+          sur imdb : tes notes (« your ratings ») → menu ⋯ → exporter. tu reçois un .csv : glisse-le
+          ici.
         </p>
       </div>
     </div>

@@ -9,6 +9,8 @@ export interface AnalysisGroups {
   toVerify: Unrecognized[];
   /** not_found released in 2024 or later. */
   tooRecent: Unrecognized[];
+  /** IMDb series, episodes, games… not found by id (step 6, D4). */
+  nonFilm: Unrecognized[];
   /** other not_found (series, films with too few ratings, unknown titles). */
   notInCatalog: Unrecognized[];
 }
@@ -16,15 +18,17 @@ export interface AnalysisGroups {
 export function groupUnrecognized(unrecognized: readonly Unrecognized[]): AnalysisGroups {
   const toVerify: Unrecognized[] = [];
   const tooRecent: Unrecognized[] = [];
+  const nonFilm: Unrecognized[] = [];
   const notInCatalog: Unrecognized[] = [];
   for (const u of unrecognized) {
-    if (u.status === 'ambiguous' || u.status === 'probable_fuzzy') {
+    if (u.reason === 'non_film') nonFilm.push(u);
+    else if (u.status === 'ambiguous' || u.status === 'probable_fuzzy') {
       if (u.candidates.length > 0) toVerify.push(u);
       else notInCatalog.push(u);
     } else if (u.year !== null && u.year >= FIRST_TOO_RECENT_YEAR) tooRecent.push(u);
     else notInCatalog.push(u);
   }
-  return { toVerify, tooRecent, notInCatalog };
+  return { toVerify, tooRecent, nonFilm, notInCatalog };
 }
 
 /** « 1 film » / « 3 films ». */
@@ -36,6 +40,12 @@ export function tooRecentSentence(n: number): string {
   return n > 1
     ? `${n} films sont sortis après 2023 : trop récents pour nous, désolé.`
     : '1 film est sorti après 2023 : trop récent pour nous, désolé.';
+}
+
+export function nonFilmSentence(n: number): string {
+  return n > 1
+    ? `${n} séries, épisodes ou jeux : on fait que les films.`
+    : '1 série, épisode ou jeu : on fait que les films.';
 }
 
 export function notInCatalogSentence(n: number): string {

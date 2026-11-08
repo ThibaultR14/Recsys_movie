@@ -5,7 +5,13 @@ import { byline } from '../components/cardRules';
 import type { Choices } from '../reco/engine';
 import type { ImportSummary } from '../reco/engine';
 import type { FilmCard, Unrecognized } from '../reco/workerCore';
-import { films, groupUnrecognized, notInCatalogSentence, tooRecentSentence } from './analysis';
+import {
+  films,
+  groupUnrecognized,
+  nonFilmSentence,
+  notInCatalogSentence,
+  tooRecentSentence,
+} from './analysis';
 
 const THUMB_BASE = 'https://image.tmdb.org/t/p/w92';
 const NONE = 'none';
@@ -126,7 +132,9 @@ export function Analyse({ summary, unrecognized, onSubmit, busy = false, error }
         </section>
       )}
 
-      {(groups.tooRecent.length > 0 || groups.notInCatalog.length > 0) && (
+      {(groups.tooRecent.length > 0 ||
+        groups.nonFilm.length > 0 ||
+        groups.notInCatalog.length > 0) && (
         <section className="flex flex-col gap-4 text-[16px]">
           {groups.tooRecent.length > 0 && (
             <details>
@@ -134,6 +142,14 @@ export function Analyse({ summary, unrecognized, onSubmit, busy = false, error }
                 {tooRecentSentence(groups.tooRecent.length)}
               </summary>
               <TitleList items={groups.tooRecent} />
+            </details>
+          )}
+          {groups.nonFilm.length > 0 && (
+            <details>
+              <summary className="min-h-11 cursor-pointer py-2">
+                {nonFilmSentence(groups.nonFilm.length)}
+              </summary>
+              <TitleList items={groups.nonFilm} />
             </details>
           )}
           {groups.notInCatalog.length > 0 && (

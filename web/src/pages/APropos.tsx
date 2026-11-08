@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { HandNote } from '../components/HandNote';
 import { NoList } from '../components/NoList';
 
 const TMDB_LOGO = `${import.meta.env.BASE_URL}tmdb-logo.svg`;
@@ -35,8 +34,8 @@ export function APropos() {
 
       <Section id="comment-ca-marche" title="comment ça marche">
         <p className="m-0">
-          tu nous donnes ton export letterboxd. ton navigateur le lit, sur ta machine : il n'est
-          envoyé nulle part.
+          tu nous donnes ton export letterboxd ou tes notes imdb. ton navigateur le lit, sur ta
+          machine : il n'est envoyé nulle part.
         </p>
         <p className="m-0">
           on compare tes goûts à ceux de milliers de cinéphiles qui ont noté des films, et on
@@ -47,9 +46,6 @@ export function APropos() {
           moins les films proposés ont été vus.
         </p>
         <p className="m-0">compatible avec les exports Letterboxd et IMDb.</p>
-        <HandNote rotate={-1.5} size={20}>
-          (pour imdb, ça arrive bientôt)
-        </HandNote>
       </Section>
 
       <Section id="on-garde-rien" title="on garde rien">
