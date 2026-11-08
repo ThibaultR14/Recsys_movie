@@ -188,16 +188,16 @@ def user_inputs(model: als.ALSModel, foldin: sp.csr_matrix, Gs: dict):  # noqa: 
     return (x.astype(np.float32) @ model.Y.T).astype(np.float64), profiles
 
 
-def cmd_sweep(mode: str) -> dict:
+def cmd_sweep(mode: str, lambdas: tuple[float, ...] = LAMBDAS, tag: str = "") -> dict:
     catalog = ev.load_catalog()
     counts = ev.train_counts(catalog)
     eval_set = ev.load_eval_set("val", catalog)
     model = sw.adapter("A", catalog)
     Gs = {k: genre_matrix(mode=k)[0] for k in MODES}  # noqa: N806
     G, names = Gs[mode], genre_matrix()[1]  # noqa: N806
-    lists = {(lam, cap): [] for lam in LAMBDAS for cap in CAPS}
+    lists = {(lam, cap): [] for lam in lambdas for cap in CAPS}
     profiles = {k: [] for k in MODES}
-    t_cal = {lam: 0.0 for lam in LAMBDAS}
+    t_cal = {lam: 0.0 for lam in lambdas}
     for start in range(0, len(eval_set.user_ids), ev.BATCH_SIZE):
         batch = eval_set.foldin[start : start + ev.BATCH_SIZE]
         scores, Ps = user_inputs(model, batch, Gs)  # noqa: N806
@@ -209,7 +209,7 @@ def cmd_sweep(mode: str) -> dict:
             pools = ev.top_k(scores.copy(), batch, cand, POOL)
             pool_scores = np.take_along_axis(scores, pools, axis=1)
             pools = np.where(np.isfinite(pool_scores), pools, -1)
-            for lam in LAMBDAS:
+            for lam in lambdas:
                 t0 = time.perf_counter()
                 lists[(lam, cap)].append(
                     calibrate_batch(pools, pool_scores, P, G, lam, N_LIST, mode)
@@ -218,7 +218,7 @@ def cmd_sweep(mode: str) -> dict:
         print(f"  {start + len(batch.indptr) - 1} utilisateurs", flush=True)
     P_mass, P_share = np.vstack(profiles["mass"]), np.vstack(profiles["share"])  # noqa: N806
     rows = []
-    for lam in LAMBDAS:
+    for lam in lambdas:
         for cap in CAPS:
             L = np.vstack(lists[(lam, cap)])  # noqa: N806
             ranked = np.where(L[:, :TOP_K] >= 0, L[:, :TOP_K], 0)
@@ -250,7 +250,7 @@ def cmd_sweep(mode: str) -> dict:
         "genres": names,
         "rows": rows,
     }
-    path = Path(str(OUT).format(mode))
+    path = Path(str(OUT).format(mode + tag))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, indent=2) + "\n")
     print("->", path)
@@ -261,8 +261,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("cmd", choices=["sweep"])
     parser.add_argument("--mode", choices=MODES, default="mass")
+    parser.add_argument("--lambdas", help="comma-separated λ (default: the main grid)")
+    parser.add_argument("--tag", default="", help="suffix of the result file")
     args = parser.parse_args()
-    cmd_sweep(args.mode)
+    lambdas = tuple(float(x) for x in args.lambdas.split(",")) if args.lambdas else LAMBDAS
+    cmd_sweep(args.mode, lambdas, args.tag)
     return 0
 
 

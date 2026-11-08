@@ -184,6 +184,66 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 - Genres après D2 (sans calibration) : l'animation **monte encore** sur l'export de Thibault (94 % à 2 000, 100 % à 500, 75 % à 200) : c'est le rôle de D1.
 - `decisions.md` : nouvelle règle, ancienne règle de l'étape 2 marquée ✗ avec la raison. La phrase de « comment ça marche » viendra de Claude Web en fin d'étape.
 
+### Q3 — Calibration hors ligne (8 novembre 2026) — ⏸ arrêt : choix de λ (et du mode)
+
+**Code** : `pipeline/calibration.py` (référence, glouton vectorisé par lots, `sweep --mode mass|share --lambdas …`), `web/src/reco/calibrate.ts` (même algorithme, pas encore branché sur le site), tests `pytest` et Vitest sur les mêmes cas ; `web/scripts/quality-report.ts --lambdas … [--share] [--pool N]` (exports, terminal). Protocole : validation, 10 000 utilisateurs, configuration A **avec D2**, vivier de 150 par cran, liste de 48, α = 0,01, crans sur les comptes d'entraînement.
+
+**Deux façons de compter les genres** (écart découvert pendant Q3, voir plus bas) :
+- **« masse »** (Steck, D1 v0.2) : un film à k genres compte 1/k pour chacun ; KL entre distributions ;
+- **« part »** (variante ajoutée) : chaque genre est oui / non par film ; on compare la **part de films** qui ont chaque genre (KL de Bernoulli, somme sur les genres). C'est la grandeur que Thibault regarde (« 75 % de films d'animation »).
+
+**Courbe λ → qualité (validation)**. NDCG@20 (écart à λ = 0), Recall@20, `C_KL@20` (écart de calibration, toujours mesuré en « masse » pour comparer), « excès » = de combien de points la part de films du genre le plus sur-représenté dépasse sa part dans le profil, dans la première rangée de 8 (moyenne des utilisateurs) :
+
+| Mode | λ | NDCG@20 ∞ | Recall@20 ∞ | NDCG@20 2 000 | NDCG@20 500 | C_KL@20 ∞ / 2 000 / 500 | Excès ∞ / 2 000 / 500 |
+|---|---|---|---|---|---|---|---|
+| — | 0 (D2 seul) | 0,1635 | 0,1990 | 0,0267 | 0,0080 | 0,35 / 0,84 / 1,12 | 0,31 / 0,34 / 0,36 |
+| masse | 0,1 | 0,1637 (+0,1 %) | 0,1992 | 0,0267 (+0,1 %) | 0,0081 | 0,32 / 0,76 / 1,00 | 0,30 / 0,32 / 0,35 |
+| masse | 0,2 | 0,1636 (0,0 %) | 0,1994 | 0,0265 (−0,7 %) | 0,0080 | 0,30 / 0,67 / 0,87 | 0,28 / 0,31 / 0,33 |
+| masse | 0,3 | 0,1620 (−1,0 %) | 0,1993 | 0,0259 (−3,0 %) | 0,0078 | 0,28 / 0,59 / 0,75 | 0,28 / 0,30 / 0,31 |
+| **masse** | **0,4** | **0,1587 (−3,0 %)** | 0,1993 | 0,0251 (−6,2 %) | 0,0074 | 0,25 / 0,50 / 0,64 | 0,27 / 0,29 / 0,30 |
+| masse | 0,5 | 0,1550 (−5,2 %) | 0,1979 | 0,0243 (−9,2 %) | 0,0072 | 0,22 / 0,43 / 0,55 | 0,26 / 0,27 / 0,28 |
+| masse | 0,8 | 0,1399 (−14,4 %) | 0,1922 | 0,0214 (−20,0 %) | 0,0062 | 0,12 / 0,21 / 0,29 | 0,24 / 0,23 / 0,23 |
+| masse | 0,9 | 0,1314 (−19,7 %) | 0,1858 | 0,0196 (−26,5 %) | 0,0057 | 0,08 / 0,13 / 0,20 | 0,23 / 0,22 / 0,22 |
+| masse | 0,99 | 0,1038 (−36,6 %) | 0,1481 | 0,0156 (−41,6 %) | 0,0046 | 0,03 / 0,07 / 0,14 | 0,24 / 0,22 / 0,22 |
+| part | 0,05 | 0,1620 (−0,9 %) | 0,1992 | 0,0265 (−0,9 %) | 0,0079 | 0,32 / 0,72 / 0,95 | 0,28 / 0,30 / 0,32 |
+| **part** | **0,1** | **0,1598 (−2,3 %)** | 0,1994 | 0,0261 (−2,2 %) | 0,0077 | 0,29 / 0,62 / 0,80 | 0,26 / 0,27 / 0,29 |
+| part | 0,15 | 0,1570 (−4,0 %) | 0,1994 | 0,0258 (−3,3 %) | 0,0076 | 0,27 / 0,54 / 0,70 | 0,24 / 0,25 / 0,26 |
+| part | 0,2 | 0,1539 (−5,9 %) | 0,1983 | 0,0254 (−4,9 %) | 0,0074 | 0,24 / 0,48 / 0,62 | 0,22 / 0,23 / 0,24 |
+| part | 0,5 | 0,1422 (−13,1 %) | 0,1940 | 0,0231 (−13,7 %) | 0,0068 | 0,15 / 0,26 / 0,35 | 0,17 / 0,16 / 0,16 |
+| part | 0,8 | 0,1282 (−21,6 %) | 0,1805 | 0,0205 (−23,3 %) | 0,0060 | 0,08 / 0,13 / 0,21 | 0,12 / 0,11 / 0,12 |
+| part | 0,9 | 0,1192 (−27,1 %) | 0,1676 | 0,0192 (−28,3 %) | 0,0056 | 0,06 / 0,11 / 0,18 | 0,10 / 0,11 / 0,12 |
+| part | 0,99 | 0,0976 (−40,3 %) | 0,1315 | 0,0159 (−40,5 %) | 0,0047 | 0,05 / 0,09 / 0,17 | 0,10 / 0,11 / 0,12 |
+
+(Valeurs 0,95 et 0,98 dans `pipeline/data/processed/results/quality/calibration_val_*.json`.) λ = 0 retrouve exactement D2 (0,1635 / 0,0267 / 0,0080).
+
+**Part de films d'animation dans les 16 premières** (∞, 20 000, 10 000, 5 000, 2 000, 1 000, 500, 200 ; `quality-report`, avec D2) :
+
+| | Export de Thibault (historique gardé : 13 % de films d'animation) | Exemple (7 %) |
+|---|---|---|
+| sans calibration | 25, 19, 31, 50, **94, 81, 100, 75** | 31, 44, 44, 25, 13, 0, 0, 0 |
+| masse λ = 0,4 | 19, 19, 31, 63, **81, 75, 94, 81** | 31, 44, 38, 25, 19, 0, 6, 0 |
+| part λ = 0,1 | 19, 19, 25, 50, **81, 81, 88, 69** | 31, 44, 38, 25, 19, 0, 6, 0 |
+| part λ = 0,15 | 19, 19, 25, 50, **75, 75, 88, 63** | 31, 44, 38, 25, 19, 0, 6, 0 |
+| masse λ = 0,99 | 13, 19, 19, 19, 38, 25, 38, 31 | 13, 13, 13, 13, 6, 13, 6, 6 |
+| part λ = 0,8 | 13, 19, 13, 31, 44, 50, 44, 38 | 13, 19, 19, 19, 6, 6, 6, 6 |
+| part λ = 0,9 | 13, 19, 19, 19, **31, 31, 31, 25** | 13, 13, 13, 13, 6, 6, 6, 6 |
+
+**Lecture** :
+1. **Avec la règle « au plus −3 % de NDCG@20 à ∞ »**, le λ retenu serait **0,4 en « masse »** (−3,0 %) ou **0,1 en « part »** (−2,3 % ; 0,15 coûte −4,0 %). Dans les deux cas, **l'animation reste à 69-94 % aux crans 2 000 à 200 de l'export de Thibault** : le critère de la spec (≤ 2 × 13 % + 10 points = 36 %) n'est **pas** atteint.
+2. **« masse » ne règle pas l'animation, même à λ fort** : un film d'animation a souvent 3-4 genres MovieLens (*Animation | Adventure | Children | Fantasy*), il ne pèse que 1/4 dans « Animation » ; à λ = 0,99 l'écart de calibration est presque nul mais il reste 38 % de films d'animation à 2 000 et à 500. Un vivier plus grand n'y change rien (300 et 600 essayés : mêmes parts à ± 6 points).
+3. **« part » vise la bonne grandeur** : à λ = 0,9, 25-31 % d'animation aux crans bas de l'export de Thibault (critère atteint), l'excès par rangée tombe de 0,34 à 0,11 sur la validation, au prix de −27 % de NDCG@20 à ∞ et −28 % à 2 000.
+4. Le coût vient surtout de **l'ordre** : Recall@20 bouge peu jusqu'à λ = 0,3 (0,1990 → 0,1967 en « part ») ; NDCG baisse parce que les meilleurs films descendent de quelques places.
+5. **Aux crans bas, la qualité hors ligne est déjà minuscule** (NDCG@20 de 0,008 à 500, contre 0,16 à ∞), et c'est là que la sur-représentation est la plus forte (excès 0,36). La règle des 3 % à ∞ protège surtout ∞, où la calibration est la moins nécessaire.
+
+**Pistes pour le choix (arrêt)** :
+- **A. Règle telle quelle** : « masse » λ = 0,4 ou « part » λ = 0,1. Coût ≤ 3 % ; effet faible sur l'animation (69-94 % aux crans bas de l'export de Thibault).
+- **B. λ par cran, mode « part »** (recommandé) : λ faible là où le modèle est le plus fiable (∞ à 10 000 : 0,1, −2,3 % à ∞, règle respectée), fort aux crans bas où le profil dérive (5 000 à 200 : 0,8 ou 0,9 ; NDCG@20 −23 à −28 % à 2 000, mais sur une base de 0,027). Sur l'export de Thibault : animation 19-25 % de ∞ à 10 000, 31-50 % de 5 000 à 200 (λ 0,8) ou 19-31 % (λ 0,9). Une ligne de plus dans D1 : `λ(cran)`.
+- **C. Pas de calibration au MVP**, D2 seul ; reporter à l'étape 7 avec les retours des volontaires.
+
+**Temps** (Node, `quality-report`, 8 crans × 48 parmi 150) : **70 à 160 ms** selon l'export et λ, au-delà de ce que vise la spec (+100 ms au total avec les explications pour 3 000 films). La version TypeScript recalcule toute la distribution pour chaque candidat ; en Q4 elle doit passer à une mise à jour incrémentale (seuls les genres du candidat changent) : à mesurer, objectif ≤ 30 ms.
+
+**Remarque** : à λ fort, les films **sans genre** (227 sur 23 019) sont favorisés une fois les genres équilibrés, puisqu'ils ne changent pas la distribution (réponse Q1) ; effet visible dans les tests, marginal en pratique (1 % du catalogue).
+
 ---
 
 ## 6. À reporter
