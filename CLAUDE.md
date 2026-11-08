@@ -14,9 +14,9 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - **Site 100 % statique.** Pas de serveur, pas de base de données, pas de comptes.
 - **Tout le calcul de reco se fait dans le navigateur** (Web Worker). Les données de l'utilisateur ne quittent jamais son navigateur : aucun appel réseau ne doit contenir ses films ou ses notes.
 - **Pipeline Python hors ligne** (`pipeline/`) : MovieLens 32M + TMDB (+ IMDb datasets pour les contrôles hors ligne seulement, voir « Données IMDb ») → modèle **ALS** → fichiers statiques dans `web/public/data/`.
-- Arborescence : `pipeline/` (`config.py`, `download.py`, `build_catalog.py`, `enrich_tmdb.py`, `titles.py`, `manual_overrides.csv`, étape 2 : `split.py`, `metrics.py`, `baselines.py`, `evaluate.py`, `models/`, `train.py`, `train_ease.py`, `colab_bundle.py`, `slider.py`, `sweep_slider.py`, `slider_variants.py`, `popularity.py`, `export.py`, étape 3 : `site_catalog.py`, `title_fixtures.py`, `match_diagnostics.py`, `{notebooks,tests,data/raw,data/processed,data/cache}`), `web/src/{adapters,matching,reco,components,pages,styles}`, `web/scripts/`, `web/public/data/`, `web/test-data/` (ignoré), `shared/fixtures/` (cas partagés Python / TypeScript), `.github/workflows/`, `docs/` (dont `etape-2-modele.md`, `etape-3-letterboxd.md`, `figures/` ; voir `docs/stack-technique.md` §7).
+- Arborescence : `pipeline/` (`config.py`, `download.py`, `build_catalog.py`, `enrich_tmdb.py`, `titles.py`, `manual_overrides.csv`, étape 2 : `split.py`, `metrics.py`, `baselines.py`, `evaluate.py`, `models/`, `train.py`, `train_ease.py`, `colab_bundle.py`, `slider.py`, `sweep_slider.py`, `slider_variants.py`, `popularity.py`, `export.py`, étape 3 : `site_catalog.py`, `title_fixtures.py`, `match_diagnostics.py`, `{notebooks,tests,data/raw,data/processed,data/cache}`), `web/src/{adapters,matching,reco,components,pages,styles}`, `web/scripts/`, `web/e2e/` (Playwright), `web/public/data/`, `web/public/exemple/` (export d'exemple synthétique, versionné), `web/test-data/` (ignoré), `shared/fixtures/` (cas partagés Python / TypeScript), `.github/workflows/`, `docs/` (dont `etape-2-modele.md` à `etape-5-interface.md`, `figures/` ; voir `docs/stack-technique.md` §7).
 - Corrections manuelles du catalogue : **uniquement** via `pipeline/manual_overrides.csv` (`exclude` / `merge_into` / `title`, avec une raison), jamais en dur dans le code. `title` = titre affiché sur le site (colonne `title`), appliqué par `site_catalog.py` seulement.
-- **Front** (`web/`) : **React + Vite + TypeScript**, Tailwind CSS, PapaParse, fflate, Fuse.js, idb-keyval.
+- **Front** (`web/`) : **React + Vite + TypeScript**, Tailwind CSS v4, PapaParse, fflate, Fuse.js ; polices auto-hébergées (`@fontsource`, aucune requête vers Google) ; aucun stockage dans le navigateur au MVP (ni `localStorage` ni IndexedDB).
 - Hébergement : Cloudflare Pages (ou GitHub Pages). Métadonnées TMDB rafraîchies chaque mois par GitHub Actions.
 
 ## Décisions prises (ne pas remettre en question sans raison)
@@ -29,6 +29,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 - Pas d'IA au MVP pour les listes faites main : correspondance floue (Fuse.js).
 - Calcul des recos : **un seul moteur** (`web/src/reco/engine.ts`) utilisé par le Web Worker et par les scripts du terminal (`reco-report`, `reco-bench`) ; il doit rejouer `foldin_cases.json` à l'identique (listes) et à 10⁻⁹ près (vecteurs). L'historique du fold-in = `exact` + `probable_variant` ; sont exclus des recommandations les films vus, non recommandables, les candidats `ambiguous` et le candidat principal `probable_fuzzy`.
 - Correspondance des titres : normalisation « v2 » **identique** en Python (`pipeline/titles.py`) et en TypeScript (`web/src/matching/normalize.ts`), vérifiée par `shared/fixtures/` ; toute modification passe par les deux et par les cas partagés. Titre + année ±1 (TMDB ou ML), puis variantes ; le flou (Fuse.js) n'est **jamais** utilisé automatiquement pour les recommandations.
+- Interface (étape 5, `docs/etape-5-interface.md`) : machine à états accueil → analyse → résultats (pas de routeur, rien de stocké) ; le flou n'est jamais coché par défaut, un candidat choisi devient `confirmed` (il entre dans le fold-in) ; un seul `recommend({ n: 48 })` pour les 8 crans, départ au cran 2 000, 8 cartes puis 8 par 8 ; « loin de tes goûts » si score relatif < 0,04 ; tampon « ✱ pépite » : au plus un par rangée de 8, sur le moins connu s'il a au plus la moitié de la popularité médiane de la rangée ; carte = lien `letterboxd.com/tmdb/<id>/` ; mention « spectacle » non affichée (reportée aux genres TMDB).
 - Dataset Letterboxd 10M : **non utilisé** (collecte probablement par scraping).
 - Scraping Letterboxd : **hors MVP**, option secondaire seulement (contraire aux conditions de Letterboxd).
 
@@ -56,13 +57,11 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 
 ## Ordre de construction
 
-**Étape en cours : 5, voir docs/etape-5-interface.md**
-
 1. ✅ Pipeline de données : téléchargement MovieLens + IMDb, catalogue, correspondances d'ids (MovieLens ↔ IMDb ↔ TMDB via `links.csv`). Fait : 23 019 films (seuil 20 → 23 350, − 1 exclu à la main, − 315 séries/épisodes, − 15 fusions) ; TMDB : tmdb_id 99,96 %, titres/années 99,8 %, réalisateurs et affiches 99,7 % ; 51 films `recommendable = false`.
 2. ✅ Modèle ALS + évaluation hors ligne, avec et sans curseur. Fait (`docs/etape-2-modele.md`) : ALS 64 facteurs, NDCG@20 test **0,152** (EASE 0,172, −11 % ; populaire 0,084) ; curseur = plafond de popularité (8 positions) ; popularité hybride MovieLens/TMDB ; export int8 dans `web/public/data/` : `embeddings.bin` 1,57 Mo, `yty.bin`, `popularity.bin`, `model-meta.json` (1,57 Mo gzip au total) ; perte int8 < 0,08 % ; 22 cas de test du fold-in pour l'étape 4.
 3. ✅ Adaptateur Letterboxd + correspondance des titres. Fait (`docs/etape-3-letterboxd.md`) : `catalog.json` (1,12 Mo gzip) et `title-index.json` (0,37 Mo), total `web/public/data/` 3,06 Mo gzip ; sur l'export de Thibault, 188/188 films du catalogue reconnus (précision vérifiée à la main 100/100), les 37 autres hors catalogue (après 2023, séries) ; 3 000 entrées en ~100 ms.
 4. ✅ Calcul dans le navigateur. Fait (`docs/etape-4-navigateur.md`) : moteur TypeScript (`web/src/reco/` : lecture des fichiers, fold-in Cholesky, scores, curseur à plafond) dans un Web Worker ; reproduit les 22 vecteurs (écart 3·10⁻¹⁵) et les 66 listes top 10 de `foldin_cases.json` ; recommandations en 19 ms pour un export réel, 42 ms pour 3 000 films. Exclus des recos : films vus, non recommandables, candidats `ambiguous` et candidat principal `probable_fuzzy`. Diagnostic du biais des films récents en section 6 de la spec (décision en attente).
-5. Interface (style C) : accueil / dépôt, analyse du fichier, résultats + curseur, fiche film.
+5. ✅ Interface (style C). Fait (`docs/etape-5-interface.md`) : accueil / dépôt, analyse du fichier (à vérifier, trop récents, hors catalogue), résultats + curseur 8 crans, « à propos » avec les mentions ; 5 titres corrigés à la main (action `title`) ; export d'exemple synthétique ; Playwright : aucune requête hors du site sauf les affiches TMDB, rien de stocké, 0 violation axe grave ; modèle prêt en 0,8–0,9 s, analyse 11–30 ms, changement de cran ≤ 40 ms ; validé sur l'export de Thibault et sur un vrai téléphone. La fiche film passe à l'étape 8.
 6. Adaptateur IMDb.
 7. Mise en ligne (après la réponse de GroupLens), tests avec 10–20 cinéphiles.
 8. Ensuite : explications, dispo en France, listes faites main, scraping.
@@ -139,6 +138,12 @@ npm run build
 npm run match-report -- test-data/exports/<export> --name <nom>  # rapport → test-data/reports/
 npm run reco-report -- test-data/exports/<export>  # top 20 à ∞ / 2 000 / 500, terminal seulement
 npm run reco-bench -- [--export <export>]          # temps du moteur
+npm run make-example        # régénère public/exemple/letterboxd-exemple.zip (export synthétique)
+npm run spectacles          # heuristique « spectacle » → docs/figures/etape-5-spectacles.md
+npx playwright install chromium   # une fois
+npm run e2e                 # Playwright (build + vite preview, port 4173) : parcours, téléphone, réseau, stockage, axe, temps
 ```
+
+Sorties de Playwright et captures : `web/test-data/playwright/` et `web/test-data/screenshots/` (ignorés). Si le port 4173 est déjà pris (ancien `vite preview`), l'arrêter avant `npm run e2e`.
 
 Diagnostic popularité (pipeline) : `uv run python recency_diagnostics.py years | validation | user <rapport>` (titres dans le terminal seulement ; ne modifie pas `popularity.bin`).

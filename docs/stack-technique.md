@@ -1,6 +1,6 @@
 # Stack technique et sources de données
 
-> Version 0.4 (6 novembre 2026), décisions intégrées, étape 1 (pipeline de données) faite. Complète `projet-reco-films.md`.
+> Version 0.5 (8 novembre 2026), décisions intégrées, étapes 1 à 5 faites (pipeline, modèle, correspondance, calcul dans le navigateur, interface). Complète `projet-reco-films.md`.
 > Principe directeur : **tout ce qui peut être calculé à l'avance l'est, et le site reste 100 % statique.** Pas de serveur à payer, pas de données utilisateur stockées.
 
 ---
@@ -168,17 +168,17 @@ Les **cas de test du fold-in** (`foldin_cases.json`, 22 historiques, vecteur et 
 | Build / serveur de dev | **Vite** | Rapide, standard |
 | Framework UI | **React 18+** (décidé) | Le plus répandu, énormément de ressources et d'aide |
 | État de l'interface | `useState` / `useReducer` ; **Zustand** seulement si l'état devient partagé entre beaucoup d'écrans | Rester simple |
-| Navigation entre écrans | **React Router**, ou un simple état « étape » si le site reste à 3-4 écrans | Pas besoin de plus pour un site statique |
-| Style | **Tailwind CSS** | Rapide pour prototyper, cohérent |
-| Polices | **Courier Prime** + **Caveat** (Google Fonts) | Direction visuelle « C · Fanzine » retenue |
+| Navigation entre écrans | **Machine à états dans `App`** (accueil → analyse → résultats, « à propos » par `#a-propos`), pas de React Router (décidé, étape 5) | 3-4 écrans, rien à mémoriser : un rechargement ramène à l'accueil |
+| Style | **Tailwind CSS v4** (`@tailwindcss/vite`), jetons de `design-system.md` dans `@theme` | Rapide, cohérent |
+| Polices | **Courier Prime** + **Caveat**, **auto-hébergées** (`@fontsource`, décidé, étape 5) | Direction « C · Fanzine », aucune requête vers Google |
 | Lecture des CSV | **PapaParse** | Robuste, gère les virgules dans les titres, les encodages |
 | Lecture du ZIP Letterboxd | **fflate** | Petit et rapide, dézippe dans le navigateur |
 | Correspondance des titres | Index précalculé (`title-index.json`) + **Fuse.js** en dernier recours (préfiltre par trigrammes, par année) | Titre + année ±1, variantes ; le flou ne sert qu'à proposer des candidats |
 | Calcul des scores | TypeScript pur sur des `Float32Array` | Produit scalaire sur ~23 000 films = quelques millisecondes |
 | Calcul lourd sans bloquer la page | **Web Worker** | L'interface reste fluide pendant le calcul |
-| Cache du modèle | **IndexedDB** (via `idb-keyval`) | Le modèle n'est téléchargé qu'une fois |
+| Cache du modèle | **Cache HTTP** au MVP ; IndexedDB (`idb-keyval`) éventuellement à l'étape 7 | Rien n'est stocké dans le navigateur au MVP (vérifié par Playwright) |
 | Modèle SASRec (plus tard) | **ONNX Runtime Web** | Fait tourner un modèle PyTorch exporté dans le navigateur |
-| Tests | **Vitest** + **React Testing Library** | Tester les adaptateurs, la normalisation des notes et les composants clés |
+| Tests | **Vitest** (projets node, dom, timed) + **React Testing Library** ; **Playwright** (Chromium) + **axe-core** | Unités et composants ; parcours dans un vrai navigateur, téléphone, réseau, stockage, accessibilité, temps |
 | Qualité du code | **ESLint** + **Prettier** | Standard |
 
 ### Comment on calcule une recommandation (ALS)
@@ -258,15 +258,17 @@ projet/
 │   │   ├── adapters/         # types.ts (format commun), letterboxd.ts, normalizeRatings.ts (percentiles) ; imdb.ts (étape 6)
 │   │   ├── matching/         # normalize.ts, titleIndex.ts, match.ts, history.ts
 │   │   ├── reco/             # modelFiles, foldIn, recommend, engine, workerCore, worker, client
-│   │   ├── components/       # composants React (Curseur, CarteFilm, ZoneDepot…)
-│   │   ├── pages/            # Accueil, Analyse, Resultats, Fiche
-│   │   └── styles/           # tokens de la direction C (design-system.md)
+│   │   ├── components/       # Layout, DropZone, FilmCard, FilmGrid, Slider, HandNote… + cardRules.ts
+│   │   ├── pages/            # Accueil, Analyse, Resultats, APropos (+ textes et règles testés à part)
+│   │   └── styles/           # index.css : polices, Tailwind, jetons de la direction C
+│   ├── e2e/                  # tests Playwright (parcours, téléphone, réseau, stockage, axe, temps)
 │   ├── public/data/          # fichiers produits par le pipeline (non versionnés)
-│   ├── scripts/              # match-report.ts, reco-report.ts, reco-bench.ts (terminal seulement)
+│   ├── public/exemple/       # export Letterboxd d'exemple synthétique (versionné)
+│   ├── scripts/              # match-report, reco-report, reco-bench, make-example, spectacles (terminal seulement)
 │   └── test-data/            # ignoré par git, jamais servi : cas de test du fold-in, titres du catalogue, exports réels, rapports
 ├── shared/fixtures/          # cas de normalisation des titres partagés Python / TypeScript (versionnés)
 ├── .github/workflows/        # mise à jour mensuelle TMDB (à venir)
-├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md, etape-3-letterboxd.md, maquette, figures/
+├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md à etape-5-interface.md, maquette, figures/
 └── CLAUDE.md                 # instructions pour Claude Code
 ```
 
@@ -309,6 +311,9 @@ npm run build
 npm run match-report -- test-data/exports/<export> --name <nom>  # mesure sur un export réel
 npm run reco-report -- test-data/exports/<export>  # top 20 à ∞ / 2 000 / 500 (terminal)
 npm run reco-bench -- [--export <export>]          # temps du moteur
+npm run make-example        # export d'exemple synthétique → public/exemple/
+npm run spectacles          # heuristique « spectacle » → docs/figures/etape-5-spectacles.md
+npx playwright install chromium && npm run e2e   # tests dans un vrai navigateur
 ```
 
 Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB : relancer ensuite `enrich_tmdb.py` (il repart du cache).
@@ -324,14 +329,14 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 2. ✅ **Modèle** : ALS (et EASE pour comparer), évaluation hors ligne avec et sans curseur (fait : ALS 64 facteurs, NDCG@20 test 0,152, EASE 0,172 ; curseur = plafond de popularité ; export int8 de 1,57 Mo, voir §3 « Modèle »).
 3. ✅ **Adaptateur Letterboxd** + correspondance des titres (fait, `docs/etape-3-letterboxd.md` : sur l'export de Thibault, 188/188 films du catalogue reconnus, précision vérifiée à la main 100/100, 0 échec ; les 37 autres films sont hors catalogue, sortis après 2023 ou séries). L'index de correspondance utilise `tmdb_title`, `tmdb_original_title` et `ml_title` nettoyé (article replacé : « Usual Suspects, The » → « The Usual Suspects »), plus le titre alternatif entre parenthèses, tous normalisés (casse, accents, ponctuation, comme `pipeline/titles.py`), avec les deux années (TMDB et ML) acceptées à ±1 an. Mesuré en B4 : 28,6 % des titres TMDB diffèrent du titre ML brut normalisé, 6,7 % après nettoyage.
 4. ✅ **Calcul dans le navigateur** : fold-in, scores, curseur, dans un Web Worker (fait : 22 vecteurs et 66 listes top 10 rejoués à l'identique ; 19 ms par recommandation pour un export réel). Diagnostic du biais des films récents : `docs/etape-4-navigateur.md` §6, décision en attente.
-5. **Interface** : dépôt du fichier, liste de recos, curseur.
+5. ✅ **Interface** (fait, `docs/etape-5-interface.md`) : accueil et dépôt, analyse du fichier (à vérifier, trop récents, hors catalogue), résultats avec le curseur à 8 crans, page « à propos » ; aucune requête hors du site sauf les affiches TMDB, rien de stocké ; modèle prêt en moins d'1 s, changement de cran ≤ 40 ms ; validé sur un vrai téléphone. La fiche film passe à l'étape 8.
 6. **Adaptateur IMDb**.
 7. Mise en ligne, tests avec 10-20 cinéphiles.
 8. Ensuite seulement : explications, dispo en France, liste faite main, scraping.
 
 ---
 
-## 9. Décisions prises (6-8 novembre 2026, étapes 1-4)
+## 9. Décisions prises (6-8 novembre 2026, étapes 1-5)
 
 | Sujet | Décision |
 |---|---|
@@ -350,6 +355,8 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 | Dataset Letterboxd 10M | **Non utilisé** (collecte probablement par scraping, pas de vérité terrain) |
 | Calcul des recos | Moteur TypeScript unique (Web Worker + scripts), identique au Python ; exclus : vus, non recommandables, candidats ambigus, candidat flou principal |
 | IA pour les listes faites main | **Pas d'IA au MVP** (Fuse.js) ; API + Cloudflare Worker plus tard |
+| Interface | Machine à états, rien de stocké ; polices auto-hébergées ; flou jamais coché par défaut (statut `confirmed` si l'utilisateur choisit) ; un seul calcul pour les 8 crans, départ à 2 000 ; « loin de tes goûts » < 0,04 ; tampon « ✱ pépite » relatif à la rangée de 8 ; carte = lien `letterboxd.com/tmdb/<id>/` ; mention « spectacle » non affichée |
+| Titres affichés | Action `title` de `manual_overrides.csv`, appliquée par `site_catalog.py` seulement (5 titres) |
 | Licences | **Contact direct** avec GroupLens et TMDB |
 
 ## 10. Actions

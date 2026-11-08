@@ -472,7 +472,7 @@ Fait le 8 novembre 2026. Tous les critères sont atteints.
 
 ### G6
 
-Contrôle fait le 8 novembre 2026. **Arrêt obligatoire : relecture de Thibault en cours** (captures et test sur téléphone ; décisions 1 et 2 prises, voir plus bas).
+Contrôle fait le 8 novembre 2026. **Étape 5 validée par Thibault le 8 novembre 2026** (test sur téléphone OK ; relecture des captures jugée inutile).
 
 - **Export de Thibault dans la vraie interface** (`vite preview` sur le build, Chromium piloté par un script non versionné dans `web/test-data/` ; ZIP refait avec `ratings.csv`, `watched.csv` et `diary.csv` seulement, jamais `profile.csv`). Taux et comptes seulement, aucun titre :
   - 225 entrées lues, **188 reconnues**, comme à l'étape 3 ;
@@ -486,12 +486,12 @@ Contrôle fait le 8 novembre 2026. **Arrêt obligatoire : relecture de Thibault 
   - temps : modèle prêt en 924 ms (bureau) et 595 ms (téléphone), analyse en 30 et 19 ms ;
   - captures dans `web/test-data/screenshots/thibault/` (ignoré), montrées à Thibault seulement.
 - **Lien Letterboxd** : `https://letterboxd.com/tmdb/<tmdb_id>/` vérifié sur 3 films du catalogue. TMDB 1398, 81 et 670 redirigent (1 redirection, code 200) vers `/film/stalker/`, `/film/nausicaa-of-the-valley-of-the-wind/` et `/film/oldboy/`. Critère tenu.
-- **Test sur un vrai téléphone** (`npm run dev -- --host`) : à faire à la main par Thibault ; résultat à noter ici.
+- **Test sur un vrai téléphone** (`npm run dev -- --host`) : fait par Thibault le 8 novembre 2026, **OK**.
 - **Décisions de Thibault** (8 novembre 2026) :
   1. **mention « spectacle »** : non affichée, reportée à l'enrichissement TMDB des genres (section 6). `src/reco/spectacle.ts` reste, non utilisé par l'interface ;
   2. **tampon « ✱ pépite »** : la règle v0.2 n'apparaissait presque jamais (aux crans ∞ à 2 000, les premiers films sont tous au-dessus de 1 000 ; 0 carte tamponnée sur les 8 premières au cran 2 000, avec les deux exports). Remplacée par une **règle relative à la grille** (D6) ;
   3. **écarts acceptés** : réalisateurs du profil en noms complets (G4) ; test de temps du matcher isolé dans le projet Vitest `timed` (G4) ;
-  4. en attente : relecture visuelle des captures et test sur un vrai téléphone.
+  4. test sur un vrai téléphone OK ; relecture des captures non nécessaire. Étape validée.
 - **Nouvelle règle du tampon** (D6) : `pepiteStamps(popularités)` dans `cardRules.ts`, appelée par `FilmGrid` sur les cartes affichées ; `FilmCard` reçoit un booléen `stamp` (plus le plafond).
   - Tests : `components.test.tsx` (règle sur des rangées choisies : seuil exact à la moitié, égalités, plusieurs rangées, rangée courte ; grille qui tamponne la bonne carte), `results.test.tsx` (un tampon par rangée à tous les crans, deux après « encore des films ») ; Playwright : au plus un tampon sur les 8 premières cartes à ∞, 2 000, 1 000 et 500, au plus deux sur 16. Vitest 187/187, Playwright 4/4, `tsc`, ESLint, Prettier verts.
   - **Nombre de tampons** (même moteur que le site, 48 films par cran, sans le filtre des documentaires ; comptes seulement) :
@@ -504,7 +504,7 @@ Contrôle fait le 8 novembre 2026. **Arrêt obligatoire : relecture de Thibault 
 
     L'interface (Playwright, exemple avec *Milk* confirmé) donne la même chose sur les 8 premières : 1 à ∞, 0 à 2 000, 1 000 et 500.
   - **Constat** : la règle marche à ∞ (environ une rangée sur six sans tampon), mais **presque jamais aux crans bas**. Le plafond resserre les popularités : au cran 2 000, les 8 premières vont de 1 266 à 2 000 environ (médiane ~1 500, il faudrait ≤ ~750) ; au cran 500, de ~270 à 500 (médiane ~430-450). Le film le moins connu est rarement à moins de la moitié de la médiane. Sur les 8 crans et 48 cartes : exemple 13 tampons en tout, dont 0 aux crans 5 000, 1 000, 500 et 200 ; Thibault 17. Si on veut un tampon visible aussi aux crans bas, il faudrait un seuil plus doux (par exemple ≤ 2/3 de la médiane) ou une règle sur le rang ; à trancher par Thibault, ou à recalibrer avec les volontaires (section 6).
-- Après la relecture : mise à jour de `CLAUDE.md` et de `stack-technique.md`, avec le diff montré avant le commit.
+- Clôture : `CLAUDE.md` et `stack-technique.md` mis à jour (validés par Thibault sans voir le diff).
 
 ---
 
