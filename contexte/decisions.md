@@ -1,7 +1,7 @@
 # Décisions
 
 > Toutes les décisions prises du 6 au 8 novembre 2026 (étapes 1 à 6b), une ligne chacune : décision — raison — où c'est détaillé. Les décisions **écartées** importantes sont marquées ✗.
-> Abréviations : `projet` = `docs/projet-reco-films.md`, `stack` = `docs/stack-technique.md`, `é2` à `é6` = `docs/etape-2-modele.md` … `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `DS` = `docs/design-system.md`.
+> Abréviations : `projet` = `docs/projet-reco-films.md`, `stack` = `docs/stack-technique.md`, `é2` à `é6` = `docs/etape-2-modele.md` … `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md`, `DS` = `docs/design-system.md`.
 
 ## Données et licences
 
@@ -23,6 +23,9 @@
 
 - **ALS (`implicit`) en production**, configuration A : 64 facteurs, `regularization` 0,05, `alpha` 1, β 1, 30 itérations — bon compromis qualité / taille / calcul dans le navigateur — `é2` C2, D6.
 - Signal : tout film vu est positif, pondéré par le percentile de sa note (`r = 1 + β·p`, 0,5 sans note) — un 3★ n'a pas le même sens pour tous — `é2` D2.
+- **Fold-in de l'utilisateur du site sans les films mal notés** : films notés de percentile < 0,3 retirés du fold-in (toujours « vus », jamais recommandés), films sans note jamais retirés, ex æquo retirés ou gardés en bloc, repli si moins de 5 films ; l'entraînement ne change pas — +8,2 % de NDCG@20 à ∞ sur la validation, moins de recos tirées par un film détesté — `é6c` D2.
+- ✗ **« Tout film vu est un positif » pour le fold-in du site** (règle de `é2` D2) : un film détesté attirait des recos qui lui ressemblent ; remplacée par la ligne précédente (la règle reste vraie pour l'entraînement) — `é6c` D2, §2.2.
+- Autres versions d'un film (`version_of` dans `manual_overrides.csv`, dans les deux sens) : jamais recommandées si l'une est vue ; 2 cas dans le catalogue, liste manuelle (une règle automatique ferait surtout des faux positifs) — `é6c` D3.
 - Protocole : 10 000 utilisateurs de validation et 10 000 de test, 80 % des notes les plus anciennes en fold-in, 20 % à retrouver ; test évalué une seule fois — pas de fuite, pas de sur-ajustement — `é2` D1, D3.
 - Modèle final réentraîné sur **tous les utilisateurs** — plus de signal pour le site — `é2` D6, C5.
 - **Vecteurs int8** (échelle par film), `YᵀY` calculé sur les vecteurs déquantifiés — 1,57 Mo, perte < 0,08 % — `é2` D8, C5.

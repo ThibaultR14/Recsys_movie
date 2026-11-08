@@ -167,6 +167,23 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 - Chiffres complets en section 2 (genres par cran sur deux exports, six seuils de retrait sur la validation, versions dans le catalogue).
 - Remarque sur les ex æquo : sur l'export de Thibault, 45 films sont sous le percentile 0,2 **et** sous 0,3 (notes en demi-étoiles, même rang moyen) ; le seuil agit en pratique sur des **niveaux de note**.
 
+### Q1 — Versions (8 novembre 2026)
+
+- Action `version_of` (`build_catalog.py` : cible obligatoire, pas de film version de lui-même, pas de doublon, plusieurs lignes permises pour un même film) ; 3 lignes dans `manual_overrides.csv` (*Kill Bill: The Whole Bloody Affair* → *Vol. 1* et *Vol. 2* ; *Superman II: The Richard Donner Cut* → *Superman II*).
+- `catalog.json` : `version_of` = 3 paires d'`item_idx` (`site_catalog.version_pairs`, vérifié par `catalog-verify`) ; total `web/public/data/` 3 115 839 octets gzip (+65).
+- Moteur : `versionPartners`, `versionExclusions` (`engine.ts`) : les autres versions des films **vus** (historique) sont exclues ; référence Python `version_partners` / `seen_mask` (`export.py`) ; nouveau cas `version_seen` dans `foldin_cases.json`.
+- Tests : `pytest` (lecture, fichiers invalides, paires), Vitest (paires dans les deux sens, exclusion, cas `version_seen` : jamais recommandé à aucun cran). Parité : 23 cas, 69 listes identiques, écart des vecteurs 3,3·10⁻¹⁵.
+
+### Q2 — Films mal notés hors du fold-in (8 novembre 2026)
+
+- Python : `als.kept_for_foldin` (seuil strict en float64 sur les percentiles float32, groupes d'ex æquo en bloc, films sans note jamais retirés, repli sous 5 films) ; `export.py` : `FOLDIN_RULE = {drop_below: 0,3, min_kept: 5}`, écrit dans `model-meta.json` (`foldin_drop_below`, `foldin_min_kept`, `foldin_rule`) ; deux cas ajoutés : `ties_at_threshold` (p = 0,05 ×2 et 0,2 retirés, p = 0,3 exactement **gardé**) et `guard_small` (6 films, 2 sous le seuil → tout gardé).
+- TypeScript : `keptForFoldIn` (`foldIn.ts`), appliqué par `recommend` ; un ancien `model-meta.json` sans la règle garde tout.
+- `foldin_cases.json` régénéré **hors du dépôt** (`pipeline/data/processed/export/`, `web/test-data/`) : **25 cas, 75 listes identiques**, `export.py verify` : écart 0 ; TypeScript : **écart maximal des vecteurs 2,0·10⁻¹⁵**, des scores 2,2·10⁻¹⁵ (seuil des tests resserré de 10⁻⁹ à **10⁻¹⁴**).
+- Tests : `pytest` (ex æquo, 0,3 exact, sans note, repli), Vitest (mêmes cas + rejeu).
+- **Export de Thibault, après D2** (16 premières recos) : recos dont un des 2 voisins les plus proches est mal noté : 0, 1, 3, 5, 1, 2, 3, 5 de ∞ à 200 (avant : 0, 2, 5, 5, 4, 3, 5, 8 ; **20 au lieu de 32** au total). ⚠️ Critère « moins à chaque cran » : **égalité** à ∞ (0) et à 5 000 (5), baisse ailleurs. Exemple : 2, 0, 1, 5, 5, 2, 0, 0 (avant : 5, 4, 2, 5, 5, 2, 0, 0).
+- Genres après D2 (sans calibration) : l'animation **monte encore** sur l'export de Thibault (94 % à 2 000, 100 % à 500, 75 % à 200) : c'est le rôle de D1.
+- `decisions.md` : nouvelle règle, ancienne règle de l'étape 2 marquée ✗ avec la raison. La phrase de « comment ça marche » viendra de Claude Web en fin d'étape.
+
 ---
 
 ## 6. À reporter

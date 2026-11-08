@@ -77,6 +77,28 @@ def train(
     return model
 
 
+def kept_for_foldin(
+    percentiles: np.ndarray,
+    rated: np.ndarray | None,
+    *,
+    drop_below: float | None,
+    min_kept: int,
+) -> np.ndarray:
+    """Films of ONE user kept in the fold-in (step 6c, D2): every film, except the rated ones whose
+    percentile is < drop_below (strict; ties share their percentile, so a group of equal ratings is
+    dropped or kept as a whole). Unrated films (p = 0.5) are never dropped. If fewer than
+    `min_kept` films would remain, every film is kept. Percentiles are compared in float64, as the
+    TypeScript engine does with its float32-rounded percentiles."""
+    keep = np.ones(len(percentiles), dtype=bool)
+    if drop_below is None:
+        return keep
+    is_rated = np.ones(len(percentiles), dtype=bool) if rated is None else rated
+    keep = ~(is_rated & (np.asarray(percentiles, dtype=np.float64) < drop_below))
+    if keep.sum() < min_kept:
+        return np.ones(len(percentiles), dtype=bool)
+    return keep
+
+
 def fold_in(
     item_factors: np.ndarray,
     signal: sp.csr_matrix,

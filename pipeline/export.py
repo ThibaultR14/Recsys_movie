@@ -58,6 +58,9 @@ from config import (  # noqa: E402
 from models import als  # noqa: E402
 
 FINAL_CONFIG = {"factors": 64, "regularization": 0.05, "alpha": 1.0, "beta": 1.0, "iterations": 30}
+# Fold-in of the site's user (step 6c, D2): rated films with percentile < 0.3 left out, unless
+# fewer than 5 films would remain. Training is unchanged.
+FOLDIN_RULE = {"drop_below": 0.3, "min_kept": 5}
 C2_FACTORS = PROCESSED / "models" / "als_f64_r0.05_a1_b1_i30_item_factors.npy"
 FINAL_FACTORS = PROCESSED / "models" / "als_final_f64_r0.05_a1_b1_i30_item_factors.npy"
 FINAL_INFO = PROCESSED / "models" / "als_final_info.json"
@@ -166,6 +169,14 @@ def top_under_cap(
     idx = np.flatnonzero(cand)
     order = np.lexsort((idx, -scores[idx]))  # score desc, item_idx asc on ties
     return idx[order[:k]]
+
+
+def kept_signal(signal: sp.csr_matrix, kept: np.ndarray) -> sp.csr_matrix:
+    """One-user signal restricted to the films kept in the fold-in (step 6c, D2)."""
+    s = signal.tocsr().copy()
+    s.data = np.where(kept, s.data, 0).astype(s.data.dtype)
+    s.eliminate_zeros()
+    return s
 
 
 def version_partners(movie_ids: np.ndarray) -> dict[int, set[int]]:
@@ -335,6 +346,18 @@ def fixture_cases(
     first = np.flatnonzero(recommendable)[:5]
     histories.append(("single_film", first[:1], np.array([4.0], dtype=np.float32)))
     histories.append(("all_ties", first, np.full(5, 3.5, dtype=np.float32)))
+    # step 6c (D2): ties around the threshold (p = 0.05 x2 and 0.2 dropped, p = 0.3 exactly kept)
+    # and the guard (dropping 2 of 6 films would leave 4 < 5: every film kept)
+    eleven = np.flatnonzero(recommendable)[5:16]
+    histories.append(
+        (
+            "ties_at_threshold",
+            eleven,
+            np.array([1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], dtype=np.float32),
+        )
+    )
+    six = np.flatnonzero(recommendable)[16:22]
+    histories.append(("guard_small", six, np.arange(1, 7, dtype=np.float32)))
     # step 6c (D3): a history with one cut of a film (the other cut must never be recommended)
     partners = version_partners(movie_ids)
     if partners:
@@ -353,8 +376,13 @@ def fixture_cases(
         )
         p = als.percentile_values(R).data
         signal = als.signal_values(R, cfg["beta"])
+        kept = als.kept_for_foldin(p, None, **FOLDIN_RULE)
         x = als.fold_in(
-            Y, signal, regularization=cfg["regularization"], alpha=cfg["alpha"], yty=yty
+            Y,
+            kept_signal(signal, kept),
+            regularization=cfg["regularization"],
+            alpha=cfg["alpha"],
+            yty=yty,
         )[0]
         scores = Y.astype(np.float64) @ x
         seen = seen_mask(len(Y), items, partners)
@@ -374,6 +402,7 @@ def fixture_cases(
                 "rating": ratings.astype(float).tolist(),
                 "percentile": p.astype(float).tolist(),
                 "signal": signal.data.astype(float).tolist(),
+                "kept": kept.tolist(),
                 "user_vector": x.tolist(),
                 "excluded_versions": sorted(
                     int(i) for i in np.flatnonzero(seen) if i not in set(items)
@@ -438,6 +467,11 @@ def cmd_export(out_dir: Path) -> None:
         "alpha": cfg["alpha"],
         "beta": cfg["beta"],
         "iterations": cfg["iterations"],
+        "foldin_drop_below": FOLDIN_RULE["drop_below"],
+        "foldin_min_kept": FOLDIN_RULE["min_kept"],
+        "foldin_rule": "step 6c (D2): rated films with p < foldin_drop_below are left out of the "
+        "fold-in (still seen, never recommended); unrated films never; if fewer than "
+        "foldin_min_kept films remain, every film is kept",
         "signal": "r_ui = 1 + beta * p_ui, p_ui = (average_rank - 1) / (n - 1) of the rating "
         "in the user's history (0.5 if one rating or no rating)",
         "confidence": "C_ui = alpha * r_ui on watched movies (P_ui = 1), C = 1 and P = 0 elsewhere",
@@ -497,7 +531,7 @@ def cmd_export(out_dir: Path) -> None:
         "(dequantised vectors, yty.bin, popularity.bin).",
         "created_at": meta["created_at"],
         "embeddings_sha256": meta["embeddings_sha256"],
-        "config": cfg,
+        "config": cfg | FOLDIN_RULE,
         "positions": [None if p is None else p for p in FIXTURE_POSITIONS],
         "top": FIXTURE_TOP,
         "cases": cases,
@@ -553,9 +587,12 @@ def cmd_verify(out_dir: Path) -> dict:
         )
         signal = als.signal_values(R, cfg["beta"])
         assert np.allclose(signal.data, case["signal"]), case["name"]
+        p = als.percentile_values(R).data
+        kept = als.kept_for_foldin(p, None, drop_below=cfg["drop_below"], min_kept=cfg["min_kept"])
+        assert kept.tolist() == case["kept"], case["name"]
         x = als.fold_in(
             Yq,
-            signal,
+            kept_signal(signal, kept),
             regularization=cfg["regularization"],
             alpha=cfg["alpha"],
             yty=yty.astype(np.float64),

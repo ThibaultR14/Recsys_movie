@@ -13,7 +13,7 @@ import { matchHistory, toUserHistory, type MatchedEntry, type UserFilm } from '.
 import { ImdbIdIndex } from '../matching/imdbIds';
 import { Matcher, type MatchStatus } from '../matching/match';
 import { TitleIndex, type TitleIndexFile } from '../matching/titleIndex';
-import { foldIn } from './foldIn';
+import { foldIn, keptForFoldIn } from './foldIn';
 import { buildModelFiles, fetchModelFiles, type FetchFn, type ModelFiles } from './modelFiles';
 import { rankCandidates, scoreAll, topByPosition, type PositionResult } from './recommend';
 
@@ -213,10 +213,18 @@ export function recommend(
 ): Recommendations {
   const { model } = engine;
   const history = toUserHistory(matched); // exact + probable_variant + confirmed
+  // step 6c (D2): disliked rated films out of the fold-in (they stay seen, never recommended)
+  const kept = keptForFoldIn(
+    history.map((h) => h.percentile),
+    history.map((h) => h.rating !== undefined),
+    model.meta.foldin_drop_below,
+    model.meta.foldin_min_kept ?? 0,
+  );
+  const foldInFilms = history.filter((_, i) => kept[i]);
   const x = foldIn(
     model,
-    history.map((h) => h.item),
-    history.map((h) => h.percentile),
+    foldInFilms.map((h) => h.item),
+    foldInFilms.map((h) => h.percentile),
   );
   const scores = scoreAll(model, x);
   const excluded = exclusions(matched, history);

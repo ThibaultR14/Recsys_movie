@@ -11,7 +11,7 @@ import {
   versionPartners,
   type Engine,
 } from './engine';
-import { choleskySolve, foldIn, FoldInError, signal } from './foldIn';
+import { choleskySolve, foldIn, FoldInError, keptForFoldIn, signal } from './foldIn';
 import {
   buildModelFiles,
   dequantize,
@@ -185,6 +185,8 @@ interface FixtureCase {
   rating: number[];
   percentile: number[];
   signal: number[];
+  /** Films kept in the fold-in (step 6c, D2). */
+  kept: boolean[];
   user_vector: number[];
   /** Other cuts of the seen films (step 6c, D3). */
   excluded_versions: number[];
@@ -193,6 +195,8 @@ interface FixtureCase {
 
 export const fileFetch = async (url: string) =>
   new Response(readFileSync(DATA + url.replace('/data/', '')));
+
+const pick = <T>(xs: readonly T[], keep: readonly boolean[]) => xs.filter((_, i) => keep[i]);
 
 describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => {
   const engine: Engine | null = ready ? await loadEngine(fileFetch) : null;
@@ -203,12 +207,20 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
       })
     : null;
 
+  const keptFor = (_c: FixtureCase, p: number[]) =>
+    keptForFoldIn(
+      p,
+      p.map(() => true),
+      engine!.model.meta.foldin_drop_below,
+      engine!.model.meta.foldin_min_kept ?? 0,
+    );
+
   it('uses the same model files as the fixture', () => {
-    expect(fixture!.cases).toHaveLength(23); // 22 + version_seen (step 6c)
+    expect(fixture!.cases).toHaveLength(25); // 22 + version_seen, ties_at_threshold, guard_small (6c)
     expect(fixture!.embeddings_sha256).toBe(engine!.model.meta.embeddings_sha256);
   });
 
-  it('23 user vectors within 1e-9, signal identical', () => {
+  it('25 user vectors within 1e-14, signal and kept films identical', () => {
     let worst = 0;
     for (const c of fixture!.cases) {
       const p = percentiles(c.rating);
@@ -217,20 +229,24 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
         p.map((v) => signal(v, engine!.model.meta.beta)),
         c.name,
       ).toEqual(c.signal);
-      const x = foldIn(engine!.model, c.item_idx, p);
+      const kept = keptFor(c, p);
+      expect(kept, c.name).toEqual(c.kept);
+      const x = foldIn(engine!.model, pick(c.item_idx, kept), pick(p, kept));
       for (let d = 0; d < x.length; d++)
         worst = Math.max(worst, Math.abs(x[d]! - c.user_vector[d]!));
     }
     console.info(`fold-in: max |Δx| = ${worst.toExponential(2)}`);
-    expect(worst).toBeLessThanOrEqual(1e-9);
+    expect(worst).toBeLessThanOrEqual(1e-14);
   });
 
-  it('69 top-10 lists identical (item_idx and order), scores within 1e-9', () => {
+  it('75 top-10 lists identical (item_idx and order), scores within 1e-14', () => {
     const model = engine!.model;
     let lists = 0;
     let worst = 0;
     for (const c of fixture!.cases) {
-      const x = foldIn(model, c.item_idx, percentiles(c.rating));
+      const p = percentiles(c.rating);
+      const kept = keptFor(c, p);
+      const x = foldIn(model, pick(c.item_idx, kept), pick(p, kept));
       const scores = scoreAll(model, x);
       const ranked = rankCandidates(
         scores,
@@ -246,8 +262,8 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
       }
     }
     console.info(`top-10 lists: ${lists} identical, max |Δscore| = ${worst.toExponential(2)}`);
-    expect(lists).toBe(69);
-    expect(worst).toBeLessThanOrEqual(1e-9);
+    expect(lists).toBe(75);
+    expect(worst).toBeLessThanOrEqual(1e-14);
   });
 
   it('recommend(): never a seen, excluded or non-recommendable film', () => {
@@ -300,5 +316,25 @@ describe('versions (step 6c, D3)', () => {
     expect([...versionExclusions(v, [1])]).toEqual([10]); // saw Vol. 1 -> no long cut
     expect([...versionExclusions(v, [10]).values()].sort()).toEqual([1, 2]); // saw the long cut
     expect(versionExclusions(v, [5]).size).toBe(0);
+  });
+});
+
+describe('fold-in without the disliked films (step 6c, D2)', () => {
+  it('strict threshold, ties as a whole, unrated never dropped, guard under 5 films', () => {
+    const f = Math.fround;
+    // 0.3 exactly (float32) is kept; below is dropped
+    expect(
+      keptForFoldIn([f(0.05), f(0.05), f(0.2), f(0.3), 0.4, 0.5], Array(6).fill(true), 0.3, 1),
+    ).toEqual([false, false, false, true, true, true]);
+    // unrated (0.5 anyway, and never dropped even under a higher threshold)
+    expect(
+      keptForFoldIn([0, 0.5, 0.5, 0.8, 0.9, 1], [true, false, false, true, true, true], 0.6, 5),
+    ).toEqual([false, true, true, true, true, true]);
+    // dropping 2 of 6 would leave 4 < 5: everything kept
+    expect(keptForFoldIn([0, 0.2, 0.4, 0.6, 0.8, 1], Array(6).fill(true), 0.3, 5)).toEqual(
+      Array(6).fill(true),
+    );
+    // no rule in an older model-meta.json
+    expect(keptForFoldIn([0, 1], [true, true], undefined, 5)).toEqual([true, true]);
   });
 });

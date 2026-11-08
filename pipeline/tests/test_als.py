@@ -51,3 +51,39 @@ def test_fold_in_closed_form_single_item():
 def test_fold_in_empty_user_is_zero():
     X = als.fold_in(np.ones((3, 2)), sp.csr_matrix((1, 3)), regularization=1, alpha=1)
     assert (X == 0).all()
+
+
+# --- step 6c (D2): disliked films out of the fold-in ---------------------------------------------
+
+
+def _p(ratings):
+    r = sp.csr_matrix(np.array([ratings], dtype=np.float32))
+    return als.percentile_values(r).data
+
+
+def test_kept_for_foldin_ties_and_exact_threshold():
+    p = _p([1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])  # 0.05, 0.05, 0.2, 0.3 (float32), 0.4 …
+    keep = als.kept_for_foldin(p, None, drop_below=0.3, min_kept=5)
+    assert keep.tolist() == [False, False, False] + [True] * 8  # 0.3 exactly: kept (strict <)
+    # a tie group straddling the threshold is dropped or kept as a whole
+    p = _p([1, 2, 2, 2, 3, 4, 5, 6, 7, 8])  # ranks 2-4 share p = 2/9 ≈ 0.22
+    keep = als.kept_for_foldin(p, None, drop_below=0.3, min_kept=5)
+    assert keep[:4].tolist() == [False, False, False, False] and keep[4:].all()
+
+
+def test_kept_for_foldin_unrated_never_dropped_and_guard():
+    p = np.array([0.0, 0.1, 0.5, 0.5, 0.8, 0.9, 1.0], dtype=np.float32)
+    rated = np.array([True, True, False, False, True, True, True])
+    assert als.kept_for_foldin(p, rated, drop_below=0.6, min_kept=5).tolist() == [
+        False,
+        False,
+        True,
+        True,
+        True,
+        True,
+        True,
+    ]
+    # dropping 2 of 6 would leave 4 < 5: everything kept
+    p6 = _p([1, 2, 3, 4, 5, 6])
+    assert als.kept_for_foldin(p6, None, drop_below=0.3, min_kept=5).all()
+    assert als.kept_for_foldin(p6, None, drop_below=None, min_kept=5).all()

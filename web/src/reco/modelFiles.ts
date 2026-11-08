@@ -10,6 +10,10 @@ export interface ModelMeta {
   regularization: number;
   alpha: number;
   beta: number;
+  /** Step 6c (D2): rated films with a percentile below this are left out of the fold-in. */
+  foldin_drop_below?: number;
+  /** …unless fewer than this many films would remain. */
+  foldin_min_kept?: number;
   slider: { variant: string; positions: (number | null)[] };
   movie_ids: number[];
   non_recommendable_item_idx: number[];

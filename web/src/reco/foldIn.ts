@@ -14,6 +14,23 @@ export function signal(percentile: number, beta: number): number {
 
 export class FoldInError extends Error {}
 
+/**
+ * Films kept in the fold-in (step 6c, D2), reproduction of Python `models.als.kept_for_foldin`:
+ * every film except the rated ones with a percentile < dropBelow (strict; equal ratings share their
+ * percentile, so a tie group goes as a whole); unrated films are never dropped; if fewer than
+ * minKept films would remain, every film is kept.
+ */
+export function keptForFoldIn(
+  percentiles: readonly number[],
+  rated: readonly boolean[],
+  dropBelow: number | undefined,
+  minKept: number,
+): boolean[] {
+  if (dropBelow === undefined) return percentiles.map(() => true);
+  const keep = percentiles.map((p, i) => !(rated[i] && p < dropBelow));
+  return keep.filter(Boolean).length < minKept ? percentiles.map(() => true) : keep;
+}
+
 /** User vector from catalogue items and their percentiles (same order). */
 export function foldIn(
   model: ModelFiles,
