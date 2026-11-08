@@ -7,8 +7,10 @@ import {
   parseLetterboxdFiles,
   parseLetterboxdZip,
 } from '../adapters/letterboxd';
+import { parseImdbCsv } from '../adapters/imdb';
 import type { AdapterResult } from '../adapters/types';
 import { matchHistory, toUserHistory, type MatchedEntry, type UserFilm } from '../matching/history';
+import { ImdbIdIndex } from '../matching/imdbIds';
 import { Matcher, type MatchStatus } from '../matching/match';
 import { TitleIndex, type TitleIndexFile } from '../matching/titleIndex';
 import { foldIn } from './foldIn';
@@ -23,6 +25,7 @@ export interface CatalogFile {
   year: (number | null)[];
   tmdb_id: (number | null)[];
   imdb_id: (string | null)[];
+  imdb_id_aliases?: Record<string, string[]>;
   directors: string[][];
   poster_path: (string | null)[];
   genres: number[][];
@@ -34,6 +37,8 @@ export interface Engine {
   catalog: CatalogFile;
   index: TitleIndex;
   matcher: Matcher;
+  /** imdb_id (and aliases) -> item, for the IMDb adapter (docs/etape-6-imdb.md, D2). */
+  ids: ImdbIdIndex;
   timings: { fetchMs: number; modelMs: number; indexMs: number; matcherMs: number };
 }
 
@@ -56,12 +61,14 @@ export async function loadEngine(fetchFn: FetchFn, base = '/data/'): Promise<Eng
   const index = new TitleIndex(indexFile, catalog.year, model.popularity);
   const t3 = performance.now();
   const matcher = new Matcher(index);
+  const ids = new ImdbIdIndex(catalog.imdb_id, catalog.imdb_id_aliases);
   const t4 = performance.now();
   return {
     model,
     catalog,
     index,
     matcher,
+    ids,
     timings: { fetchMs: t1 - t0, modelMs: t2 - t1, indexMs: t3 - t2, matcherMs: t4 - t3 },
   };
 }
@@ -69,11 +76,14 @@ export async function loadEngine(fetchFn: FetchFn, base = '/data/'): Promise<Eng
 export type ExportInput =
   | { kind: 'zip'; bytes: Uint8Array }
   | { kind: 'files'; files: Record<string, string> }
-  | { kind: 'csv'; name: string; text: string };
+  | { kind: 'csv'; name: string; text: string }
+  /** IMDb ratings CSV, already decoded (docs/etape-6-imdb.md, D5). */
+  | { kind: 'imdb'; name: string; text: string };
 
 export function readExport(input: ExportInput): AdapterResult {
   if (input.kind === 'zip') return parseLetterboxdZip(input.bytes);
   if (input.kind === 'files') return parseLetterboxdFiles(input.files);
+  if (input.kind === 'imdb') return parseImdbCsv(input.text);
   return parseLetterboxdCsv(input.name, input.text);
 }
 
@@ -106,7 +116,7 @@ export function summarize(adapter: AdapterResult, matched: readonly MatchedEntry
 
 export function importExport(engine: Engine, input: ExportInput) {
   const adapter = readExport(input);
-  const matched = matchHistory(engine.matcher, adapter.entries);
+  const matched = matchHistory(engine.matcher, adapter.entries, engine.ids);
   return { matched, summary: summarize(adapter, matched) };
 }
 

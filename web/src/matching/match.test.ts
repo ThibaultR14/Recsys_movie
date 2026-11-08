@@ -2,7 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseLetterboxdFiles } from '../adapters/letterboxd';
-import { matchHistory, toUserHistory } from './history';
+import type { HistoryEntry } from '../adapters/types';
+import { matchEntry, matchHistory, toUserHistory } from './history';
+import { ImdbIdIndex, imdbKey } from './imdbIds';
 import { Matcher, stripArticle, variantTitles } from './match';
 import { normalizeTitle } from './normalize';
 import { loadTitleIndex, TitleIndex, type TitleIndexFile } from './titleIndex';
@@ -253,3 +255,97 @@ describe.skipIf(!hasData)('real catalogue', async () => {
 
 // keep the adapter import used (real-export end-to-end check lives in scripts/match-report.ts)
 void parseLetterboxdFiles;
+
+// --- step 6: IMDb ids and the title fallback (docs/etape-6-imdb.md, D2-D4) ----------------------
+
+describe('ImdbIdIndex', () => {
+  const ids = new ImdbIdIndex(['tt0114814', 'tt0211915', null, 'tt1234567'], {
+    '1': ['tt9999999', 'tt0114814'], // an alias equal to a main id is ignored
+  });
+  it('numeric part of the id, case-insensitive; main ids before aliases', () => {
+    expect(imdbKey('tt0114814')).toBe(114814);
+    expect(imdbKey('TT114814')).toBe(114814);
+    expect(imdbKey('nm0000001')).toBeNull();
+    expect(ids.lookup('tt114814')).toEqual({ item: 0, by: 'imdb_id' });
+    expect(ids.lookup('tt9999999')).toEqual({ item: 1, by: 'imdb_alias' });
+    expect(ids.lookup('tt0000002')).toBeNull();
+    expect(ids.lookup(undefined)).toBeNull();
+  });
+});
+
+describe('matchEntry (synthetic catalogue)', () => {
+  const m = new Matcher(syntheticIndex());
+  const ids = new ImdbIdIndex(FILMS.map((_, i) => `tt${1000000 + i}`));
+  const imdb = (over: Partial<HistoryEntry>): HistoryEntry => ({
+    title: 'X',
+    scaleMax: 10,
+    rating: 8,
+    source: 'imdb',
+    sourceKey: 'k',
+    titleType: 'movie',
+    ...over,
+  });
+
+  it('found by id: exact, whatever the title or the type', () => {
+    const r = matchEntry(
+      m,
+      imdb({ imdbId: 'tt1000004', title: 'Rien à voir', titleType: 'tvseries' }),
+      ids,
+    );
+    expect(r).toEqual({ status: 'exact', item: 4, candidates: [], matchedBy: 'imdb_id' });
+  });
+
+  it('id unknown, film type: title fallback always sent to review (ambiguous, by title)', () => {
+    const r = matchEntry(m, imdb({ imdbId: 'tt9', title: 'The Usual Suspects', year: 1995 }), ids);
+    expect(r).toMatchObject({ status: 'ambiguous', titleStatus: 'exact', matchedBy: 'title' });
+    expect(r.item).toBeUndefined();
+    expect(r.candidates.map((c) => c.item)).toEqual([0]);
+  });
+
+  it('localized Title, then Original Title', () => {
+    const r = matchEntry(
+      m,
+      imdb({
+        title: 'Die fabelhafte Welt der Amélie',
+        originalTitle: "Le Fabuleux Destin d'Amélie Poulain",
+        year: 2001,
+      }),
+      ids,
+    );
+    expect(r).toMatchObject({ status: 'ambiguous', titleStatus: 'exact', matchedBy: 'title' });
+    expect(r.candidates[0]!.item).toBe(1);
+  });
+
+  it('id unknown, not a film: no title fallback (non_film)', () => {
+    for (const titleType of ['tvseries', 'tvepisode', 'videogame', 'somethingnew']) {
+      expect(matchEntry(m, imdb({ title: 'Interstellar', year: 2014, titleType }), ids)).toEqual({
+        status: 'not_found',
+        candidates: [],
+        reason: 'non_film',
+      });
+    }
+  });
+
+  it('nothing found by title stays not_found; Letterboxd unchanged', () => {
+    expect(matchEntry(m, imdb({ title: 'Inconnu au bataillon', year: 2001 }), ids).status).toBe(
+      'not_found',
+    );
+    const lb: HistoryEntry = {
+      title: 'The Usual Suspects',
+      year: 1995,
+      scaleMax: 5,
+      source: 'letterboxd',
+      sourceKey: 'u',
+    };
+    expect(matchEntry(m, lb, ids)).toEqual(m.match('The Usual Suspects', 1995));
+  });
+
+  it('title matches never enter the fold-in; ids do', () => {
+    const entries = [
+      imdb({ imdbId: 'tt1000010', sourceKey: 'a' }),
+      imdb({ imdbId: 'tt9', title: 'Godzilla', year: 1954, sourceKey: 'b' }),
+    ];
+    const history = toUserHistory(matchHistory(m, entries, ids));
+    expect(history.map((h) => h.item)).toEqual([10]);
+  });
+});

@@ -36,6 +36,12 @@ export interface MatchResult {
   candidates: Candidate[];
   /** Key (variant or fuzzy) that matched, when not the title itself. */
   via?: string;
+  /** How an IMDb entry was matched (docs/etape-6-imdb.md, D2-D3); absent for Letterboxd. */
+  matchedBy?: 'imdb_id' | 'imdb_alias' | 'title';
+  /** Title fallback (D3): the matcher's own status, before it is sent to review as ambiguous. */
+  titleStatus?: MatchStatus;
+  /** Not a film (series, episode, game…) and not found by id: no title fallback (D4). */
+  reason?: 'non_film';
 }
 
 export const YEAR_TOLERANCE = 1;

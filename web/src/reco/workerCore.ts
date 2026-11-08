@@ -56,6 +56,10 @@ export interface Unrecognized {
   year: number | null;
   status: MatchStatus;
   candidates: FilmCard[];
+  /** Series, episode, game… not found by id (docs/etape-6-imdb.md, D4). */
+  reason?: 'non_film';
+  /** Candidates found by the title only (IMDb, D3): to verify, never ticked by default. */
+  byTitle?: boolean;
 }
 
 export interface ImportResult {
@@ -133,6 +137,8 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
         year: m.entry.year ?? null,
         status: m.result.status,
         candidates: m.result.candidates.map((c) => filmCard(engine, c.item)),
+        ...(m.result.reason && { reason: m.result.reason }),
+        ...(m.result.matchedBy === 'title' && { byTitle: true }),
       }));
     return { summary, unrecognized } satisfies ImportResult;
   }
