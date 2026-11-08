@@ -1,0 +1,262 @@
+# Étape 6b — Retouches de l'interface
+
+> Version 0.1 (8 novembre 2026). Mini-étape insérée entre l'étape 6 (adaptateur IMDb) et l'étape 7 (mise en ligne). **En attente de validation par Thibault** : voir les questions de la section 7.
+> Décisions de départ données par Thibault le 8 novembre 2026 (D1-D7). Les **textes de l'interface** viennent de Claude Web : le code prévoit des emplacements (D8), remplis en R7.
+
+---
+
+## 0. Mode d'emploi (pour Claude Code)
+
+- Relis ce document au début de chaque sous-étape. Les décisions de la section 3 ne changent pas sans accord.
+- Une sous-étape à la fois (R0 → R8), en suivant « Quand s'arrêter » de `CLAUDE.md`. **Arrêts obligatoires** :
+  - en **R7**, pour recevoir les textes de Claude Web (Thibault peut les donner plus tôt : ils sont intégrés dès qu'ils arrivent, R7 ne fait alors que vérifier qu'il n'en manque aucun) ;
+  - en **R8**, si l'adresse de contact n'est pas confirmée (D3) ;
+  - en **R8**, pour l'essai sur un vrai téléphone (deux thèmes) et la relecture.
+- Résultats dans la section 5 : chiffres exacts.
+- **Données personnelles** (inchangé) : l'export de Thibault reste dans `web/test-data/exports/` ; les explications calculées sur son export (D6) ne s'affichent que dans le terminal (`reco-report`) ; dans les fichiers versionnés, comptes et temps seulement, aucun titre.
+
+---
+
+## 1. Objectifs
+
+1. Séparer « comment ça marche », « à propos » et une nouvelle page « contact », accessibles depuis l'en-tête et par un lien direct, sans quitter la machine à états.
+2. Rendre l'aide « où trouver mon export » visuelle : un carrousel accessible avec des schémas dessinés.
+3. Enrichir les cartes : note du public (MovieLens) et « parce que t'as aimé X et Y ».
+4. Thème sombre par défaut, thème clair au choix, contraste AA partout.
+5. Ne rien changer à la confidentialité : **aucune requête réseau nouvelle**, une seule clé stockée (le choix du thème clair).
+
+---
+
+## 2. Données d'entrée
+
+- **Interface actuelle** (fin d'étape 6) :
+  - `App.tsx` : machine à états `accueil` → `analyse` → `resultats` ; la page « à propos » s'affiche déjà **par-dessus l'écran courant** quand l'ancre vaut `#a-propos` ou `#comment-ca-marche` (l'écran est gardé : revenir à `#` retrouve les résultats sans recalcul) ;
+  - `Layout.tsx` : en-tête avec le logo et la navigation (« comment ça marche », « qui on est ») **seulement à l'accueil** ; en analyse et en résultats, la navigation est remplacée par « ← changer de fichier » ;
+  - `APropos.tsx` : une seule page, sections `#a-propos`, `#comment-ca-marche`, `#on-garde-rien`, `#limites`, `#donnees` (mentions TMDB et MovieLens) ; texte à la première personne du pluriel, avec le nom de l'école ;
+  - `Accueil.tsx` : bouton « je sais pas où trouver mon export » qui déplie deux paragraphes (Letterboxd, IMDb) ;
+  - `FilmCard.tsx` : affiche, titre, « réalisateur, année », « documentaire », annotation « (même série que « X », que t'as vu) » (Caveat), tampon « ✱ pépite » ;
+  - couleurs : jetons Tailwind dans `web/src/styles/index.css` (`paper`, `white`, `ink`, `muted`, `rule`, `pen`, `tape`), un seul thème clair.
+- **Catalogue** (`catalog.parquet`) : `ml_mean_rating` (moyenne MovieLens sur 5, de 0,86 à 4,40) et `ml_rating_count` (de 20 à 102 929) existent déjà ; `catalog.json` ne les contient pas.
+- **Taille mesurée le 8 novembre 2026** (même sérialisation que `site_catalog.py`, gzip niveau 9) : `catalog.json` **1 117 254 → 1 172 373 octets gzip (+55 Ko, +4,9 %)** en ajoutant deux tableaux d'entiers (`ml_mean` = moyenne × 10, `ml_count`). Total `web/public/data/` : ~3,06 → ~3,11 Mo gzip.
+- **Moteur** : les vecteurs d'items (int8, une échelle par film) et l'historique (percentiles) sont déjà dans le worker ; `recommend({ n: 48 })` calcule les 8 crans en une fois (19 ms pour l'export de Thibault, 42 ms pour 3 000 films, étape 4).
+
+---
+
+## 3. Décisions
+
+### D1. « À propos » à la première personne
+
+- La page « à propos » passe au **« je »** (« je suis étudiant… »), **sans nom d'école** ni de formation précise. Le reste du site garde le « on » (accueil, analyse, résultats, comment ça marche, contact).
+- Elle garde les **mentions obligatoires** (`CLAUDE.md`) : logo TMDB + « This product uses the TMDB API but is not endorsed or certified by TMDB. », citation MovieLens (Harper & Konstan, 2015), phrase « ni soutenu ni approuvé par l'université du minnesota, grouplens ou tmdb ». Ces textes ne viennent pas de Claude Web : ils restent tels quels.
+- Textes : emplacements `apropos.*` (D8).
+- Le pied de page (« fait à la main par des gens qui regardent trop de films ») n'est pas touché, sauf si Claude Web en fournit un nouveau (question Q5).
+
+### D2. Trois pages par ancre, par-dessus la machine à états
+
+- Pages : **« comment ça marche »** (détaillée), **« à propos »**, **« contact »**. La machine à états de l'étape 5 (D2) est gardée : la page affichée se déduit de l'**ancre**, pas de l'état. C'est le mécanisme actuel, étendu (simple, pas de routeur) :
+  - `#comment-ca-marche`, `#a-propos`, `#contact` ouvrent la page correspondante ;
+  - les ancres de sections ouvrent leur page puis défilent jusqu'à la section (table `PAGE_OF_HASH` dans `web/src/pages/pages.ts`) : `#on-garde-rien`, `#modele`, `#curseur`, `#donnees`, `#limites`, `#inspirations` → « comment ça marche » ; `#mentions` → « à propos » ;
+  - **lien direct** : l'ancre est lue au chargement, donc `…/#contact` ouvre la page contact (l'écran dessous est l'accueil, rien n'étant stocké) ; précédent / suivant du navigateur fonctionnent (`hashchange`) ;
+  - fermer une page : lien « ← retour » vers `#` (l'écran courant réapparaît, résultats et cran du curseur compris, sans recalcul).
+- **« comment ça marche »** : sections dans cet ordre, textes de Claude Web : le modèle (des goûts comparés, **pas de genres**), les percentiles (pourquoi un 3★ n'a pas le même sens pour tous), le curseur (plafond de popularité, 8 crans), les données (MovieLens, TMDB, d'où vient la note du public), on garde rien (D7), ce qu'on sait pas faire (films après 2023, séries, films très peu vus), inspirations. Une phrase sur l'explication des cartes (D6) dans la section du modèle.
+- **Navigation dans l'en-tête, sur tous les écrans** : logo, puis « comment ça marche », « à propos », « contact », puis le bouton de thème (D7). Le lien de la page ouverte porte `aria-current="page"`.
+  - « ← changer de fichier » quitte l'en-tête et passe en haut du contenu (analyse et résultats).
+  - Téléphone : la navigation passe sur une deuxième ligne sous le logo ; zones tactiles ≥ 44 px, pas de menu repliable (trois liens tiennent sur 360 px en deux lignes au plus).
+- Fichiers : `web/src/pages/CommentCaMarche.tsx`, `APropos.tsx` (réduit), `Contact.tsx`, `pages.ts` (ancres), `Layout.tsx`, `App.tsx`.
+
+### D3. Contact
+
+- **Adresse** : `[ADRESSE À CONFIRMER]`, dans une seule constante (`CONTACT_EMAIL`, `web/src/content/contact.ts`). Affichée **en texte sélectionnable** (pas une image, pas d'obfuscation) + bouton **« copier »** :
+  - `navigator.clipboard.writeText` ; si l'API échoue (contexte non sécurisé, refus), le texte de l'adresse est sélectionné et le message invite à faire ctrl+c ;
+  - résultat annoncé dans une zone `aria-live="polite"` (« copié »).
+- **Formulaire** : vrai `<form>` avec `<fieldset>` + `<legend>` pour le sujet (boutons radio : bug, film mal reconnu, idée, autre ; aucun coché par défaut, choix obligatoire) et `<label>` + `<textarea>` pour le message (obligatoire, 2 000 caractères au plus, compteur visible). Le bouton **ouvre un `mailto:` pré-rempli** :
+  - sujet : `[pépite] <sujet>` ; corps : le message, rien d'autre ;
+  - construit par une fonction pure `mailtoHref(subject, message)` (`encodeURIComponent`, retours à la ligne en `%0D%0A`), testée par Vitest ;
+  - **rien n'est ajouté automatiquement** : ni navigateur, ni films de l'utilisateur, ni résultats d'analyse. Pour « film mal reconnu », l'aide du champ suggère d'écrire le titre, l'année et la source (texte de Claude Web).
+  - Sous le bouton, une phrase : si aucune application de mail ne s'ouvre, copier l'adresse.
+- **Aucun service tiers, aucune requête nouvelle** : pas de Formspree, pas de captcha, pas de `fetch`. Le formulaire n'est jamais envoyé à un serveur (`onSubmit` empêche l'envoi et navigue vers le `mailto:`).
+- Risque accepté : une adresse en clair attire du spam. Une adresse dédiée au projet est conseillée (question Q6).
+
+### D4. Aide des exports : carrousel accessible
+
+- Remplace les deux paragraphes dépliés par « je sais pas où trouver mon export » (le bouton dépliant reste).
+- **Onglets** « letterboxd » / « imdb » : motif ARIA *tabs* (`role="tablist"`, `tab`, `tabpanel`, `aria-selected`, tabindex itinérant, flèches ← →, Début / Fin). Letterboxd sélectionné au départ.
+- **Étapes** dans chaque onglet : 3 pour Letterboxd, 4 pour IMDb (base : les textes actuels de l'accueil) :
+  - Letterboxd : réglages → « import & export » → « exporter tes données » → le .zip à glisser tel quel ;
+  - IMDb : profil → évaluations → « … » / actions → exporter → page des exports (attendre, recharger) → télécharger le .csv et le glisser ;
+  - les noms de menus sont **vérifiés par Thibault sur les vrais sites** (R7) ; sur téléphone, préciser si l'export se fait sur le site et non dans l'application (texte de Claude Web).
+- **Navigation** : boutons « ← précédent » / « suivant → » (vrais `<button>`, désactivés aux extrémités), indication « étape 2 sur 4 », changement annoncé par `aria-live="polite"`. **Pas de défilement automatique.** Pas d'animation si `prefers-reduced-motion` ; sinon un fondu court (≤ 150 ms) au plus.
+- **Illustrations** : une par étape, **SVG en ligne dessiné à la main dans le style fanzine** : blocs d'interface schématiques (rectangles encre, pointillés, lignes de texte simulées par des traits), la cible entourée ou fléchée au **stylo bleu** (Caveat pour l'annotation), libellés en Courier Prime.
+  - **Pas de capture d'écran, pas de vidéo, aucun logo ni couleur de marque** (ni le vert / orange / bleu de Letterboxd, ni le jaune d'IMDb), pas de reproduction fidèle des pages : un schéma « de mémoire ».
+  - Couleurs par `currentColor` et variables CSS : le même SVG marche dans les deux thèmes.
+  - Le texte de l'étape porte l'information ; le SVG est `aria-hidden="true"`.
+  - Budget : ≤ 3 Ko par SVG, ≤ 25 Ko pour les 7 (non compressés).
+- Fichiers : `web/src/components/ExportHelp.tsx`, `web/src/components/help/*.tsx` (un SVG par étape).
+
+### D5. Note du public sur les cartes
+
+- **Pipeline** (`site_catalog.py`) : deux tableaux ajoutés à `catalog.json`, version `v: 2` :
+  - `ml_mean` : moyenne MovieLens × 10, entier (arrondi au plus proche, 0,5 vers le haut : `floor(x × 10 + 0,5)`) ;
+  - `ml_count` : `ml_rating_count` (nombre de notes MovieLens).
+  - Ce sont des agrégats, pas des notes brutes (règle « aucune note MovieLens brute dans le dépôt » respectée) ; `web/public/data/` reste non versionné (attente GroupLens). Rien des datasets IMDb.
+  - Pas de réentraînement : l'ordre `item_idx` ne bouge pas. `export.py catalog --out web` puis `catalog-verify` (vérifie les deux tableaux).
+- **Carte** : sous « réalisateur, année », en encre pâle 13 px : **« ★ 3,9 · 1 240 notes »** (virgule décimale, séparateur des milliers `Intl.NumberFormat('fr-FR')`, espace insécable fine).
+  - Le « ★ » est `aria-hidden` ; lecteur d'écran : « note moyenne 3,9 sur 5, 1 240 notes ».
+  - **Cohérence avec le curseur** : la popularité du curseur est ≥ `ml_count` (formule hybride), donc le nombre affiché ne dépasse jamais le plafond du cran.
+  - « notes » = notes MovieLens ; c'est expliqué dans « comment ça marche » (données). Pas de note IMDb ni TMDB.
+- Critère de taille : `catalog.json` ≤ +60 Ko gzip (mesuré : +55 Ko).
+
+### D6. « (parce que t'as aimé X et Y) »
+
+C'est la fonction **« explications »** de l'étape 8, avancée (feuille de route mise à jour à la clôture).
+
+- **Films cités** : parmi l'historique du fold-in (`exact`, `probable_variant`, `confirmed`) **avec une note** et un percentile **≥ 0,7** (seuil réglable, `LIKED_PERCENTILE`), les **2** dont le vecteur d'item est le plus proche du film recommandé (cosinus).
+  - Vecteurs int8 : l'échelle par film se simplifie dans le cosinus ; on précalcule une fois les normes des vecteurs des films aimés.
+  - Un seul film aimé proche → « (parce que t'as aimé X) » ; aucun film aimé (export sans notes, ou tout sous le seuil) → pas d'annotation.
+  - Un film n'est cité que si le cosinus est **> 0** (seuil `MIN_COSINE`, réglable en R6).
+  - Titre cité = titre affiché du catalogue (pas celui de l'export).
+- **Calcul** : une seule fois, dans le worker, **juste après `recommend({ n: 48 })`**, pour tous les films distincts des 8 crans (≤ 384). Fonction pure `explain()` dans `web/src/reco/explain.ts`, appelée par `workerCore.ts` et par `reco-report` (affichage dans le terminal). Le changement de cran n'ajoute **aucun** calcul.
+- **Temps** : ≤ +100 ms sur `recommend` pour 3 000 films (`reco-bench`), changement de cran toujours **≤ 50 ms** (Playwright). Estimation : 384 × ~900 films aimés × 64 ≈ 22 M multiplications, soit quelques dizaines de ms.
+- **Affichage** : annotation Caveat stylo bleu sous la ligne de note, comme l'annotation de série. Titres de plus de 32 caractères coupés avec « … » (titre complet dans le texte pour lecteur d'écran). **Pas de pourcentage de correspondance.**
+- Annotation de série et explication sur la même carte : question Q3.
+- **Mesure informative en R6** (terminal seulement, export de Thibault) : nombre de films distincts cités sur les 8 premières cartes de chaque cran, part des cartes sans explication. Si un même film est cité sur presque toutes les cartes, **arrêt** pour décider d'une règle de diversité (hors des décisions écrites).
+- Alternative non retenue au MVP : l'explication exacte de l'ALS (contribution de chaque film de l'historique au score, via la matrice du fold-in), plus fidèle mais moins intuitive. Notée en §6.
+
+### D7. Thème sombre par défaut, clair au choix
+
+- **Sombre par défaut.** Bouton dans l'en-tête, vrai `<button>`, libellé visible « passer en clair » / « passer en sombre » (texte de Claude Web), petit dessin SVG au trait possible, **pas d'emoji**. Il pose `data-theme="dark" | "light"` sur `<html>`.
+- **Palette sombre**, à ajouter au design system (§2, nouveau tableau) ; valeurs proposées, contrastes calculés le 8 novembre 2026 (WCAG, sur le fond / sur la surface) :
+
+| Rôle | Clair (actuel) | Sombre (proposé) | Contraste sombre |
+|---|---|---|---|
+| Fond `paper` | `#FBFAF7` | `#16171B` | — |
+| Surface `surface` (cartes, zone de dépôt ; remplace `white`) | `#FFFFFF` | `#23242A` | — |
+| Texte `ink` | `#1B1B1B` | `#ECE8DF` | 14,7 / 12,7 |
+| Texte secondaire `muted` | `#555049` | `#ADA79C` | 7,5 / 6,5 |
+| Filet `rule` | `#B9B4AA` | `#5A574F` (décoratif) | 2,5 |
+| Accent `pen` (stylo bleu éclairci) | `#2546B8` | `#8EA6FF` | 7,7 / 6,7 |
+| Scotch `tape` | `rgba(214,208,196,0.75)` | `rgba(214,208,196,0.35)` | — |
+
+  - **Jamais d'orange**, un seul accent (le stylo bleu), comme en clair.
+  - L'ombre des cartes, invisible sur fond sombre, est remplacée par un filet 1 px `rule`.
+  - `color-scheme: dark` pour les contrôles natifs (curseur, barres de défilement) ; `accent-color` = `pen`.
+  - Le filet (`rule`) ne sert qu'aux séparations décoratives ; toute bordure de composant (zone de dépôt, boutons) utilise `ink` (≥ 3:1).
+  - Logo TMDB : vérifier sa lisibilité sur fond sombre (version officielle adaptée si besoin, sans le modifier).
+- **Jetons** : les variables du `@theme` sont redéfinies sous `:root[data-theme="dark"]` ; le jeton `white` est renommé `surface` (sens, pas couleur).
+- **Stockage — exception à « rien de stocké » (é5 D2)** : **une seule clé** `localStorage`, `pepite-theme`, écrite **seulement quand l'utilisateur passe en clair** (valeur `light`) et **supprimée** quand il revient au sombre (le défaut). Toujours dans `try/catch` (navigation privée, stockage bloqué : le thème marche, il n'est simplement pas retenu).
+  - Lecture **avant le premier affichage** (petit script en ligne dans `web/index.html`, `data-theme="dark"` par défaut sur `<html>`), pour éviter un flash de thème.
+  - Ni cookie, ni `sessionStorage`, ni IndexedDB ; l'historique et les résultats ne sont toujours jamais stockés.
+- **À mettre à jour** : le texte « on garde rien » (Claude Web, D8), le test Playwright de stockage (n'autorise que cette clé, avec cette valeur), `contexte/decisions.md` (ligne « rien de stocké »), `CLAUDE.md` (« aucun stockage dans le navigateur au MVP »), `docs/design-system.md` (§2 et §7).
+
+### D8. Emplacements des textes (Claude Web)
+
+- Tous les textes nouveaux ou réécrits passent par `web/src/content/` (un module par page : `apropos.ts`, `commentCaMarche.ts`, `contact.ts`, `exportHelp.ts`, `theme.ts`, `cards.ts`). Tant qu'un texte manque, la constante vaut `pending('<id>')`, qui s'affiche « [texte à venir : <id>] ».
+- Un test Vitest liste les `pending` restants ; **bloquant à partir de R7**.
+- Liste des emplacements à remettre à Thibault pour Claude Web (avec, pour chacun, la contrainte de longueur et le ton de `docs/design-system.md` §4) :
+
+| Id | Où | Contenu attendu |
+|---|---|---|
+| `apropos.intro`, `apropos.pourquoi` | à propos | qui je suis (« je », sans école), pourquoi ce site |
+| `ccm.modele`, `ccm.percentiles`, `ccm.curseur`, `ccm.donnees`, `ccm.limites`, `ccm.inspirations` | comment ça marche | une section chacun (D2) |
+| `ccm.onGardeRien` | comment ça marche | liste « × … », avec l'exception du thème (D7) |
+| `contact.intro`, `contact.sujets` (4 libellés), `contact.aideMessage` (dont « film mal reconnu »), `contact.bouton`, `contact.copie`, `contact.copieEchec`, `contact.pasDeMail` | contact | D3 |
+| `aide.titre`, `aide.letterboxd.1-3`, `aide.imdb.1-4`, `aide.precedent`, `aide.suivant` | accueil | D4 (une à deux phrases par étape) |
+| `theme.versClair`, `theme.versSombre` | en-tête | D7 |
+| `cartes.parceQue1`, `cartes.parceQue2` | cartes | D6 (formulation pour 1 et 2 films ; par défaut « (parce que t'as aimé X et Y) ») |
+| `nav.*` | en-tête | « comment ça marche », « à propos », « contact » (par défaut ces trois-là) |
+
+- Les mentions obligatoires (TMDB, MovieLens) et les libellés techniques (« ★ 3,9 · 1 240 notes ») ne sont pas dans cette liste.
+
+---
+
+## 4. Sous-étapes
+
+### R0 — Emplacements des textes
+
+- `web/src/content/` et `pending()` (D8), test des `pending` restants (non bloquant jusqu'à R7). Liste des emplacements prête à transmettre.
+
+### R1 — Thème sombre
+
+- Jetons des deux thèmes, renommage `white` → `surface`, script en ligne de `index.html`, bouton de thème, clé `pepite-theme` (D7).
+- Test Vitest : contrastes calculés depuis les jetons des deux thèmes (texte ≥ 4,5:1, bordures de composants ≥ 3:1).
+- Playwright : axe 0 violation grave **dans les deux thèmes**, sur l'accueil, l'analyse, les résultats ; stockage : vide sans clic, exactement `{ "pepite-theme": "light" }` après le passage en clair, retenu après rechargement, vide après le retour au sombre.
+- `docs/design-system.md` : palette sombre.
+
+### R2 — Pages et navigation
+
+- Ancres (D2), `CommentCaMarche.tsx`, `APropos.tsx`, `Contact.tsx` (coquille), en-tête commun, « ← changer de fichier » déplacé, `aria-current`.
+- Vitest : ancre → page, ancre de section → page + section, fermeture vers `#` qui retrouve les résultats au même cran. Playwright : lien direct `/#contact` au chargement, précédent / suivant.
+
+### R3 — Contact
+
+- Adresse + copier, formulaire, `mailtoHref` (D3).
+- Vitest : `mailtoHref` (accents, retours à la ligne, `&`, `?`, `#`, 2 000 caractères), champs obligatoires, aucun envoi. Playwright : aucune requête au clic, rien de stocké.
+
+### R4 — Aide des exports
+
+- `ExportHelp` (onglets, étapes, boutons, `aria-live`), 7 SVG (D4).
+- Vitest + RTL : clavier des onglets, boutons aux extrémités, annonce de l'étape. Playwright : téléphone (pas de défilement horizontal), axe dans les deux thèmes ; taille des SVG.
+
+### R5 — Note du public
+
+- `site_catalog.py` (`v: 2`, `ml_mean`, `ml_count`), `catalog-verify`, tests `pytest` ; `export.py catalog --out web` ; type `CatalogFile`, `FilmCard` (D5).
+- Mesure de la taille de `catalog.json` (gzip) dans la section 5.
+
+### R6 — Explications
+
+- `explain.ts`, appel dans `workerCore.ts`, affichage dans `FilmCard`, `reco-report` (terminal) (D6).
+- Vitest : vecteurs synthétiques (les deux plus proches, seuil de percentile, cosinus ≤ 0 exclu, 0 / 1 / 2 films aimés, films vus jamais cités deux fois sur une carte), invariance à l'échelle int8. `reco-bench` : temps avant / après. Playwright : changement de cran ≤ 50 ms.
+- Mesure informative sur l'export de Thibault (D6), comptes seulement dans la section 5.
+
+### R7 — Textes de Claude Web (**arrêt** si des textes manquent)
+
+- Thibault fournit les textes (D8) et vérifie les noms de menus de l'aide (D4) sur les vrais sites. Intégration ; le test des `pending` devient bloquant ; tests de composants mis à jour (anciens libellés « qui on est »…).
+
+### R8 — Vérifications et clôture
+
+- Tous les critères ci-dessous ; adresse de contact confirmée (sinon **arrêt**).
+- **Essai sur un vrai téléphone par Thibault**, dans les deux thèmes (**arrêt**).
+- Section 5 complète ; `CLAUDE.md` (stockage, arborescence), `docs/design-system.md`, `docs/stack-technique.md` (§9), `contexte/` (état, décisions — exception de stockage —, feuille de route : étape 6b, explications avancées) dans le même commit ; **arrêt** pour relecture.
+
+### Critères de réussite
+
+| Critère | Seuil |
+|---|---|
+| Qualité | `npm test`, `typecheck`, `lint`, `format:check`, `build`, `e2e` verts ; `pytest`, `ruff check`, `ruff format --check` (pipeline touché en R5) |
+| Accessibilité | axe : **0 violation grave dans chaque thème**, sur accueil, analyse, résultats, les trois pages ; onglets et carrousel au clavier ; zones tactiles ≥ 44 px |
+| Contraste | AA pour tous les couples texte / fond des deux thèmes (test sur les jetons) ; aucun orange |
+| Réseau | **0 requête nouvelle** : test `fetch` et Playwright (seules les affiches TMDB hors du site), y compris contact et copie |
+| Stockage | rien sans clic ; seule la clé `pepite-theme` = `light` après le passage en clair ; ni cookie, ni `sessionStorage`, ni IndexedDB |
+| Liens directs | `#comment-ca-marche`, `#a-propos`, `#contact` et les ancres de sections ouvrent la bonne page au chargement ; retour vers `#` sans recalcul |
+| Taille | `catalog.json` ≤ +60 Ko gzip ; SVG de l'aide ≤ 25 Ko au total |
+| Temps | `recommend` + explications ≤ +100 ms pour 3 000 films (`reco-bench`) ; changement de cran ≤ 50 ms (Playwright) ; modèle prêt et analyse : pas plus de 10 % au-dessus des temps de l'étape 5 |
+| Moteur | les 22 cas de `foldin_cases.json` rejoués à l'identique (les explications n'y touchent pas) |
+| Téléphone | une colonne, pas de défilement horizontal, navigation sur deux lignes au plus (Playwright) ; validé sur un vrai téléphone dans les deux thèmes |
+| Textes | aucun `pending` restant ; mentions obligatoires intactes ; « Letterboxd » / « IMDb » jamais dans le nom ni le logo, aucun logo de marque dans l'aide |
+| Confidentialité | aucun titre de l'export de Thibault dans un fichier versionné |
+
+---
+
+## 5. Résultats
+
+*(à remplir pendant l'étape)*
+
+---
+
+## 6. À reporter
+
+- **Explication exacte de l'ALS** (contribution de chaque film de l'historique au score) : plus fidèle que le cosinus, à comparer avec la fiche film (étape 8).
+- **Règle de diversité des films cités** (éviter le même film sur toutes les cartes), si la mesure de R6 le demande sans justifier un arrêt.
+- **Suivre le thème du système** (`prefers-color-scheme`) quand rien n'est choisi : écarté par D7 (sombre par défaut), voir Q2.
+- **Formulaire de contact relié à un service** (envoi sans application de mail) : demanderait un service tiers ou un Worker ; à rediscuter avec « forme du retour des volontaires » (étape 7).
+
+---
+
+## 7. Questions pour la validation
+
+1. **Q1 — Cartes en thème sombre.** Proposé : surface sombre (`#23242A`) avec un filet, pour ne pas allumer 8 à 48 rectangles blancs. Autre possibilité : garder des « photos » claires scotchées sur un mur sombre (plus fanzine, mais très lumineux, et le stylo clair n'y est plus lisible : il faudrait le bleu actuel sur les cartes).
+2. **Q2 — Sombre même si le système est réglé en clair ?** D7 dit oui (proposé tel quel). Autre possibilité : suivre le réglage du système tant que rien n'est choisi (aucune clé de plus).
+3. **Q3 — Carte d'un film d'une série déjà vue** : proposé, l'annotation de série **remplace** l'explication (c'en est déjà une, et une seule annotation manuscrite par carte reste lisible).
+4. **Q4 — Seuils de D6** : percentile ≥ 0,7 et cosinus > 0, ajustés en R6 en regardant `reco-report` ; l'explication s'affiche aussi sur les cartes « loin de tes goûts ». D'accord ?
+5. **Q5 — Libellés** : « qui on est » devient « à propos » dans la navigation ; le pied de page garde « des gens qui regardent trop de films » sauf texte nouveau de Claude Web.
+6. **Q6 — Adresse de contact** : une adresse dédiée au projet (et pas l'adresse personnelle) limite le spam et ce qui reste visible après le projet. La clôture attend l'adresse.
