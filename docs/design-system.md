@@ -131,7 +131,8 @@ Mentions obligatoires (ne pas reformuler) :
 - Légère **rotation** différente pour chaque carte (entre −1,8° et +1,8°).
 - Un **bout de scotch** (72 × 22 px) centré en haut, légèrement de travers.
 - Affiche au format **2:3**.
-- Dessous : titre en gras 16 px, puis « réalisateur, année » en encre pâle 13 px.
+- Dessous : titre en gras 16 px, puis « réalisateur, année » en encre pâle 13 px, puis la note du public « ★ 3,9 · 1 240 notes » (encre pâle 13 px ; étape 6b).
+- Annotation Caveat « (parce que t'as aimé « X » et « Y ») » (étape 6b), ou « (même série que « X », que t'as vu) » qui la remplace ; titres de plus de 32 caractères coupés avec « … ».
 - Si c'est une pépite : « ✱ pépite » en Caveat gras, stylo bleu, incliné à −12°, qui déborde un peu du bord droit de la carte.
 - Toute la carte est un lien vers la fiche du film.
 
@@ -170,6 +171,9 @@ Mentions obligatoires (ne pas reformuler) :
 | Analyse du fichier | ⏳ à refaire en style C | « on a reconnu 412 de tes films », liste des titres ambigus à corriger |
 | Recommandations | ✅ fait (C) | Titre, annotation de profil, curseur, grille de cartes |
 | Fiche film | ⏳ à refaire en style C | Grande affiche, résumé, « pourquoi ce film », lien Letterboxd, « je l'ai déjà vu » |
-| À propos | ⏳ à faire | Qui on est, comment ça marche, mentions TMDB / MovieLens |
+| Comment ça marche | ✅ fait (étape 6b) | Le principe, tes notes, le curseur, les données, on garde rien, limites, inspirations |
+| À propos | ✅ fait (étape 6b) | « je » (étudiant, sans école), pourquoi ce site, crédits TMDB / MovieLens |
+| Contact | ✅ fait (étape 6b) | Adresse + « copier », formulaire (sujet, message) qui ouvre la messagerie |
+| Aide des exports | ✅ fait (étape 6b) | Onglets letterboxd / imdb, étapes avec schémas SVG au trait |
 
 Directions écartées pour l'instant (gardées sur le canevas de maquettes) : A « Lumière » (blanc, cobalt, Inter Tight) et B « Générique » (gris clair, vert, capitales étroites).

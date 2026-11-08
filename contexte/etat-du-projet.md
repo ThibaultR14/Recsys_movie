@@ -1,6 +1,6 @@
 # État du projet
 
-> Mis à jour le 8 novembre 2026, à la clôture de l'étape 6. Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
+> Mis à jour le 8 novembre 2026, à l'arrêt de R8 de l'étape 6b (retouches de l'interface : tout est fait sauf l'adresse de contact et l'essai sur un vrai téléphone). Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
 > Dépôt : https://github.com/ThibaultR14/Recsys_movie
 
 ## Le projet en 5 lignes
@@ -8,10 +8,10 @@
 - **Pépite** (nom de travail) : un site gratuit qui recommande à un cinéphile des films qu'il n'a pas encore vus.
 - **Cible** : les cinéphiles qui tiennent un journal sur Letterboxd ou IMDb. Ils déposent leur export (ZIP ou CSV Letterboxd, CSV des notes IMDb).
 - **Curseur « connu ↔ pépite »** : il fait glisser les recommandations des classiques vers des films très peu vus mais proches du goût de l'utilisateur.
-- **Tout se passe dans le navigateur** : site 100 % statique, sans serveur, sans compte ni stockage. Les films et les notes de l'utilisateur ne quittent jamais sa machine.
+- **Tout se passe dans le navigateur** : site 100 % statique, sans serveur, sans compte ni stockage (seul le choix du thème clair est retenu). Les films et les notes de l'utilisateur ne quittent jamais sa machine.
 - Projet étudiant (M2, ECE Paris), **non commercial** : MovieLens, TMDB et les datasets IMDb l'imposent.
 
-## Où on en est : étapes 1 à 6 faites
+## Où on en est : étapes 1 à 6 faites, 6b presque close
 
 | Étape | Résultat | Chiffres clés | Détail |
 |---|---|---|---|
@@ -22,6 +22,7 @@
 | 4. Calcul dans le navigateur | moteur TypeScript dans un Web Worker | reproduit le Python à 10⁻¹⁵ près (22 vecteurs, 66 listes) ; recommandations en 19-42 ms | `docs/etape-4-navigateur.md` |
 | 5. Interface | style « C · Fanzine » : accueil, analyse du fichier, résultats et curseur, « à propos » | modèle prêt en 0,8-0,9 s, analyse 11-30 ms, changement de cran ≤ 40 ms ; aucune requête hors du site sauf les affiches TMDB ; validée sur un vrai téléphone | `docs/etape-5-interface.md` |
 | 6. Import IMDb | CSV des notes détecté par l'en-tête, rapprochement par `imdb_id` (+ alias), repli par titre seulement proposé dans « à vérifier », séries et épisodes à part, watchlist refusée avec un message | export fabriqué de Thibault (compte en français, 42 lignes) : 35 films trouvés par id ; 3 000 lignes en 22 ms ; mesure sur un vrai historique reportée à l'étape 7 | `docs/etape-6-imdb.md` |
+| 6b. Retouches de l'interface | thème sombre par défaut ; pages « comment ça marche », « à propos » (« je »), « contact » (`mailto:`) ; aide des exports en carrousel ; note du public et « parce que t'as aimé X et Y » sur les cartes ; textes de Claude Web | explications en 3,5 ms (export réel) et 38 ms (3 000 films), 2 cartes au plus par film cité et par rangée ; `catalog.json` +55 Ko gzip ; axe 0 dans les deux thèmes ; **reste : adresse de contact, essai téléphone** | `docs/etape-6b-retouches.md` |
 
 Données embarquées par le site (`web/public/data/`) : **~3 Mo gzip** au total. Elles se composent des vecteurs int8, de la popularité, du catalogue et de l'index des titres.
 
@@ -68,6 +69,7 @@ Les commandes complètes, avec les scripts de mesure, sont dans `CLAUDE.md` (sec
 | Moteur dans le navigateur, biais des films récents | `docs/etape-4-navigateur.md` |
 | Interface, textes, tests navigateur | `docs/etape-5-interface.md` |
 | Import IMDb (format réel, types traduits, repli par titre) | `docs/etape-6-imdb.md` |
+| Thème sombre, pages, contact, aide, note du public, explications | `docs/etape-6b-retouches.md` |
 | Direction visuelle (couleurs, polices, composants, ton) | `docs/design-system.md`, `docs/maquette-C-fanzine.html` |
 | Concurrents, positionnement | `docs/etat-de-l-art.md` |
 | Décisions résumées, feuille de route | `contexte/decisions.md`, `contexte/feuille-de-route.md` |
@@ -94,6 +96,7 @@ Chaque spec d'étape suit le même plan : décisions (D1, D2…), sous-étapes e
 
 ## En attente
 
+- **Fin de l'étape 6b** : l'adresse de contact (aujourd'hui `[ADRESSE À CONFIRMER]`, `web/src/content/contact.ts`), la confirmation des noms de menus Letterboxd de l'aide, et l'essai de Thibault sur un vrai téléphone dans les deux thèmes.
 - **Réponse de GroupLens** sur la licence MovieLens (mail envoyé le 6 novembre 2026). **Elle bloque la mise en ligne** (étape 7) et le versionnement de `web/public/data/`, mais pas le développement en local.
 - **Exports de 10 à 20 cinéphiles volontaires** (étape 7). Ils serviront à mesurer la correspondance des titres et à recaler les seuils de l'interface : « loin de tes goûts » et tampon « ✱ pépite ».
 - **Un vrai historique IMDb** (export d'un proche ou d'un volontaire) : pour mesurer les taux de correspondance, et vérifier les libellés français probables de `Title Type` (mini-série, jeu vidéo).

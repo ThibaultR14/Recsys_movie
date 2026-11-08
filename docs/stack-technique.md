@@ -227,7 +227,7 @@ Appeler TMDB depuis le site exposerait notre clé d'API. On **pré-calcule** don
 | **Liste faite main remise en forme par IA** (décidé) | **MVP : pas d'IA**, correspondance floue des titres (Fuse.js + index des titres). **Plus tard** : un petit modèle via API pour les cas difficiles. | L'API passe par un **Cloudflare Worker** (pour cacher la clé), avec une **limite d'usage** pour maîtriser le coût. Modèle dans le navigateur écarté pour l'instant (trop lourd). |
 | **Scraping Letterboxd par pseudo** | Récupérer les pages publiques du profil | Impossible depuis le navigateur (CORS) → il faut un **Cloudflare Worker**. ⚠️ Contraire aux conditions de Letterboxd et fragile : option secondaire uniquement. |
 | **Filtre « dispo en France »** | Endpoint *watch providers* de TMDB pour chaque film du catalogue | Pré-calculé chaque mois par GitHub Actions, ajouté à `catalog.json` (région FR uniquement). |
-| **Explications** | Pour chaque reco, les films de l'utilisateur les plus proches | Aucun outil en plus : calcul de similarité entre vecteurs, déjà disponible. |
+| **Explications** | ✅ Fait à l'étape 6b : pour chaque reco, les 2 films aimés de l'utilisateur les plus proches (cosinus) | `web/src/reco/explain.ts` ; règle de diversité dans la grille. Explication exacte de l'ALS (contributions du fold-in) : plus tard. |
 | **Autres imports** (SensCritique, Trakt…) | Un adaptateur par source | Aucun outil en plus si la source fournit un export. |
 | **Films récents** | Modèle basé sur le contenu (genres, mots-clés, réalisateur, résumé) | Données TMDB + éventuellement embeddings de texte calculés hors ligne. |
 
@@ -333,12 +333,13 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 4. ✅ **Calcul dans le navigateur** : fold-in, scores, curseur, dans un Web Worker (fait : 22 vecteurs et 66 listes top 10 rejoués à l'identique ; 19 ms par recommandation pour un export réel). Diagnostic du biais des films récents : `docs/etape-4-navigateur.md` §6, décision en attente.
 5. ✅ **Interface** (fait, `docs/etape-5-interface.md`) : accueil et dépôt, analyse du fichier (à vérifier, trop récents, hors catalogue), résultats avec le curseur à 8 crans, page « à propos » ; aucune requête hors du site sauf les affiches TMDB, rien de stocké ; modèle prêt en moins d'1 s, changement de cran ≤ 40 ms ; validé sur un vrai téléphone. La fiche film passe à l'étape 8.
 6. ✅ **Adaptateur IMDb** (fait, `docs/etape-6-imdb.md`) : CSV des notes détecté par l'en-tête, rapprochement par `imdb_id` (+ alias), repli par titre seulement proposé dans « à vérifier », séries/épisodes/jeux comptés à part (`Title Type` traduit : liste de non-films en anglais et en français, tout type inconnu = film) ; watchlist refusée avec un message ; sur un export fabriqué de Thibault, 35 films trouvés par id ; 3 000 lignes en 22 ms. Mesure sur un vrai historique IMDb reportée à l'étape 7.
+6b. ✅ **Retouches de l'interface ** (`docs/etape-6b-retouches.md`), **sauf l'adresse de contact et l'essai sur un vrai téléphone** (arrêt de R8). Fait : thème sombre par défaut (clair au choix, seule clé `localStorage` `pepite-theme`), pages « comment ça marche », « à propos » (« je ») et « contact » par ancre, contact par `mailto:` sans service tiers, aide des exports en carrousel (7 schémas SVG), note du public MovieLens sur les cartes (`catalog.json` v2, +55 Ko gzip), « (parce que t'as aimé X et Y) » (cosinus, percentile ≥ 0,7, 2 cartes au plus par film cité et par rangée de 8 ; 3,5 ms sur un export réel, 38 ms pour 3 000 films), textes de Claude Web ; axe 0 dans les deux thèmes, réseau inchangé.
 7. Mise en ligne, tests avec 10-20 cinéphiles.
-8. Ensuite seulement : explications, dispo en France, liste faite main, scraping.
+8. Ensuite seulement : fiche film, dispo en France, liste faite main, scraping (explications avancées à l'étape 6b).
 
 ---
 
-## 9. Décisions prises (6-8 novembre 2026, étapes 1-6)
+## 9. Décisions prises (6-8 novembre 2026, étapes 1-6b)
 
 | Sujet | Décision |
 |---|---|
@@ -358,7 +359,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 | Dataset Letterboxd 10M | **Non utilisé** (collecte probablement par scraping, pas de vérité terrain) |
 | Calcul des recos | Moteur TypeScript unique (Web Worker + scripts), identique au Python ; exclus : vus, non recommandables, candidats ambigus, candidat flou principal |
 | IA pour les listes faites main | **Pas d'IA au MVP** (Fuse.js) ; API + Cloudflare Worker plus tard |
-| Interface | Machine à états, rien de stocké ; polices auto-hébergées ; flou jamais coché par défaut (statut `confirmed` si l'utilisateur choisit) ; un seul calcul pour les 8 crans, départ à 2 000 ; « loin de tes goûts » < 0,04 ; tampon « ✱ pépite » relatif à la rangée de 8 ; carte = lien `letterboxd.com/tmdb/<id>/` ; mention « spectacle » non affichée |
+| Interface | Machine à états, rien de stocké sauf le choix du thème clair (`pepite-theme`, étape 6b) ; thème sombre par défaut ; pages par ancre (« comment ça marche », « à propos », « contact ») ; contact par `mailto:` ; note du public MovieLens et « parce que t'as aimé X et Y » sur les cartes (2 cartes au plus par film cité et par rangée) ; polices auto-hébergées ; flou jamais coché par défaut (statut `confirmed` si l'utilisateur choisit) ; un seul calcul pour les 8 crans, départ à 2 000 ; « loin de tes goûts » < 0,04 ; tampon « ✱ pépite » relatif à la rangée de 8 ; carte = lien `letterboxd.com/tmdb/<id>/` ; mention « spectacle » non affichée |
 | Titres affichés | Action `title` de `manual_overrides.csv`, appliquée par `site_catalog.py` seulement (5 titres) |
 | Licences | **Contact direct** avec GroupLens et TMDB |
 

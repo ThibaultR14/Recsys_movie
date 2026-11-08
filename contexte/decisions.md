@@ -1,7 +1,7 @@
 # Décisions
 
-> Toutes les décisions prises du 6 au 8 novembre 2026 (étapes 1 à 6), une ligne chacune : décision — raison — où c'est détaillé. Les décisions **écartées** importantes sont marquées ✗.
-> Abréviations : `projet` = `docs/projet-reco-films.md`, `stack` = `docs/stack-technique.md`, `é2` à `é6` = `docs/etape-2-modele.md` … `docs/etape-6-imdb.md`, `DS` = `docs/design-system.md`.
+> Toutes les décisions prises du 6 au 8 novembre 2026 (étapes 1 à 6b), une ligne chacune : décision — raison — où c'est détaillé. Les décisions **écartées** importantes sont marquées ✗.
+> Abréviations : `projet` = `docs/projet-reco-films.md`, `stack` = `docs/stack-technique.md`, `é2` à `é6` = `docs/etape-2-modele.md` … `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `DS` = `docs/design-system.md`.
 
 ## Données et licences
 
@@ -92,11 +92,19 @@
 - Carte = lien vers `https://letterboxd.com/tmdb/<tmdb_id>/` (redirection vérifiée) ; fiche film reportée à l'étape 8 — `é5` D6.
 - Export d'exemple **synthétique** (films connus, notes inventées) — démontrer le site sans donnée personnelle — `é5` D3.
 - Accessibilité : vrais `<button>`, `<a>`, `<label>` ; contraste AA ; zones tactiles ≥ 44 px ; 0 violation axe grave — `CLAUDE.md`, `é5` G5.
+- **Thème sombre par défaut**, même si le système est en clair ; bouton « passer en clair » ; palette sombre (stylo bleu éclairci `#8EA6FF`, cartes un cran plus claires que le fond, scotch gardé, jamais d'orange), AA dans les deux thèmes — `é6b` D7, Q1-Q2.
+- Pages « comment ça marche », « à propos », « contact » ouvertes par l'ancre par-dessus l'écran courant (gardé, cran compris), navigation sur tous les écrans — garder la machine à états, permettre les liens directs — `é6b` D2.
+- « À propos » à la première personne, sans nom d'école ; le reste du site garde le « on » ; textes de Claude Web dans `web/src/content/` — `é6b` D1, D8.
+- Contact : adresse en texte + « copier », formulaire qui ouvre un `mailto:` pré-rempli ; aucun service tiers — rien de nouveau sur le réseau — `é6b` D3.
+- Aide des exports : carrousel à onglets, schémas SVG au trait, aucune capture ni logo de marque — `é6b` D4.
+- Note du public sur les cartes : moyenne MovieLens sur 5 + nombre de notes (`catalog.json` v2, +55 Ko gzip) — `é6b` D5.
+- **« (parce que t'as aimé X et Y) »** (explications avancées de l'étape 8) : cosinus des vecteurs, films notés de percentile ≥ 0,7, repli « vu » sans aucune note ; pas sur une carte de série ni aux crans « loin de tes goûts » ; **2 cartes au plus par film cité et par rangée de 8** — sinon un même film était cité sur 7-8 cartes sur 8 — `é6b` D6, R6.
+- Changement de cran : 50 ms **sur la médiane** de 21 mesures, pire cas journalisé seulement — les pointes viennent du rendu des affiches sur une machine chargée — `é6b` R6.
 
 ## Confidentialité
 
 - **Aucun appel réseau avec les films ou les notes de l'utilisateur** ; seules requêtes hors du site : les affiches TMDB (vérifié par Playwright) — principe fondateur — `CLAUDE.md`, `é5` G5.
-- Rien de stocké dans le navigateur (ni `localStorage`, ni IndexedDB, ni cookie) — « on garde rien » — `é5` D2, G5.
+- Rien de stocké dans le navigateur (ni IndexedDB, ni cookie, ni `sessionStorage`) — « on garde rien » — `é5` D2, G5. **Seule exception** : la clé `localStorage` `pepite-theme` = `light` quand l'utilisateur choisit le thème clair, supprimée au retour au sombre ; dite dans « on garde rien » ; vérifiée par Playwright — `é6b` D7.
 - Clé TMDB uniquement dans `.env` (ignoré) et les secrets GitHub, jamais affichée — `CLAUDE.md`.
 - Exports réels dans `web/test-data/` (ignoré) ; volontaires : taux seulement, fichiers supprimés après la mesure ; jamais de pseudo ni de titre d'un export dans le dépôt — `CLAUDE.md`, `é3` D6.
 - ✗ **Fixture du fold-in versionnée** (`foldin_cases.json`) : elle contenait des notes MovieLens brutes ; elle est générée hors du dépôt et l'historique a été purgé le 7 novembre 2026 — `é2` C5, `CLAUDE.md`.

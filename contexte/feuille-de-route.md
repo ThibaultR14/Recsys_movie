@@ -1,9 +1,13 @@
 # Feuille de route
 
-> Mise à jour le 8 novembre 2026, à la clôture de l'étape 6. Ordre des étapes : `docs/stack-technique.md` §8.
+> Mise à jour le 8 novembre 2026, à l'arrêt de R8 de l'étape 6b. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md` (§6 = « À reporter » ou questions ouvertes).
 
-## Prochaine étape à lancer : 7, mise en ligne et volontaires
+## En cours : fin de l'étape 6b (retouches de l'interface)
+
+Spec `docs/etape-6b-retouches.md` v0.2 validée le 8 novembre 2026. R0-R7 faits (thème sombre, pages par ancre, contact, aide des exports, note du public, explications avec règle de diversité, textes de Claude Web). **Reste (R8)** : l'adresse de contact, la confirmation des noms de menus Letterboxd, l'essai sur un vrai téléphone dans les deux thèmes, puis la relecture.
+
+## Ensuite : 7, mise en ligne et volontaires
 
 L'étape 6 (adaptateur IMDb) est close et relue le 8 novembre 2026 (`é6`). L'étape 7 reste **bloquée par la réponse de GroupLens** pour la mise en ligne ; les tests avec des volontaires peuvent se préparer en local.
 
@@ -32,7 +36,7 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 ### 8. Ensuite
 
 - **Fiche film** : retirée de l'étape 5. Pour l'instant, la carte renvoie vers Letterboxd. Il faut choisir le contenu (résumé TMDB ? casting ? films proches ?) et vérifier ce que TMDB permet d'embarquer.
-- **Explications** : « recommandé parce que tu as aimé X, Y, Z », à partir des films de l'historique dont les vecteurs sont les plus proches. Le calcul est déjà possible dans le moteur. Reste à décider le nombre de films cités et le niveau de confiance.
+- ✅ **Explications** : avancées à l'étape 6b (« parce que t'as aimé X et Y », `é6b` D6). Reste pour plus tard : l'explication exacte de l'ALS (contributions du fold-in), à voir avec la fiche film.
 - **Dispo en France** : à partir des *watch providers* TMDB (région FR), précalculés chaque mois et ajoutés à `catalog.json`. Il faut vérifier les conditions TMDB et l'attribution JustWatch.
 - **Listes faites main** : texte libre rapproché par Fuse.js, puis une IA via un Cloudflare Worker avec une limite d'usage. À trancher : coût, garde-fous, et ce qu'on envoie à l'API (des titres, jamais rien de personnel).
 - **Scraping Letterboxd par pseudo** : option secondaire seulement, puisque c'est contraire aux conditions de Letterboxd. Il faudrait un Worker, à cause de CORS.
@@ -54,7 +58,9 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 - **Évaluation sur de vrais historiques Letterboxd** : les exports des volontaires, sans dataset scrapé (`é2` §6).
 - **Formulaire de retour** derrière « dis-nous si on s'est planté » (`é5` D5).
 - **Cache du modèle** : IndexedDB éventuellement (`é4` D1).
-- **Changement de cran** : 34 à 40 ms au pire, pour un seuil de 50 ms. À surveiller si les cartes s'enrichissent (`é5` §6).
+- **Changement de cran** : critère sur la médiane depuis l'étape 6b (33 ms ; pire cas 36-54 ms sur une machine chargée, journalisé). À surveiller sur les téléphones des volontaires (`é6b` R6).
+- **Seuils des explications** (percentile ≥ 0,7, cosinus > 0, 2 cartes par film cité et par rangée) : à recaler avec les retours des volontaires (`é6b` §6, Q4).
+- **Contact** : le formulaire `mailto:` de l'étape 6b peut servir de retour des volontaires ; à décider avec la forme du retour (`é6b` §6).
 
 ### Plus tard (pipeline, données)
 

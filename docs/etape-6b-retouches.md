@@ -312,6 +312,29 @@ C'est la fonction **« explications »** de l'étape 8, avancée (feuille de rou
 - Noms de menus : **IMDb vérifié par Thibault** (chemin du texte) ; **Letterboxd : la ligne de confirmation du message de Thibault est restée à remplir** (« [OK tel quel / ou corrige ici] ») : à confirmer en R8.
 - Vitest 251 verts, Playwright 8 verts (axe 0 dans les deux thèmes sur les trois pages avec leurs vrais textes ; logo TMDB lisible sur fond sombre, vérifié sur capture).
 
+### R8 — Vérifications (8 novembre 2026) — ⏸ arrêt : adresse, menus Letterboxd, téléphone
+
+| Critère | Résultat |
+|---|---|
+| Qualité | `ruff check` et `ruff format --check` propres, `pytest` **232** verts ; `npm test` **251** verts (19 fichiers, dont les tests sur les vrais fichiers), `typecheck`, `lint`, `format:check`, `build` verts ; `e2e` **8** verts |
+| Accessibilité | axe : **0 violation grave dans chaque thème** sur l'accueil (aide ouverte comprise), l'analyse (Letterboxd et IMDb), les résultats, « comment ça marche », « à propos », « contact » ; onglets et carrousel au clavier (Vitest) ; zones tactiles ≥ 44 px (Playwright, téléphone) |
+| Contraste | AA pour `ink`, `muted`, `pen` sur `paper` et `surface` dans les deux thèmes, bordures ≥ 3:1, aucun orange (`contrast.test.ts`) ; logo TMDB lisible sur fond sombre |
+| Réseau | 0 requête nouvelle : seules les affiches TMDB sortent du site, y compris pages, copie et formulaire de contact (Playwright) ; aucun `fetch` dans le contact (Vitest) |
+| Stockage | rien sans clic ; exactement `{ "pepite-theme": "light" }` après le passage en clair, retenu au rechargement, vide au retour au sombre ; ni cookie, ni `sessionStorage`, ni IndexedDB |
+| Liens directs | `/#contact`, `/#on-garde-rien` (section visible) au chargement ; précédent / suivant ; « ← retour » → mêmes cartes, même cran |
+| Taille | `catalog.json` +55 Ko gzip (plafond +60) ; SVG de l'aide 8 130 octets (plafond 25 000) |
+| Temps | explications 3,5 ms (export réel) à 38,1 ms (3 000 films), plafond +100 ms ; changement de cran : médiane **33 ms** (21 mesures, plafond 50), pire cas journalisé ; modèle prêt 0,7-1,0 s, analyse de l'exemple 10-17 ms (étape 5 : 0,8-0,9 s, 11-30 ms) |
+| Moteur | 22 cas de `foldin_cases.json` rejoués à l'identique |
+| Téléphone | Playwright 375 × 812 : une colonne, pas de défilement horizontal (accueil, aide ouverte, analyse, résultats), navigation sur 2 lignes ; **essai sur un vrai téléphone : à faire par Thibault** |
+| Textes | 0 `pending` ; mentions obligatoires intactes (tests) ; aucun nom de marque dans le nom ni le logo, aucun logo dans l'aide |
+| Confidentialité | aucun titre ni pseudo d'un export dans un fichier versionné (mesures : comptes seulement) |
+
+- **Documents de clôture préparés dans ce commit** (`CLAUDE.md`, `docs/stack-technique.md` §6, §8, §9, `docs/design-system.md` §5 et §7, `contexte/`) : ils décrivent l'étape 6b comme faite **sauf** les trois points ci-dessous.
+- **Arrêt** (R8) :
+  1. **adresse de contact** : toujours `[ADRESSE À CONFIRMER]` (`CONTACT_EMAIL`, `web/src/content/contact.ts`) ;
+  2. **noms des menus Letterboxd** de l'aide (« settings », onglet « data », « export your data ») : la confirmation de Thibault est restée à remplir ;
+  3. **essai sur un vrai téléphone** dans les deux thèmes (`npm run dev -- --host`).
+
 ---
 
 ## 6. À reporter
