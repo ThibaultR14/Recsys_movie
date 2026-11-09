@@ -90,3 +90,54 @@ def test_production_table_has_one_lambda_per_slider_position():
 
     assert len(cal.PRODUCTION["lambda_by_position"]) == len(export.SLIDER_POSITIONS)
     assert cal.PRODUCTION["mode"] == "share" and cal.PRODUCTION["pool"] == 150
+
+
+# --- D1b (Q4b): proximity penalty to the disliked films ---------------------------------------
+
+
+def test_proximity_is_the_clipped_max_cosine_with_the_disliked_films():
+    Y = np.array([[1.0, 0.0], [0.0, 2.0], [-1.0, 0.0], [1.0, 1.0], [0.0, 0.0]])
+    unit = cal.unit_rows(Y)
+    # pool 3 vs disliked {0, 1}: cos 0.707 with both; pool 2 vs {0, 1}: -1 and 0 -> 0
+    out = cal.proximity([3, 2, -1, 4], [0, 1], unit)
+    assert np.allclose(out, [np.sqrt(0.5), 0.0, 0.0, 0.0])
+    assert cal.proximity([3, 2], [], unit).tolist() == [0.0, 0.0]  # no disliked film
+
+
+def test_penalty_moves_a_film_down_and_one_user_matches_the_batch_version():
+    rng = np.random.default_rng(1)
+    n_items, n_genres = 200, 5
+    genres = [
+        sorted(rng.choice(n_genres, rng.integers(1, 3), replace=False).tolist())
+        for _ in range(n_items)
+    ]
+    Gs = np.zeros((n_items, n_genres))
+    for i, gs in enumerate(genres):
+        Gs[i, gs] = 1.0
+    pool = rng.permutation(n_items)[:50]
+    scores = np.sort(rng.random(50))[::-1] + 1
+    p = cal.share_profile_one(genres, n_genres, rng.choice(n_items, 20, replace=False), np.ones(20))
+    pen = np.zeros(50)
+    pen[0] = 10.0  # the best film, pushed to the bottom
+    for lam in (0.0, 0.9):
+        one = cal.calibrate_one(pool, scores, p, genres, lam, 49, penalty=pen)
+        batch = cal.calibrate_batch(
+            pool[None, :], scores[None, :], np.array([p]), Gs, lam, 49, "share", pen[None, :]
+        )
+        assert one == batch[0].tolist()
+        assert pool[0] not in one  # the last one left out of 49 among 50
+    # μ = 0 (no penalty) is the D1 list
+    assert cal.calibrate_one(pool, scores, p, genres, 0.9, 20, penalty=np.zeros(50)) == (
+        cal.calibrate_one(pool, scores, p, genres, 0.9, 20)
+    )
+
+
+def test_disliked_near_counts_the_lists_with_a_disliked_nearest_neighbour():
+    Y = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 0.1], [0.1, 1.0], [0.7, 0.7]])
+    unit = cal.unit_rows(Y)
+    lists = np.array([[2, 3, -1]])
+    # history 0, 1 ; disliked 0: film 2 has 0 among its 2 nearest (2 films), film 3 too
+    assert cal.disliked_near(lists, [np.array([0, 1])], [np.array([0])], unit, near=2)[0] == 2
+    # nearest only: film 2 -> 0 (disliked), film 3 -> 1
+    assert cal.disliked_near(lists, [np.array([0, 1])], [np.array([0])], unit, near=1)[0] == 1
+    assert cal.disliked_near(lists, [np.array([0, 1])], [np.array([], dtype=int)], unit)[0] == 0

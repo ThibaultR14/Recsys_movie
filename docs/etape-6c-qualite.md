@@ -153,7 +153,7 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 
 - `calibrate.ts`, vivier de 150, cas partagés (listes calibrées identiques à Python), `reco-bench` (temps), `quality-report` (genres par cran sur l'export de Thibault et l'exemple, avant / après), Playwright (curseur, axe, réseau).
 
-### Q4b — Pénalité de proximité aux films mal notés (D1b) — à faire
+### Q4b — Pénalité de proximité aux films mal notés (D1b) — mesurée, **arrêt** pour le choix de μ (section 5)
 
 - `pipeline/calibration.py` : `score'` avant la calibration aux crans à λ = 0,9 (option : tous les crans) ; **balayage de μ** sur la **validation** (D2 + D1 + D1b), NDCG@20 et Recall@20 à ∞, 2 000 et 500, avec la **règle −3 % de NDCG@20 à ∞** (par rapport à D2 + D1).
 - **Mesure sur les deux exports** (`quality-report`) : part des 16 premières recos dont un des 2 films de l'historique les plus proches est mal noté, **nettement sous 8/16** aux crans 5 000 à 200 (après Q4 : 10, 9, 8, 8, 7 sur l'export de Thibault) ; **animation toujours ≤ 31 %** à chaque cran.
@@ -282,6 +282,54 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
   - **b.** retirer du vivier de calibration (crans bas) les films dont un des 2 voisins les plus proches de l'historique est mal noté (cosinus, déjà calculé pour les explications) : simple, à mesurer (validation + exports) ;
   - **c.** baisser λ aux crans bas (par ex. 0,5 : animation 69-94 % → à mesurer) ;
   - **d.** mettre les films mal notés dans le profil comme un « anti-profil » (pénaliser les genres que l'utilisateur a mal notés) : plus long.
+
+### Q4b — Pénalité de proximité aux films mal notés (9 novembre 2026) — ⏸ arrêt : choix de μ (ou option a)
+
+**Forme mesurée** (précision de D1b, à valider) : `s'_k = score_k / s_max − μ × max(0, cosinus max de k avec les films retirés du fold-in par D2)`, où `s_max` est le meilleur score du vivier du cran ; la calibration travaille sur `s'` sans renormaliser. μ est donc en **unités du meilleur score du vivier**, et non en score brut, pour deux raisons. D'abord, le meilleur score du vivier baisse d'un facteur ~15 du cran 5 000 au cran 200 (médianes sur la validation : 0,64 à ∞, 0,147 à 5 000, 0,065 à 2 000, 0,020 à 500, 0,010 à 200). Ensuite, il varie d'un facteur ~10 d'un utilisateur à l'autre : un μ brut n'aurait pas le même effet d'un cran ni d'un utilisateur à l'autre. Les cosinus négatifs (0,4 à 2 % des couples) sont ramenés à 0 : la pénalité n'est jamais un bonus. Aucun film n'est retiré du vivier.
+
+**Code** (référence, pas branché sur le site) : `calibration.py` (`unit_rows`, `proximity`, paramètre `penalty` de `calibrate_one` / `calibrate_batch`, `disliked_near`, commande `penalty-sweep --mus … --tag …`) ; `calibrate.ts` (`proximity`, paramètre `penalty` de `calibrateShare`) ; `quality-report.ts --mus … [--all-positions]`. Tests `pytest` et Vitest sur les mêmes cas. `model-meta.json`, `engine.ts` et la fixture ne changent pas tant que μ n'est pas choisi.
+
+**Validation** (10 000 utilisateurs, D2 + D1 « part » au λ de production : 0,1 à ∞, 0,9 à 2 000 et 500 ; pénalité appliquée aux trois crans mesurés ; à ∞, elle mesure l'option « tous les crans », l'option de D1b laisse ∞ à μ = 0). 99,3 % des utilisateurs ont au moins un film retiré du fold-in. « Voisins » = nombre moyen, parmi les 16 premières recos, de celles dont un des 2 films du fold-in les plus proches est mal noté (IC à 95 % : ± 0,03 à 0,09).
+
+| μ | NDCG@20 ∞ | NDCG@20 2 000 | NDCG@20 500 | Recall@20 ∞ / 2 000 / 500 | Voisins /16 ∞ / 2 000 / 500 | C_KL@20 2 000 / 500 |
+|---|---|---|---|---|---|---|
+| 0 (D2 + D1) | 0,1598 | 0,0192 | 0,0056 | 0,1994 / 0,0221 / 0,0061 | 3,71 / 6,69 / 7,39 | 0,106 / 0,179 |
+| 0,25 | 0,1596 (−0,1 %) | 0,0188 (−2,1 %) | 0,0054 (−3,6 %) | 0,1979 / 0,0216 / 0,0059 | 2,83 / 6,27 / 7,09 | 0,105 / 0,178 |
+| 0,5 | 0,1559 (−2,4 %) | 0,0183 (−4,7 %) | 0,0052 (−7 %) | 0,1908 / 0,0209 / 0,0057 | 2,09 / 5,87 / 6,83 | 0,105 / 0,179 |
+| 1 | 0,1397 (−12,6 %) | 0,0161 (−16 %) | 0,0048 (−14 %) | 0,1640 / 0,0181 / 0,0052 | 1,05 / 5,23 / 6,37 | 0,108 / 0,183 |
+| 2 | 0,1097 (−31 %) | 0,0125 (−35 %) | 0,0036 (−36 %) | 0,1255 / 0,0138 / 0,0038 | 0,55 / 4,61 / 5,91 | 0,122 / 0,197 |
+| 5 | 0,0805 (−50 %) | 0,0092 (−52 %) | 0,0028 (−50 %) | 0,0951 / 0,0098 / 0,0030 | 0,55 / 4,05 / 5,36 | 0,181 / 0,253 |
+
+(IC à 95 % de NDCG@20 : ± 0,0034 à ∞, ± 0,0010 à 2 000, ± 0,0005 à 500 ; résultats dans `pipeline/data/processed/results/quality/penalty_val_{a,b}.json`.) μ = 0 retrouve exactement D2 + D1 (Q3 : 0,1598 / 0,0192 / 0,0056).
+
+**Exports** (`quality-report --mus`, pénalité aux crans 5 000 à 200, ∞ à 10 000 inchangés). Voisins mal notés /16 (2 plus proches parmi les films notés, < 0,3) · animation dans les 16 premières, crans 5 000 · 2 000 · 1 000 · 500 · 200 :
+
+| μ | Export de Thibault (45 films hors du fold-in sur 188) | Exemple (16 sur 61) |
+|---|---|---|
+| 0 (Q4) | **10 · 9 · 8 · 8 · 7** ; anim. 19 · 31 · 31 · 31 · 25 % | 2 · 4 · 0 · 0 · 0 ; anim. 13 · 6 · 6 · 6 · 6 % |
+| 0,5 | 7 · 5 · 8 · 9 · 7 ; anim. 31 · 31 · 31 · 31 · 19 % | 3 · 2 · 0 · 0 · 0 ; anim. ≤ 19 % |
+| 1 | 5 · 4 · 8 · 6 · 6 ; anim. 31 · 31 · 25 · 31 · 25 % ✓ | 1 · 0 · 0 · 0 · 0 ; anim. ≤ 13 % |
+| 2 | 4 · 4 · 6 · 7 · 6 ; anim. **38** · 31 · 31 · 25 · 19 % | 1 · 0 · 0 · 0 · 0 ; anim. ≤ 19 % |
+| 3 | 3 · 4 · 4 · 6 · 5 ; anim. **38 · 38** · 25 · 25 · 19 % | 2 · 0 · 0 · 0 · 0 ; anim. ≤ 25 % |
+| 5 | 1 · 3 · 3 · 5 · 5 ; anim. **50** · 31 · 25 · 19 · 13 % | 2 · 0 · 0 · 0 · 0 ; anim. ≤ **38** % |
+| 10 | 1 · 0 · 3 · 4 · 5 ; anim. **56** · 31 · 19 · 19 · 6 % | 2 · 0 · 0 · 0 · 0 ; anim. ≤ **50** % |
+
+Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ = 1, 0,82-0,90 à μ = 2, 0,73-0,85 à μ = 5 (export de Thibault) ; temps de la calibration avec la pénalité : 14-48 ms dans le script pour les 8 crans (non optimisé, cosinus recalculés).
+
+**Option « tous les crans »** (export de Thibault) : à μ = 0,5, voisins 0 · 1 · 1 à ∞ · 20 000 · 10 000, mais l'animation y monte à 38 · 19 · **56 %** (19 · 19 · 25 % sans pénalité) : à ces crans, λ = 0,1 ne retient plus le genre. Écartée.
+
+**Variante relative essayée** (mesure seulement, hors D1b, retirée du code) : `max(0, cos max mal notés − cos max autres films notés)`. Encore plus faible : 6 · 5 · 7 · 7 · 4 à μ = 5 sur l'export de Thibault ; rien ne bouge sur l'exemple, même à μ = 10.
+
+**Lecture** :
+1. **Aux crans à λ = 0,9, la pénalité agit peu** : le score ne pèse que 1 − λ = 0,1 dans l'objectif, la pénalité avec lui ; la divergence de genres décide. Il faut μ ≥ 1 pour un effet visible, et plus μ monte, plus le terme de score (pénalité comprise) reprend le dessus sur les genres : **l'animation remonte** (38 % à 5 000 dès μ = 2 sur l'export de Thibault, 38-50 % sur l'exemple à μ = 5-10).
+2. **Aucun μ ne remplit les deux critères de Q4b à tous les crans** de l'export de Thibault. Le seul μ qui garde l'animation ≤ 31 % partout et baisse nettement les voisins est **μ = 1** : 5 · 4 · **8** · 6 · 6 (total 29 au lieu de 42 aux crans bas) ; le cran 1 000 ne bouge pas (8).
+3. **La pénalité coûte sur la validation, plus que prévu** : −16 % de NDCG@20 à 2 000 et −14 % à 500 pour μ = 1 (−4,7 % et −7 % pour μ = 0,5). Les films proches d'un film mal noté sont souvent de bons films pour l'utilisateur (dans MovieLens, on note mal surtout des films d'un genre qu'on regarde beaucoup). Sur la validation, D2 + D1 est déjà **sous le hasard** (6,7 et 7,4 /16 à 2 000 et 500, contre ≈ 8 au hasard) : l'écart vu sur l'export de Thibault (10 · 9 · 8 · 8 · 7) est en partie propre à cet export.
+4. À ∞ (option « tous les crans »), la règle −3 % autoriserait μ = 0,5 (−2,4 %, voisins 3,7 → 2,1) ; mais sur l'export de Thibault, l'animation y remonte à 38-56 % (lecture 1).
+
+**Pistes pour le choix (arrêt)** :
+- **a. Option a, D1 seul** (recommandé) : la pénalité coûte 5 à 16 % de NDCG@20 aux crans bas pour une baisse partielle d'une mesure qui n'est pas une mesure de qualité ; à juger avec les volontaires (étape 7), μ restant prêt dans le code de référence.
+- **b. μ = 1 aux crans 5 000 à 200** : voisins 10 · 9 · 8 · 8 · 7 → 5 · 4 · 8 · 6 · 6, animation ≤ 31 %, au prix de −14 à −16 % de NDCG@20 à 2 000 et 500 (sur une base de 0,019 et 0,0056). Il resterait à brancher (`model-meta.json`, `engine.ts`, fixture, parité, `reco-bench`, Playwright).
+- **c. μ = 0,5 aux crans 5 000 à 200** : compromis plus léger (−5 à −7 %), effet faible sur l'export de Thibault (7 · 5 · 8 · 9 · 7).
 
 ---
 

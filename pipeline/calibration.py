@@ -19,7 +19,12 @@ films that have genre g, and the divergence is Σ_g of the Bernoulli KL of p_g a
 targets the share of, e.g., animation films directly (with `mass`, a film with 4 genres only
 weighs 1/4 in Animation).
 
+D1b (Q4b): proximity penalty to the disliked films (those D2 takes out of the fold-in), before
+the calibration: s'_k = score_k / s_max − μ × max(0, max cosine of k with the disliked films). μ
+is in units of the pool's best score, because raw scores shrink ~15× from cap 5 000 to cap 200.
+
     uv run python calibration.py sweep [--mode share]   # validation: λ grid x caps (∞, 2 000, 500)
+    uv run python calibration.py penalty-sweep [--mus 0,0.5,1] [--tag _a]   # Q4b, validation
 """
 
 from __future__ import annotations
@@ -110,18 +115,30 @@ def _bernoulli_term(p: float, q: float, alpha: float) -> float:
 
 
 def calibrate_one(
-    pool, scores, p: list[float], genres: list[list[int]], lam: float, n: int, alpha: float = ALPHA
+    pool,
+    scores,
+    p: list[float],
+    genres: list[list[int]],
+    lam: float,
+    n: int,
+    alpha: float = ALPHA,
+    penalty=None,
 ) -> list[int]:
     """Greedy calibrated list (share mode), incremental: at each step, with c = films with genres
     in the list + 1, base = Σ_g f(p_g, Q_g / c) and Δ_g = f(p_g, (Q_g + 1) / c) − f(p_g, Q_g / c);
     a candidate with genres scores base + Σ_{g in its genres} Δ_g (ascending g); a candidate without
-    genre leaves q as is. Ties: the first film of the pool. Mirrors calibrate.ts exactly."""
+    genre leaves q as is. Ties: the first film of the pool. Mirrors calibrate.ts exactly.
+
+    `penalty` (step 6c, D1b; one value per pool film, already × μ) is subtracted from the
+    normalised score: s'_k = score_k / s_max − penalty_k."""
     pool = [int(i) for i in pool]
     scores = [float(x) for x in scores]
     if not pool:
         return []
     smax = max(scores)
     s = [x / (smax if smax > 0 else 1.0) for x in scores]
+    if penalty is not None:
+        s = [x - float(d) for x, d in zip(s, penalty, strict=True)]
     n_g = len(p)
     sum_q = [0.0] * n_g
     n_q = 0
@@ -228,12 +245,16 @@ def calibrate_batch(
     lam: float,
     n: int = N_LIST,
     mode: str = "mass",
+    penalty: np.ndarray | None = None,
 ) -> np.ndarray:
-    """(B, n) picked item_idx in pick order (-1 when the pool runs out)."""
+    """(B, n) picked item_idx in pick order (-1 when the pool runs out). `penalty` (B, P), already
+    × μ, is subtracted from the normalised scores (D1b, as in `calibrate_one`)."""
     B, Pn = pools.shape  # noqa: N806
     valid = pools >= 0
     smax = np.where(valid, scores, -np.inf).max(axis=1, keepdims=True)
     s = np.where(valid, scores / np.where(smax > 0, smax, 1.0), -np.inf)
+    if penalty is not None:
+        s = np.where(valid, s - penalty, -np.inf)
     Gp = G[np.where(valid, pools, 0)] * valid[..., None]  # (B, P, genres)  # noqa: N806
     has = Gp.sum(axis=2) > 0  # (B, P)
     sum_q = np.zeros((B, G.shape[1]))
@@ -298,6 +319,137 @@ def user_inputs(model: als.ALSModel, foldin: sp.csr_matrix, Gs: dict):  # noqa: 
         model.Y, signal, regularization=model.regularization, alpha=model.alpha, yty=model.yty
     )
     return (x.astype(np.float32) @ model.Y.T).astype(np.float64), profiles
+
+
+def unit_rows(Y: np.ndarray) -> np.ndarray:  # noqa: N803
+    """Item vectors scaled to unit length (zero vectors stay zero), float64."""
+    Y = Y.astype(np.float64)  # noqa: N806
+    norm = np.linalg.norm(Y, axis=1, keepdims=True)
+    return Y / np.where(norm > 0, norm, 1.0)
+
+
+def proximity(pool, disliked, unit: np.ndarray) -> np.ndarray:
+    """D1b: max(0, max cosine) of each pool film with the disliked films (the films that D2 takes
+    out of the fold-in); 0 everywhere without disliked film. Pool entries < 0 (no candidate): 0."""
+    pool = np.asarray(pool)
+    out = np.zeros(len(pool))
+    disliked = np.asarray(disliked, dtype=np.int64)
+    ok = pool >= 0
+    if len(disliked) == 0 or not ok.any():
+        return out
+    out[ok] = np.maximum((unit[pool[ok]] @ unit[disliked].T).max(axis=1), 0.0)
+    return out
+
+
+def disliked_near(lists: np.ndarray, foldins: list, disliked: list, unit: np.ndarray, k=16, near=2):
+    """Per user: how many of the first k films of the list have a disliked film among their `near`
+    closest fold-in films (cosine), the measure of `quality-report` (Q2, Q4)."""
+    out = np.zeros(len(lists))
+    for u, (row, hist, bad) in enumerate(zip(lists, foldins, disliked, strict=True)):
+        top = row[:k][row[:k] >= 0]
+        if len(bad) == 0 or len(top) == 0 or len(hist) < near:
+            continue
+        cos = unit[top] @ unit[hist].T
+        nearest = np.argpartition(-cos, near - 1, axis=1)[:, :near]
+        out[u] = np.isin(hist[nearest], bad).any(axis=1).sum()
+    return out
+
+
+PENALTY_MUS = (0.0, 0.1, 0.25, 0.5, 1.0, 2.0)
+PENALTY_OUT = RESULTS_DIR / "quality" / "penalty_val{}.json"
+
+
+def cmd_penalty_sweep(mus: tuple[float, ...] = PENALTY_MUS, tag: str = "") -> dict:
+    """Q4b (D1b): D2 + D1 (share, λ of PRODUCTION per cap) + proximity penalty μ, validation, caps
+    ∞, 2 000, 500 (the penalty applies at every cap here; at ∞ it measures the « all positions »
+    option, the production option leaves ∞ as μ = 0)."""
+    from export import SLIDER_POSITIONS
+
+    lam_of = dict(zip(SLIDER_POSITIONS, PRODUCTION["lambda_by_position"], strict=True))
+    catalog = ev.load_catalog()
+    counts = ev.train_counts(catalog)
+    eval_set = ev.load_eval_set("val", catalog)
+    model = sw.adapter("A", catalog)
+    unit = unit_rows(model.Y)
+    Gs = {k: genre_matrix(mode=k)[0] for k in MODES}  # noqa: N806
+    G = Gs["share"]  # noqa: N806
+    lists = {(mu, cap): [] for mu in mus for cap in CAPS}
+    profiles = {k: [] for k in MODES}
+    foldins, disliked, smax_by_cap = [], [], {cap: [] for cap in CAPS}
+    for start in range(0, len(eval_set.user_ids), ev.BATCH_SIZE):
+        batch = eval_set.foldin[start : start + ev.BATCH_SIZE]
+        scores, Ps = user_inputs(model, batch, Gs)  # noqa: N806
+        for k in MODES:
+            profiles[k].append(Ps[k])
+        p_all = als.percentile_values(batch)
+        bad_batch = []
+        for u in range(batch.shape[0]):
+            lo, hi = batch.indptr[u], batch.indptr[u + 1]
+            keep = als.kept_for_foldin(p_all.data[lo:hi], None, **FOLDIN_RULE)
+            foldins.append(batch.indices[lo:hi].astype(np.int64))
+            bad_batch.append(batch.indices[lo:hi][~keep].astype(np.int64))
+        disliked.extend(bad_batch)
+        for cap in CAPS:
+            cand = catalog.recommendable & (counts <= cap)
+            pools = ev.top_k(scores.copy(), batch, cand, POOL)
+            pool_scores = np.take_along_axis(scores, pools, axis=1)
+            pools = np.where(np.isfinite(pool_scores), pools, -1)
+            smax_by_cap[cap].append(np.where(pools >= 0, pool_scores, -np.inf).max(axis=1))
+            near = np.vstack([proximity(pools[u], bad_batch[u], unit) for u in range(len(pools))])
+            lam = lam_of[None if math.isinf(cap) else cap]
+            for mu in mus:
+                pen = None if mu == 0 else mu * near
+                lists[(mu, cap)].append(
+                    calibrate_batch(pools, pool_scores, Ps["share"], G, lam, N_LIST, "share", pen)
+                )
+        print(f"  {start + batch.shape[0]} utilisateurs", flush=True)
+    P_mass, P_share = np.vstack(profiles["mass"]), np.vstack(profiles["share"])  # noqa: N806
+    rows = []
+    for mu in mus:
+        for cap in CAPS:
+            L = np.vstack(lists[(mu, cap)])  # noqa: N806
+            ranked = np.where(L[:, :TOP_K] >= 0, L[:, :TOP_K], 0)
+            met = ev.compute_metrics(ranked, eval_set, counts, catalog.recommendable)
+            row = {
+                "mu": mu,
+                "cap": None if math.isinf(cap) else cap,
+                "lambda": lam_of[None if math.isinf(cap) else cap],
+                "ndcg@20": met["ndcg@20"],
+                "recall@20": met["recall@20"],
+                "c_kl@20": m.mean_ci(list_kl(L, P_mass, Gs["mass"], TOP_K).tolist()),
+                "overshoot_row8": m.mean_ci(row_overshoot(L, P_share, Gs["share"]).tolist()),
+                "disliked_near2_of16": m.mean_ci(
+                    disliked_near(L, foldins, disliked, unit).tolist()
+                ),
+            }
+            rows.append(row)
+            print(
+                f"μ {mu:<4} · cran {row['cap']!s:>5} · NDCG@20 {met['ndcg@20']['mean']:.4f} · "
+                f"Recall@20 {met['recall@20']['mean']:.4f} · "
+                f"C_KL@20 {row['c_kl@20']['mean']:.3f} · "
+                f"excès {row['overshoot_row8']['mean']:.3f} · "
+                f"voisins mal notés {row['disliked_near2_of16']['mean']:.2f}/16",
+                flush=True,
+            )
+    out = {
+        "split": "val",
+        "config": "A + D2 + D1 (share, λ per cap) + D1b proximity penalty μ",
+        "penalty": "s' = score / s_max - μ × max(0, max cos with the films out of the fold-in)",
+        "pool": POOL,
+        "n_list": N_LIST,
+        "alpha": ALPHA,
+        "pool_smax_median": {
+            ("inf" if math.isinf(c) else str(c)): float(np.median(np.concatenate(v)))
+            for c, v in smax_by_cap.items()
+        },
+        "users_with_disliked": float(np.mean([len(b) > 0 for b in disliked])),
+        "rows": rows,
+    }
+    path = Path(str(PENALTY_OUT).format(tag))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, indent=2) + "\n")
+    print("->", path)
+    return out
 
 
 def cmd_sweep(mode: str, lambdas: tuple[float, ...] = LAMBDAS, tag: str = "") -> dict:
@@ -371,11 +523,18 @@ def cmd_sweep(mode: str, lambdas: tuple[float, ...] = LAMBDAS, tag: str = "") ->
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("cmd", choices=["sweep"])
+    parser.add_argument("cmd", choices=["sweep", "penalty-sweep"])
     parser.add_argument("--mode", choices=MODES, default="mass")
     parser.add_argument("--lambdas", help="comma-separated λ (default: the main grid)")
+    parser.add_argument("--mus", help="comma-separated μ of penalty-sweep (default: PENALTY_MUS)")
     parser.add_argument("--tag", default="", help="suffix of the result file")
     args = parser.parse_args()
+    # λ and μ in the output: a redirected stdout is cp1252 on Windows
+    sys.stdout.reconfigure(encoding="utf-8")
+    if args.cmd == "penalty-sweep":
+        mus = tuple(float(x) for x in args.mus.split(",")) if args.mus else PENALTY_MUS
+        cmd_penalty_sweep(mus, args.tag)
+        return 0
     lambdas = tuple(float(x) for x in args.lambdas.split(",")) if args.lambdas else LAMBDAS
     cmd_sweep(args.mode, lambdas, args.tag)
     return 0

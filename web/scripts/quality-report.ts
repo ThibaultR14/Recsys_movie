@@ -10,16 +10,22 @@
  *    animation in the first 16 films of each notch, and miscalibration C_KL of the first 20.
  * 2. Disliked neighbours: among the first 16 recommendations of each notch, how many have, among
  *    their 2 (and 5) closest rated history films (cosine), one with a percentile < 0.2 / < 0.3.
+ * 5. With --mus 0,0.25,1 [--all-positions]: proximity penalty to the disliked films (step 6c, D1b)
+ *    at the positions where λ = 0.9 (or all): disliked neighbours, animation, mean score of the 16.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   bernoulliDivergence,
   calibrate,
+  calibrateShare,
   genreProfile,
   genreRows,
   klDivergence,
+  lambdaOf,
   POOL,
+  proximity,
+  shareProfile,
   type CalibrationMode,
 } from '../src/reco/calibrate';
 import { explain } from '../src/reco/explain';
@@ -189,6 +195,98 @@ async function main() {
         console.log(`${name.padEnd(8)} animation ${anim}`);
         console.log(`${''.padEnd(8)} transitions ${steps.join(' | ')}`);
       }
+    }
+  }
+
+  // ---- 5. proximity penalty to the disliked films (step 6c, D1b, Q4b): --mus 0,0.25,1
+  const musAt = process.argv.indexOf('--mus');
+  const calibration = model.meta.calibration;
+  if (musAt > 0 && calibration) {
+    const mus = process.argv[musAt + 1]!.split(',').map(Number);
+    const everywhere = process.argv.includes('--all-positions');
+    const meta = model.meta;
+    const kept = keptForFoldIn(
+      history.map((h) => h.percentile),
+      history.map((h) => h.rating !== undefined),
+      meta.foldin_drop_below,
+      meta.foldin_min_kept ?? 0,
+    );
+    const films = history.filter((_, i) => kept[i]);
+    const disliked = history
+      .filter((h, i) => !kept[i] && h.rating !== undefined)
+      .map((h) => h.item);
+    const p = shareProfile(
+      catalog.genres,
+      catalog.genre_names.length,
+      films.map((h) => h.item),
+      films.map((h) => signal(h.percentile, meta.beta)),
+    );
+    // pools in model order (recommend returns them calibrated): score desc, then item
+    const pools = recommend(engine, matched, { n: calibration.pool }).positions.map((pos) => {
+      const order = pos.items.map((item, k) => ({ item, score: pos.scores[k]! }));
+      order.sort((a, b) => b.score - a.score || a.item - b.item);
+      return { cap: pos.cap, items: order.map((o) => o.item), scores: order.map((o) => o.score) };
+    });
+    const near = pools.map((pos) => proximity(pos.items, disliked, model.vectors, model.dims));
+    const scoreOf = new Map<number, number>();
+    for (const pos of pools) pos.items.forEach((i, k) => scoreOf.set(i, pos.scores[k]!));
+    const neighbours = (top: readonly number[]) => {
+      const nn = explain(model.vectors, model.dims, rated, top, {
+        likedPercentile: 0,
+        minCosine: -Infinity,
+        maxCited: 2,
+      });
+      return top.filter((i) => (nn.get(i)?.items ?? []).some((h) => (pctOf.get(h) ?? 1) < 0.3))
+        .length;
+    };
+    console.log(
+      `\n── pénalité de proximité (D1b, ${everywhere ? 'tous les crans' : 'crans à λ = 0,9'}) : ` +
+        `${disliked.length} films hors du fold-in ; par cran : voisins mal notés (2 plus proches) /16 · ` +
+        `animation (16 premières) · score moyen des 16 / μ = 0 ──`,
+    );
+    console.log(
+      `${'μ'.padEnd(6)} ${pools.map((p) => String(p.cap ?? '∞').padStart(16)).join(' ')}`,
+    );
+    const mean16 = (l: readonly number[]) =>
+      l.slice(0, SHOWN).reduce((t, i) => t + scoreOf.get(i)!, 0) / Math.min(SHOWN, l.length);
+    const base = pools.map((pos) =>
+      mean16(
+        calibrateShare(
+          pos.items,
+          pos.scores,
+          p,
+          catalog.genres,
+          lambdaOf(calibration, pos.cap),
+          48,
+          calibration.alpha,
+        ),
+      ),
+    );
+    for (const mu of mus) {
+      const t0 = performance.now();
+      let total = 0;
+      const cells = pools.map((pos, k) => {
+        const lam = lambdaOf(calibration, pos.cap);
+        const on = mu !== 0 && (everywhere || lam === 0.9);
+        const list = calibrateShare(
+          pos.items,
+          pos.scores,
+          p,
+          catalog.genres,
+          lam,
+          48,
+          calibration.alpha,
+          on ? near[k]!.map((c) => mu * c) : undefined,
+        );
+        const top = list.slice(0, SHOWN);
+        const bad = neighbours(top);
+        total += bad;
+        return `${String(bad).padStart(2)} · ${pct(share(top, 'Animation'))} · ${(mean16(list) / base[k]!).toFixed(2)}`;
+      });
+      const ms = performance.now() - t0;
+      console.log(
+        `${String(mu).padEnd(6)} ${cells.map((c) => c.padStart(16)).join(' ')}  (total ${total} ; ${ms.toFixed(0)} ms)`,
+      );
     }
   }
 }

@@ -184,12 +184,14 @@ export function calibrateShare(
   lambda: number,
   n: number,
   alpha: number = ALPHA,
+  /** Step 6c D1b: one value per pool film (already × μ), subtracted from the normalised score. */
+  penalty?: readonly number[],
 ): number[] {
   if (!pool.length) return [];
   let smax = -Infinity;
   for (const x of scores) if (x > smax) smax = x;
   const div = smax > 0 ? smax : 1;
-  const s = scores.map((x) => x / div);
+  const s = scores.map((x, k) => x / div - (penalty ? penalty[k]! : 0));
   const nG = p.length;
   const sumQ = new Array<number>(nG).fill(0);
   const delta = new Array<number>(nG).fill(0);
@@ -239,6 +241,41 @@ export function calibrateShare(
     for (const g of gs) sumQ[g]! += 1;
     if (gs.length) nQ++;
   }
+  return out;
+}
+
+/**
+ * Step 6c D1b (Python `proximity`): max(0, max cosine) of each pool film with the disliked films
+ * (those D2 takes out of the fold-in); 0 everywhere without disliked film.
+ * @param vectors dequantised item vectors, row-major (item * dims + d)
+ */
+export function proximity(
+  pool: readonly number[],
+  disliked: readonly number[],
+  vectors: Float32Array,
+  dims: number,
+): number[] {
+  const out = new Array<number>(pool.length).fill(0);
+  if (!disliked.length) return out;
+  const unit = (item: number) => {
+    let n = 0;
+    for (let d = 0; d < dims; d++) n += vectors[item * dims + d]! ** 2;
+    const inv = n > 0 ? 1 / Math.sqrt(n) : 0;
+    const u = new Float64Array(dims);
+    for (let d = 0; d < dims; d++) u[d] = vectors[item * dims + d]! * inv;
+    return u;
+  };
+  const bad = disliked.map(unit);
+  pool.forEach((item, k) => {
+    const u = unit(item);
+    let best = 0;
+    for (const b of bad) {
+      let dot = 0;
+      for (let d = 0; d < dims; d++) dot += u[d]! * b[d]!;
+      if (dot > best) best = dot;
+    }
+    out[k] = best;
+  });
   return out;
 }
 

@@ -7,7 +7,7 @@
 
 Spec `docs/etape-6c-qualite.md` v0.4. Q1-Q4 faits (versions, films mal notés hors du fold-in, calibration des genres dans le navigateur). **À faire, dans l'ordre** :
 
-1. **Q4b** — pénalité de proximité aux films mal notés avant la calibration (D1b, rien de codé) : balayage de μ sur la validation (règle −3 % de NDCG@20 à ∞), mesure sur les deux exports (voisins mal notés nettement sous 8/16 aux crans bas, animation ≤ 31 %), arrêt pour choisir μ ; sinon option a.
+1. **Q4b** — pénalité de proximité aux films mal notés (D1b) : **mesurée, arrêt** pour le choix (option a recommandée, ou μ = 1 / 0,5 aux crans 5 000 à 200 ; résultats en section 5 de la spec) ; si un μ est retenu : branchement dans `engine.ts`, `model-meta.json`, fixture, parité, `reco-bench`, Playwright.
 2. **Q5** — clôture : test évalué **une seule fois** (jamais fait pour 6c), section 5, `CLAUDE.md`, `docs/stack-technique.md`, `contexte/`, emplacements de texte « comment ça marche » (Claude Web), arrêt pour relecture.
 3. **Tags des cartes** (section 8 de la spec 6c) : réalisateur, « ça divise », « vieux trésor » ; mesure des fréquences par cran et arrêt pour les seuils et les couleurs.
 

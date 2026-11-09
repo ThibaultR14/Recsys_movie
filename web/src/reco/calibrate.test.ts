@@ -1,6 +1,6 @@
 // Same cases as pipeline/tests/test_calibration.py (step 6c, D1).
 import { describe, expect, it } from 'vitest';
-import { calibrate, genreProfile, genreRows } from './calibrate';
+import { calibrate, calibrateShare, genreProfile, genreRows, proximity } from './calibrate';
 
 // 3 genres; items 0-3 genre 0 (best scores), items 4-5 genre 1, item 6 without genre
 const GENRES = [[0], [0], [0], [0], [1], [1], []];
@@ -49,5 +49,32 @@ describe('calibrate (share of films)', () => {
       'share',
     );
     expect(out.filter((i) => i < 4)).toHaveLength(1);
+  });
+});
+
+// Same cases as the D1b tests of pipeline/tests/test_calibration.py (step 6c, Q4b).
+describe('proximity penalty to the disliked films (D1b)', () => {
+  const Y = Float32Array.from([1, 0, 0, 2, -1, 0, 1, 1, 0, 0]); // 5 items x 2 dims
+
+  it('is the max cosine with the disliked films, clipped at 0', () => {
+    const out = proximity([3, 2, 4], [0, 1], Y, 2);
+    expect(out[0]).toBeCloseTo(Math.SQRT1_2, 12);
+    expect(out.slice(1)).toEqual([0, 0]);
+    expect(proximity([3, 2], [], Y, 2)).toEqual([0, 0]);
+  });
+
+  it('is subtracted from the normalised score; zero penalty is the D1 list', () => {
+    const genres = [[0], [0], [1], [1], [0, 1]];
+    const pool = [0, 1, 2, 3, 4];
+    const scores = [2, 1.8, 1.6, 1.4, 1.2];
+    const prof = [0.5, 0.5];
+    expect(calibrateShare(pool, scores, prof, genres, 0, 5, 0.01, [10, 0, 0, 0, 0])).toEqual([
+      1, 2, 3, 4, 0,
+    ]);
+    for (const lam of [0, 0.9]) {
+      expect(calibrateShare(pool, scores, prof, genres, lam, 4, 0.01, [0, 0, 0, 0, 0])).toEqual(
+        calibrateShare(pool, scores, prof, genres, lam, 4),
+      );
+    }
   });
 });

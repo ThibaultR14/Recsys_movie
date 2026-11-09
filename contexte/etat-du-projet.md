@@ -1,6 +1,6 @@
 # État du projet
 
-> Mis à jour le 9 novembre 2026, pendant l'étape 6c (qualité des résultats) : Q1-Q4 faits, **Q4b à faire**, Q5 pas commencée. Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
+> Mis à jour le 9 novembre 2026, pendant l'étape 6c (qualité des résultats) : Q1-Q4 faits, **Q4b mesurée, arrêt pour le choix de μ** (ou option a), Q5 pas commencée. Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
 > Dépôt : https://github.com/ThibaultR14/Recsys_movie
 
 ## Le projet en 5 lignes
@@ -23,7 +23,7 @@
 | 5. Interface | style « C · Fanzine » : accueil, analyse du fichier, résultats et curseur, « à propos » | modèle prêt en 0,8-0,9 s, analyse 11-30 ms, changement de cran ≤ 40 ms ; aucune requête hors du site sauf les affiches TMDB ; validée sur un vrai téléphone | `docs/etape-5-interface.md` |
 | 6. Import IMDb | CSV des notes détecté par l'en-tête, rapprochement par `imdb_id` (+ alias), repli par titre seulement proposé dans « à vérifier », séries et épisodes à part, watchlist refusée avec un message | export fabriqué de Thibault (compte en français, 42 lignes) : 35 films trouvés par id ; 3 000 lignes en 22 ms ; mesure sur un vrai historique reportée à l'étape 7 | `docs/etape-6-imdb.md` |
 | 6b. Retouches de l'interface | thème sombre par défaut ; pages « comment ça marche », « à propos » (« je »), « contact » (`mailto:`) ; aide des exports en carrousel ; note du public et « parce que t'as aimé X et Y » sur les cartes ; textes de Claude Web | explications en 3,5 ms (export réel) et 38 ms (3 000 films), 2 cartes au plus par film cité et par rangée ; `catalog.json` +55 Ko gzip ; axe 0 dans les deux thèmes ; « loin de tes goûts » par rangée ; close le 8 novembre 2026 (essai sur vrai téléphone à refaire en début d'étape 7) | `docs/etape-6b-retouches.md` |
-| 6c. Qualité des résultats (**en cours**) | versions (`version_of`), films mal notés hors du fold-in (percentile < 0,3), calibration des genres (« part de films », λ 0,1 de ∞ à 10 000 et 0,9 de 5 000 à 200) | validation : +8,2 % de NDCG@20 à ∞ avec D2 ; export de Thibault : animation 19-31 % à tous les crans (avant : 94-100 % aux crans bas) ; **reste Q4b** (pénalité de proximité aux films mal notés) **et Q5** (clôture, test jamais évalué) | `docs/etape-6c-qualite.md` |
+| 6c. Qualité des résultats (**en cours**) | versions (`version_of`), films mal notés hors du fold-in (percentile < 0,3), calibration des genres (« part de films », λ 0,1 de ∞ à 10 000 et 0,9 de 5 000 à 200) | validation : +8,2 % de NDCG@20 à ∞ avec D2 ; export de Thibault : animation 19-31 % à tous les crans (avant : 94-100 % aux crans bas) ; **Q4b mesurée, arrêt** (pénalité de proximité aux films mal notés : choix de μ ou option a) **puis Q5** (clôture, test jamais évalué) | `docs/etape-6c-qualite.md` |
 
 Données embarquées par le site (`web/public/data/`) : **~3 Mo gzip** au total. Elles se composent des vecteurs int8, de la popularité, du catalogue et de l'index des titres.
 
@@ -38,7 +38,7 @@ Données embarquées par le site (`web/public/data/`) : **~3 Mo gzip** au total.
 | Q2 — Films mal notés hors du fold-in (percentile < 0,3, repli sous 5 films) | ✅ fait ; égalités à ∞ et à 5 000 acceptées |
 | Q3 — Calibration hors ligne | ✅ fait ; décision : option B (« part de films », λ par cran dans `model-meta.json`) |
 | Q4 — Calibration dans le navigateur | ✅ fait (incrémentale, 3-7,5 ms, 200 listes calibrées identiques Python / TypeScript) ; arrêt sur les voisins mal notés (10, 9, 8, 8, 7 /16 aux crans 5 000 à 200 de l'export de Thibault) |
-| **Q4b — Pénalité de proximité aux films mal notés** (D1b) | **à faire** : décidée, **rien n'est codé** ; balayage de μ (validation, −3 % à ∞), mesure sur les deux exports (nettement sous 8/16, animation ≤ 31 %) ; sinon option a |
+| **Q4b — Pénalité de proximité aux films mal notés** (D1b) | **mesurée, ⏸ arrêt** : μ en unités du meilleur score du vivier ; aucun μ ne remplit les deux critères à tous les crans ; μ = 1 : voisins 10 · 9 · 8 · 8 · 7 → 5 · 4 · 8 · 6 · 6 (export de Thibault), animation ≤ 31 %, mais −16 % / −14 % de NDCG@20 à 2 000 / 500 ; recommandation : option a. Code de référence seulement (Python + `calibrate.ts`), pas branché |
 | Q5 — Clôture | **pas commencée** ; **le test n'a jamais été évalué** pour 6c (une seule évaluation, à la clôture, sur la configuration retenue) ; emplacements de texte « comment ça marche » (retrait des films mal notés + équilibre des genres) à prévoir, texte de Claude Web |
 
 **Fichiers régénérés à chaque changement de règle** (jamais versionnés) : `web/public/data/` et `foldin_cases.json` (`pipeline/data/processed/export/`, `web/test-data/`) : `export.py export`, `export.py export --out web`, `export.py catalog --out web`, puis `export.py verify --out web` et `npm test`.
@@ -143,7 +143,7 @@ Chaque spec d'étape suit le même plan : décisions (D1, D2…), sous-étapes e
 
 ## En attente
 
-- **Étape 6c** : Q4b (pénalité de proximité aux films mal notés) puis Q5 (clôture, test évalué une seule fois) ; texte de Claude Web pour « comment ça marche » à la clôture.
+- **Étape 6c** : choix de Thibault pour Q4b (μ ou option a, section 5 de la spec) puis Q5 (clôture, test évalué une seule fois) ; texte de Claude Web pour « comment ça marche » à la clôture.
 - **Essai sur un vrai téléphone** de la version de l'étape 6b (deux thèmes) : non confirmé à la clôture, à faire au début de l'étape 7.
 - **Réponse de GroupLens** sur la licence MovieLens (mail envoyé le 6 novembre 2026). **Elle bloque la mise en ligne** (étape 7) et le versionnement de `web/public/data/`, mais pas le développement en local.
 - **Exports de 10 à 20 cinéphiles volontaires** (étape 7). Ils serviront à mesurer la correspondance des titres et à recaler les seuils de l'interface : « loin de tes goûts » et tampon « ✱ pépite ».
