@@ -1,9 +1,17 @@
 # Feuille de route
 
-> Mise à jour le 8 novembre 2026, à la clôture de l'étape 6b. Ordre des étapes : `docs/stack-technique.md` §8.
-> Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md` (§6 = « À reporter » ou questions ouvertes).
+> Mise à jour le 9 novembre 2026, pendant l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
+> Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## Prochaine étape à lancer : 7, mise en ligne et volontaires
+## En cours : étape 6c, qualité des résultats
+
+Spec `docs/etape-6c-qualite.md` v0.4. Q1-Q4 faits (versions, films mal notés hors du fold-in, calibration des genres dans le navigateur). **À faire, dans l'ordre** :
+
+1. **Q4b** — pénalité de proximité aux films mal notés avant la calibration (D1b, rien de codé) : balayage de μ sur la validation (règle −3 % de NDCG@20 à ∞), mesure sur les deux exports (voisins mal notés nettement sous 8/16 aux crans bas, animation ≤ 31 %), arrêt pour choisir μ ; sinon option a.
+2. **Q5** — clôture : test évalué **une seule fois** (jamais fait pour 6c), section 5, `CLAUDE.md`, `docs/stack-technique.md`, `contexte/`, emplacements de texte « comment ça marche » (Claude Web), arrêt pour relecture.
+3. **Tags des cartes** (section 8 de la spec 6c) : réalisateur, « ça divise », « vieux trésor » ; mesure des fréquences par cran et arrêt pour les seuils et les couleurs.
+
+## Ensuite : étape 7, mise en ligne et volontaires
 
 L'étape 6b (retouches de l'interface) est close le 8 novembre 2026 (`docs/etape-6b-retouches.md` v0.4) : thème sombre, pages par ancre, contact, aide des exports, note du public, explications, site élargi, « loin de tes goûts » par rangée. **À faire en premier** : l'essai sur un vrai téléphone, non confirmé à la clôture.
 
@@ -47,6 +55,9 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 - Ids inventés `tt99000001`-`tt99000005` de `imdb-exemple.csv` : à revérifier de temps en temps, IMDb pourrait les attribuer un jour (`é6` §6).
 
 ### Étape 7 (mise en ligne, volontaires)
+
+- **λ des crans bas** (0,9) et, si adoptée, **μ** de D1b : à recaler avec la question des volontaires, vraie mesure aux crans bas (`é6c` §6).
+- **Seuil de retrait du fold-in** (percentile 0,3) : à recaler avec les volontaires (`é6c` §6).
 
 - **Essai sur un vrai téléphone** de la version 6b (deux thèmes, mise en page élargie, annotation « loin de tes goûts » par rangée) : non confirmé à la clôture (`é6b` §6).
 - **Seuil « loin de tes goûts » par rangée** (0,04, moitié d'une rangée de 8) : à recaler avec les volontaires (`é6b` R10).

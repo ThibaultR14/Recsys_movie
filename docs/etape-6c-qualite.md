@@ -1,6 +1,6 @@
 # Étape 6c — Qualité des résultats
 
-> Version 0.3 (9 novembre 2026) : décision de Q3 (option B, mode « part de films », λ par cran : 0,1 de ∞ à 10 000, 0,9 de 5 000 à 200, table dans `model-meta.json`). Version 0.2 (8 novembre 2026). Mini-étape insérée entre l'étape 6b (retouches de l'interface) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026** avec ses réponses à la section 7 : genres MovieLens, films sans genre hors des distributions (D1) ; `version_of` dans les deux sens (D3) ; seuil 0,3, films sans note jamais retirés, égalités au bord vérifiées, repli sous 5 films, phrase dans « comment ça marche » (D2) ; Steck sur un vivier de 150 par cran, reclassement une seule fois après l'analyse (D1) ; λ choisi en Q3 (au plus −3 % de NDCG@20 à ∞) ; test une seule fois à la clôture ; ordre Q1 → Q5. Section 8 ajoutée : tags des cartes, **après** Q5.
+> Version 0.4 (9 novembre 2026) : décision après Q4 (piste b en version douce : pénalité de proximité aux films mal notés avant la calibration, sous-étape **Q4b**, pas encore codée). Version 0.3 (9 novembre 2026) : décision de Q3 (option B, mode « part de films », λ par cran : 0,1 de ∞ à 10 000, 0,9 de 5 000 à 200, table dans `model-meta.json`). Version 0.2 (8 novembre 2026). Mini-étape insérée entre l'étape 6b (retouches de l'interface) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026** avec ses réponses à la section 7 : genres MovieLens, films sans genre hors des distributions (D1) ; `version_of` dans les deux sens (D3) ; seuil 0,3, films sans note jamais retirés, égalités au bord vérifiées, repli sous 5 films, phrase dans « comment ça marche » (D2) ; Steck sur un vivier de 150 par cran, reclassement une seule fois après l'analyse (D1) ; λ choisi en Q3 (au plus −3 % de NDCG@20 à ∞) ; test une seule fois à la clôture ; ordre Q1 → Q5. Section 8 ajoutée : tags des cartes, **après** Q5.
 > Point de départ : l'essai de Thibault (trop d'animation aux crans bas, films proches de films qu'il a mal notés, une autre version d'un film déjà vu). Le diagnostic (Q0) est fait : chiffres en section 2, détails en section 5.
 
 ---
@@ -91,6 +91,17 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 
 - **v0.3 (décision de Thibault après Q3, option B)** : mode **« part de films »** (et non « masse ») ; **λ par cran** : **0,1** à ∞, 20 000 et 10 000 ; **0,9** de 5 000 à 200. Table dans `model-meta.json` (`calibration.lambda_by_position`), jamais en dur dans le code, pour la recaler avec les volontaires. Raison : la règle « au plus −3 % de NDCG@20 » s'applique à ∞, où la métrique mesure bien ce qu'on veut ; aux crans bas, NDCG@20 ≈ 0,008 ne voit presque plus rien et la dérive de genre observée (94-100 % d'animation pour 13 % de l'historique) domine. La vraie mesure aux crans bas sera la question des volontaires (étape 7). Transition 10 000 → 5 000 vérifiée (pas de palier à 0,5 : voir Q4).
 
+### D1b. Pénalité de proximité aux films mal notés, avant la calibration (v0.4, décision de Thibault après Q4)
+
+- Aux crans où λ = 0,9 (5 000 à 200), **avant** la calibration, le score de chaque film du vivier devient
+  **`score' = score − μ × max(cosinus avec les films mal notés de l'historique)`** ; la calibration (D1) travaille sur `score'`.
+- « Mal notés » = les films **retirés du fold-in** par D2 (notés, percentile < 0,3) ; aucun film mal noté (ou historique sans note) → pas de pénalité.
+- **Pas de filtre** : aucun film n'est retiré du vivier.
+- **Raison** : « mal noté » = 30 % de l'historique par construction (percentile < 0,3), donc au hasard environ la moitié des recos (≈ 8/16) ont un film mal noté parmi leurs 2 plus proches voisins ; D2 seul est sous le hasard, la calibration y ramène ; un filtre dur retirerait la moitié du vivier.
+- À étendre à tous les crans **si la mesure le justifie** (Q4b).
+- **μ** dans `model-meta.json` (comme la table des λ), jamais en dur dans le code ; référence Python + parité TypeScript, comme D1.
+- Si **aucun μ ne convient** (Q4b) : **option a** (on garde D1 tel quel), à juger avec les volontaires (étape 7).
+
 ### D2. Films mal notés retirés du fold-in
 
 - Les films de l'historique dont le **percentile est < 0,3** (percentile calculé sur **tout** l'historique noté, comme aujourd'hui) **ne comptent plus dans le fold-in**. Ils restent **vus** : jamais recommandés, jamais cités dans « parce que t'as aimé » (déjà le cas : percentile ≥ 0,7).
@@ -141,6 +152,13 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 ### Q4 — Calibration dans le navigateur (D1)
 
 - `calibrate.ts`, vivier de 150, cas partagés (listes calibrées identiques à Python), `reco-bench` (temps), `quality-report` (genres par cran sur l'export de Thibault et l'exemple, avant / après), Playwright (curseur, axe, réseau).
+
+### Q4b — Pénalité de proximité aux films mal notés (D1b) — à faire
+
+- `pipeline/calibration.py` : `score'` avant la calibration aux crans à λ = 0,9 (option : tous les crans) ; **balayage de μ** sur la **validation** (D2 + D1 + D1b), NDCG@20 et Recall@20 à ∞, 2 000 et 500, avec la **règle −3 % de NDCG@20 à ∞** (par rapport à D2 + D1).
+- **Mesure sur les deux exports** (`quality-report`) : part des 16 premières recos dont un des 2 films de l'historique les plus proches est mal noté, **nettement sous 8/16** aux crans 5 000 à 200 (après Q4 : 10, 9, 8, 8, 7 sur l'export de Thibault) ; **animation toujours ≤ 31 %** à chaque cran.
+- Si un μ convient : `model-meta.json`, `calibrate.ts` / `engine.ts`, fixture régénérée hors du dépôt et parité Python / TypeScript (listes identiques), `reco-bench`, Playwright. **Arrêt** pour le choix de μ.
+- Si **aucun μ ne convient** : option **a** (D1 seul), à juger avec les volontaires ; noter en §6.
 
 ### Q5 — Clôture
 
@@ -258,7 +276,8 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 - **Tests** : Vitest 267 (rejeu des 200 listes calibrées ; deux anciens tests qui supposaient l'ordre du modèle à ∞ adaptés : le top 10 de `recommend()` est celui de la liste calibrée, et le score relatif par carte a la même base pour tous les films) ; `pytest` (référence incrémentale = version par lots, table de λ d'une valeur par cran).
 - **Résultat sur l'export de Thibault** (16 premières, part de films ; historique entre parenthèses) : **Animation (11 %) : 19, 19, 25, 19, 31, 31, 31, 25 %** de ∞ à 200 (avant : 25, 19, 31, 50, 94, 81, 100, 75) ; Thriller (33 %) 19-31 % ; Crime (27 %) 6-38 % ; Drama (55 %) 50-75 %. Exemple : Animation (5 %) 31, 44, 38, 13, 6, 6, 6, 6 %.
 - ⚠️ **Voisins mal notés** (recos dont un des 2 films de l'historique les plus proches est mal noté, < 0,3) : export de Thibault **1, 2, 3, 10, 9, 8, 8, 7** /16 de ∞ à 200 (après D2 seul : 0, 1, 3, 5, 1, 2, 3, 5 ; avant 6c : 0, 2, 5, 5, 4, 3, 5, 8). En écartant l'animation, la calibration prend dans le vivier des films proches de films que Thibault a mal notés. Exemple : 2, 0, 1, 2, 4, 0, 0, 0. **Le critère « films mal notés » de la section 4 échoue aux crans 5 000 à 200 avec la configuration complète** : arrêt avant Q5 (Q5 consomme l'évaluation unique sur le test).
-- **Pistes** (à décider) :
+- **Décision de Thibault (9 novembre 2026)** : piste **b en version douce** (pénalité, pas de filtre) → D1b, sous-étape **Q4b** (à faire). Raison : « mal noté » = 30 % de l'historique par construction (percentile < 0,3), donc au hasard environ la moitié des recos (≈ 8/16) ont un film mal noté parmi leurs 2 plus proches voisins ; D2 seul est sous le hasard, la calibration y ramène ; un filtre dur retirerait la moitié du vivier.
+- **Pistes** (examinées à l'arrêt) :
   - **a.** accepter : la mesure regarde la ressemblance avec un film mal noté, pas la qualité ; à juger sur l'écran et avec les volontaires ;
   - **b.** retirer du vivier de calibration (crans bas) les films dont un des 2 voisins les plus proches de l'historique est mal noté (cosinus, déjà calculé pour les explications) : simple, à mesurer (validation + exports) ;
   - **c.** baisser λ aux crans bas (par ex. 0,5 : animation 69-94 % → à mesurer) ;
