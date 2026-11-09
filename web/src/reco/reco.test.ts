@@ -6,11 +6,13 @@ import type { MatchedEntry } from '../matching/history';
 import {
   exclusions,
   loadEngine,
+  calibratePositions,
   recommend,
   versionExclusions,
   versionPartners,
   type Engine,
 } from './engine';
+import { shareProfile } from './calibrate';
 import { choleskySolve, foldIn, FoldInError, keptForFoldIn, signal } from './foldIn';
 import {
   buildModelFiles,
@@ -190,6 +192,8 @@ interface FixtureCase {
   user_vector: number[];
   /** Other cuts of the seen films (step 6c, D3). */
   excluded_versions: number[];
+  /** Calibrated lists of 48 at the 8 slider positions (step 6c, D1). */
+  calibrated: Record<string, number[]>;
   top10: Record<string, { item_idx: number[]; score: number[] }>;
 }
 
@@ -266,6 +270,39 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
     expect(worst).toBeLessThanOrEqual(1e-14);
   });
 
+  it('200 calibrated lists identical to Python (step 6c, D1: share mode, λ per position)', () => {
+    const model = engine!.model;
+    const cal = model.meta.calibration!;
+    expect(cal.lambda_by_position).toEqual([0.1, 0.1, 0.1, 0.9, 0.9, 0.9, 0.9, 0.9]);
+    let lists = 0;
+    for (const c of fixture!.cases) {
+      const p = percentiles(c.rating);
+      const kept = keptFor(c, p);
+      const items = pick(c.item_idx, kept);
+      const x = foldIn(model, items, pick(p, kept));
+      const scores = scoreAll(model, x);
+      const ranked = rankCandidates(
+        scores,
+        model.recommendable,
+        new Set([...c.item_idx, ...c.excluded_versions]),
+      );
+      const pools = topByPosition(ranked, scores, model.popularity, cal.positions, cal.pool);
+      const profile = shareProfile(
+        engine!.catalog.genres,
+        engine!.catalog.genre_names.length,
+        items,
+        pick(p, kept).map((v) => signal(v, model.meta.beta)),
+      );
+      const got = calibratePositions(pools, scores, profile, engine!.catalog.genres, cal, 48);
+      for (const pos of got) {
+        const key = pos.cap === null ? 'inf' : String(pos.cap);
+        expect(pos.items, `${c.name} @ ${key}`).toEqual(c.calibrated[key]);
+        lists++;
+      }
+    }
+    expect(lists).toBe(200);
+  });
+
   it('recommend(): never a seen, excluded or non-recommendable film', () => {
     const model = engine!.model;
     const c = fixture!.cases[0]!;
@@ -285,8 +322,8 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
         if (pos.cap !== null) expect(model.popularity[i]).toBeLessThanOrEqual(pos.cap);
       }
     }
-    // the ∞ top 10 is the fixture's
-    expect(res.positions[0]!.items.slice(0, 10)).toEqual(c.top10['inf']!.item_idx);
+    // the ∞ list is the fixture's calibrated list (the greedy's first picks do not depend on n)
+    expect(res.positions[0]!.items.slice(0, 10)).toEqual(c.calibrated['inf']!.slice(0, 10));
   });
 
   it('recommend(): the other cut of a seen film is never recommended (step 6c, D3)', () => {

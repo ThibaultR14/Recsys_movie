@@ -56,3 +56,37 @@ def test_share_mode_targets_the_share_of_films():
     assert Ps[0, 0] == 0.25 and Ps[0, 4] == 0.75
     out = cal.calibrate_batch(pool, scores, Ps, Gs, 0.99, n=4, mode="share")
     assert sum(i < 4 for i in out[0]) == 1  # one animation film out of 4, as the profile
+
+
+def test_one_user_incremental_matches_the_batch_version():
+    rng = np.random.default_rng(0)
+    n_items, n_genres = 300, 6
+    genres = [
+        sorted(rng.choice(n_genres, rng.integers(0, 4), replace=False).tolist())
+        for _ in range(n_items)
+    ]
+    Gs = np.zeros((n_items, n_genres))
+    for i, gs in enumerate(genres):
+        Gs[i, gs] = 1.0
+    same = 0
+    for _trial in range(40):
+        pool = rng.permutation(n_items)[:60]
+        scores = np.sort(rng.random(60))[::-1]
+        hist = rng.choice(n_items, 30, replace=False)
+        w = rng.random(30) + 1
+        p = cal.share_profile_one(genres, n_genres, hist, w)
+        assert np.allclose(p, cal.profile(Gs, hist, w, "share"))
+        for lam in (0.0, 0.1, 0.9):
+            one = cal.calibrate_one(pool, scores, p, genres, lam, 20)
+            batch = cal.calibrate_batch(
+                pool[None, :], scores[None, :], np.array([p]), Gs, lam, 20, "share"
+            )
+            same += one == batch[0].tolist()
+    assert same == 120  # identical lists (no near-tie at this scale)
+
+
+def test_production_table_has_one_lambda_per_slider_position():
+    import export
+
+    assert len(cal.PRODUCTION["lambda_by_position"]) == len(export.SLIDER_POSITIONS)
+    assert cal.PRODUCTION["mode"] == "share" and cal.PRODUCTION["pool"] == 150

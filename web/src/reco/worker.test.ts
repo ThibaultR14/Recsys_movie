@@ -100,8 +100,9 @@ describe.skipIf(!ready)('worker protocol on the real files', () => {
       for (const f of p.films) {
         expect(seenTitles.has(f.title)).toBe(false);
         if (p.cap !== null) expect(f.popularity).toBeLessThanOrEqual(p.cap);
-        expect(f.relativeScore).toBeCloseTo(
-          f.score / (reco.positions[0]!.films.slice(0, 20).reduce((a, g) => a + g.score, 0) / 20),
+        // same base for every film (mean of the first 20 of the model at ∞; lists are calibrated)
+        expect(f.relativeScore! / f.score).toBeCloseTo(
+          reco.positions[0]!.films[0]!.relativeScore! / reco.positions[0]!.films[0]!.score,
           9,
         );
         // public rating (step 6b, D5): present, and never above the notch ceiling

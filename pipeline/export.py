@@ -171,12 +171,50 @@ def top_under_cap(
     return idx[order[:k]]
 
 
+def calibration_meta() -> dict:
+    """model-meta.json `calibration` (step 6c, D1): read by the TypeScript engine."""
+    import calibration as cal
+
+    return cal.PRODUCTION | {
+        "positions": list(SLIDER_POSITIONS),
+        "genres": "MovieLens genres of catalog.json (genre_names order); films without genre count "
+        "in neither distribution",
+        "objective": "greedy: (1 - lambda) * sum(score / max score of the pool) - lambda * "
+        "sum_g BernoulliKL(p_g, (1 - alpha) q_g + alpha p_g); p_g = signal-weighted share of the "
+        "fold-in films with genre g, q_g = share of the listed films with genre g",
+    }
+
+
 def kept_signal(signal: sp.csr_matrix, kept: np.ndarray) -> sp.csr_matrix:
     """One-user signal restricted to the films kept in the fold-in (step 6c, D2)."""
     s = signal.tocsr().copy()
     s.data = np.where(kept, s.data, 0).astype(s.data.dtype)
     s.eliminate_zeros()
     return s
+
+
+def calibrated_lists(
+    scores: np.ndarray,
+    seen: np.ndarray,
+    recommendable: np.ndarray,
+    popularity: np.ndarray,
+    kept_items: np.ndarray,
+    kept_signal: np.ndarray,
+    genres: list[list[int]],
+    calibration: dict,
+) -> dict[str, list[int]]:
+    """Calibrated lists at the 8 slider positions (step 6c, D1, share mode, λ per position)."""
+    import calibration as cal
+
+    n_genres = 1 + max(g for gs in genres for g in gs)
+    prof = cal.share_profile_one(genres, n_genres, kept_items, kept_signal)
+    out = {}
+    for pos, lam in zip(SLIDER_POSITIONS, calibration["lambda_by_position"], strict=True):
+        pool = top_under_cap(scores, seen, recommendable, popularity, pos, calibration["pool"])
+        out["inf" if pos is None else str(pos)] = cal.calibrate_one(
+            pool, scores[pool], prof, genres, lam, calibration["n_list"], calibration["alpha"]
+        )
+    return out
 
 
 def version_partners(movie_ids: np.ndarray) -> dict[int, set[int]]:
@@ -365,6 +403,9 @@ def fixture_cases(
         histories.append(
             ("version_seen", np.array([a, *first[:4]]), np.array([5, 4, 3, 2, 1], dtype=np.float32))
         )
+    import calibration as cal
+
+    genres = cal.genre_lists()
     cfg = FINAL_CONFIG
     cases = []
     for name, items, ratings in histories:
@@ -404,6 +445,16 @@ def fixture_cases(
                 "signal": signal.data.astype(float).tolist(),
                 "kept": kept.tolist(),
                 "user_vector": x.tolist(),
+                "calibrated": calibrated_lists(
+                    scores,
+                    seen,
+                    recommendable,
+                    popularity,
+                    items[kept],
+                    signal.data[kept],
+                    genres,
+                    cal.PRODUCTION,
+                ),
                 "excluded_versions": sorted(
                     int(i) for i in np.flatnonzero(seen) if i not in set(items)
                 ),
@@ -469,6 +520,7 @@ def cmd_export(out_dir: Path) -> None:
         "iterations": cfg["iterations"],
         "foldin_drop_below": FOLDIN_RULE["drop_below"],
         "foldin_min_kept": FOLDIN_RULE["min_kept"],
+        "calibration": calibration_meta(),
         "foldin_rule": "step 6c (D2): rated films with p < foldin_drop_below are left out of the "
         "fold-in (still seen, never recommended); unrated films never; if fewer than "
         "foldin_min_kept films remain, every film is kept",
@@ -532,6 +584,7 @@ def cmd_export(out_dir: Path) -> None:
         "created_at": meta["created_at"],
         "embeddings_sha256": meta["embeddings_sha256"],
         "config": cfg | FOLDIN_RULE,
+        "calibration": calibration_meta(),
         "positions": [None if p is None else p for p in FIXTURE_POSITIONS],
         "top": FIXTURE_TOP,
         "cases": cases,
@@ -575,7 +628,11 @@ def cmd_verify(out_dir: Path) -> dict:
     rec[meta["non_recommendable_item_idx"]] = False
     cfg = fixture["config"]
     partners = version_partners(np.array(meta["movie_ids"]))
-    max_vec_err, n_tops = 0.0, 0
+    import calibration as cal
+
+    genres = cal.genre_lists()
+    assert meta["calibration"] == calibration_meta(), "model-meta.json calibration"
+    max_vec_err, n_tops, n_cal = 0.0, 0, 0
     for case in fixture["cases"]:
         items = np.array(case["item_idx"], dtype=np.int32)
         R = sp.csr_matrix(  # noqa: N806
@@ -605,9 +662,16 @@ def cmd_verify(out_dir: Path) -> dict:
             got = top_under_cap(scores, seen, rec, pop, cap, fixture["top"])
             assert got.tolist() == top["item_idx"], (case["name"], pos_key)
             n_tops += 1
+        sig = als.signal_values(R, cfg["beta"]).data
+        cal_lists = calibrated_lists(
+            scores, seen, rec, pop, items[kept], sig[kept], genres, meta["calibration"]
+        )
+        assert cal_lists == case["calibrated"], case["name"]
+        n_cal += len(cal_lists)
     out = {
         "cases": len(fixture["cases"]),
         "top_lists_identical": n_tops,
+        "calibrated_lists_identical": n_cal,
         "max_user_vector_abs_diff": max_vec_err,
     }
     print(json.dumps(out, indent=2))

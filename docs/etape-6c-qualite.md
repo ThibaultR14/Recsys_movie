@@ -1,6 +1,6 @@
 # Étape 6c — Qualité des résultats
 
-> Version 0.2 (8 novembre 2026). Mini-étape insérée entre l'étape 6b (retouches de l'interface) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026** avec ses réponses à la section 7 : genres MovieLens, films sans genre hors des distributions (D1) ; `version_of` dans les deux sens (D3) ; seuil 0,3, films sans note jamais retirés, égalités au bord vérifiées, repli sous 5 films, phrase dans « comment ça marche » (D2) ; Steck sur un vivier de 150 par cran, reclassement une seule fois après l'analyse (D1) ; λ choisi en Q3 (au plus −3 % de NDCG@20 à ∞) ; test une seule fois à la clôture ; ordre Q1 → Q5. Section 8 ajoutée : tags des cartes, **après** Q5.
+> Version 0.3 (9 novembre 2026) : décision de Q3 (option B, mode « part de films », λ par cran : 0,1 de ∞ à 10 000, 0,9 de 5 000 à 200, table dans `model-meta.json`). Version 0.2 (8 novembre 2026). Mini-étape insérée entre l'étape 6b (retouches de l'interface) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026** avec ses réponses à la section 7 : genres MovieLens, films sans genre hors des distributions (D1) ; `version_of` dans les deux sens (D3) ; seuil 0,3, films sans note jamais retirés, égalités au bord vérifiées, repli sous 5 films, phrase dans « comment ça marche » (D2) ; Steck sur un vivier de 150 par cran, reclassement une seule fois après l'analyse (D1) ; λ choisi en Q3 (au plus −3 % de NDCG@20 à ∞) ; test une seule fois à la clôture ; ordre Q1 → Q5. Section 8 ajoutée : tags des cartes, **après** Q5.
 > Point de départ : l'essai de Thibault (trop d'animation aux crans bas, films proches de films qu'il a mal notés, une autre version d'un film déjà vu). Le diagnostic (Q0) est fait : chiffres en section 2, détails en section 5.
 
 ---
@@ -88,6 +88,8 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 - **Où** : une fonction pure `calibrate()` (`web/src/reco/calibrate.ts`), appelée **une seule fois, après l'analyse** (dans le `recommend({ n: 48 })` unique), **après** `topByPosition` sur un vivier de 150 par cran ; le changement de cran reste un simple affichage (≤ 50 ms en médiane) ; **avant** les explications ; référence Python `pipeline/calibration.py` ; cas partagés dans `foldin_cases.json` (liste calibrée au cran 2 000 pour chaque cas). Le fold-in, les scores et `relativeScore` (moyenne des 20 meilleurs du modèle) ne changent pas.
 - **Effets sur l'interface** : aucun texte nouveau ; le tampon « ✱ pépite », la diversité des explications et « loin de tes goûts » par rangée s'appliquent aux listes calibrées. Calcul unique, le changement de cran reste sans calcul.
 - **Pourquoi pas une règle de quota par rangée** (« un genre au plus `part de l'historique + tolérance` dans chaque rangée de 8 ») : plus simple à expliquer, mais les genres multiples rendent les quotas contradictoires et le seuil est arbitraire. La mesure par rangée sert quand même de **critère** (Q3, Q4).
+
+- **v0.3 (décision de Thibault après Q3, option B)** : mode **« part de films »** (et non « masse ») ; **λ par cran** : **0,1** à ∞, 20 000 et 10 000 ; **0,9** de 5 000 à 200. Table dans `model-meta.json` (`calibration.lambda_by_position`), jamais en dur dans le code, pour la recaler avec les volontaires. Raison : la règle « au plus −3 % de NDCG@20 » s'applique à ∞, où la métrique mesure bien ce qu'on veut ; aux crans bas, NDCG@20 ≈ 0,008 ne voit presque plus rien et la dérive de genre observée (94-100 % d'animation pour 13 % de l'historique) domine. La vraie mesure aux crans bas sera la question des volontaires (étape 7). Transition 10 000 → 5 000 vérifiée (pas de palier à 0,5 : voir Q4).
 
 ### D2. Films mal notés retirés du fold-in
 
@@ -180,7 +182,7 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 - TypeScript : `keptForFoldIn` (`foldIn.ts`), appliqué par `recommend` ; un ancien `model-meta.json` sans la règle garde tout.
 - `foldin_cases.json` régénéré **hors du dépôt** (`pipeline/data/processed/export/`, `web/test-data/`) : **25 cas, 75 listes identiques**, `export.py verify` : écart 0 ; TypeScript : **écart maximal des vecteurs 2,0·10⁻¹⁵**, des scores 2,2·10⁻¹⁵ (seuil des tests resserré de 10⁻⁹ à **10⁻¹⁴**).
 - Tests : `pytest` (ex æquo, 0,3 exact, sans note, repli), Vitest (mêmes cas + rejeu).
-- **Export de Thibault, après D2** (16 premières recos) : recos dont un des 2 voisins les plus proches est mal noté : 0, 1, 3, 5, 1, 2, 3, 5 de ∞ à 200 (avant : 0, 2, 5, 5, 4, 3, 5, 8 ; **20 au lieu de 32** au total). ⚠️ Critère « moins à chaque cran » : **égalité** à ∞ (0) et à 5 000 (5), baisse ailleurs. Exemple : 2, 0, 1, 5, 5, 2, 0, 0 (avant : 5, 4, 2, 5, 5, 2, 0, 0).
+- **Export de Thibault, après D2** (16 premières recos) : recos dont un des 2 voisins les plus proches est mal noté : 0, 1, 3, 5, 1, 2, 3, 5 de ∞ à 200 (avant : 0, 2, 5, 5, 4, 3, 5, 8 ; **20 au lieu de 32** au total). Critère « moins à chaque cran » : **égalité** à ∞ (0) et à 5 000 (5), baisse ailleurs ; **égalités acceptées par Thibault** (9 novembre 2026). Exemple : 2, 0, 1, 5, 5, 2, 0, 0 (avant : 5, 4, 2, 5, 5, 2, 0, 0).
 - Genres après D2 (sans calibration) : l'animation **monte encore** sur l'export de Thibault (94 % à 2 000, 100 % à 500, 75 % à 200) : c'est le rôle de D1.
 - `decisions.md` : nouvelle règle, ancienne règle de l'étape 2 marquée ✗ avec la raison. La phrase de « comment ça marche » viendra de Claude Web en fin d'étape.
 
@@ -244,6 +246,24 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 
 **Remarque** : à λ fort, les films **sans genre** (227 sur 23 019) sont favorisés une fois les genres équilibrés, puisqu'ils ne changent pas la distribution (réponse Q1) ; effet visible dans les tests, marginal en pratique (1 % du catalogue).
 
+**Décision de Thibault (9 novembre 2026)** : option **B**, mode « part de films », λ = 0,1 de ∞ à 10 000 et 0,9 de 5 000 à 200 (table dans `model-meta.json`) ; raison : la règle « au plus −3 % de NDCG@20 » s'applique à ∞, où la métrique mesure bien ce qu'on veut ; aux crans bas, NDCG@20 ≈ 0,008 ne voit presque plus rien et la dérive de genre observée (94-100 % d'animation pour 13 % de l'historique) domine. La vraie mesure aux crans bas sera la question des volontaires (étape 7).
+
+### Q4 — Calibration dans le navigateur (9 novembre 2026) — ⏸ arrêt : voisins mal notés aux crans bas
+
+- **Transition 10 000 → 5 000** (16 premières, `quality-report --tables`) : films communs entre les deux crans · écart de genres (somme des |Δ part|). Export de Thibault : sans calibration 4/16 · 1,69 ; λ = 0,1 partout 3/16 · 1,44 ; **B 2/16 · 1,31** ; B avec palier 0,5 à 5 000 : 3/16 · 1,56 (et 44 % d'animation à 5 000 au lieu de 19 %). Exemple : sans calibration 5/16 · 1,81 ; **B 4/16 · 1,44** ; palier 5/16 · 1,56. Entre crans voisins les listes changent toujours beaucoup (le plafond change les candidats : 0 à 8 films communs sur 16 sans calibration) ; avec B, l'écart de genres au passage 10 000 → 5 000 est **plus petit** que sans calibration. **Pas de palier.**
+- **Code** : `calibration.PRODUCTION` (Python) → `model-meta.json` `calibration` (`mode: share`, `pool: 150`, `n_list: 48`, `alpha: 0,01`, `lambda_by_position`, `positions`) ; référence un-utilisateur incrémentale `calibrate_one` / `share_profile_one` (`calibration.py`, testée contre la version par lots : 120 listes identiques) ; TypeScript `calibrateShare` / `shareProfile` / `lambdaOf` (`calibrate.ts`) et `calibratePositions` (`engine.ts`) : calcul **une seule fois** dans `recommend`, sur un vivier de 150 par cran, profil = films gardés dans le fold-in (D2) pondérés par leur signal ; `relativeScore` du cran inchangé (ordre du modèle), score relatif par carte sur la même base. Le changement de cran reste un affichage.
+- **Incrémental** : à chaque pas, la divergence de base et un Δ par genre (19) sont calculés une fois ; un candidat coûte la somme des Δ de ses genres. Les comptes de genres sont des entiers : Python et TypeScript font exactement les mêmes opérations.
+- **Parité** : `foldin_cases.json` régénéré hors du dépôt : 25 cas, 75 listes du modèle et **200 listes calibrées** (8 crans × 25 cas, 48 films) **identiques** en Python (`export.py verify`) et en TypeScript ; vecteurs 2,0·10⁻¹⁵.
+- **Temps** (`reco-bench`, médiane de 7) : **calibration 3 à 7,5 ms** pour les 8 crans (objectif ≤ 30 ms). `recommend` complet pour 3 000 films : 123-255 ms selon la charge de la machine ; **sans calibration, mesuré juste avant dans les mêmes conditions : 128-151 ms** : la calibration ajoute < 10 ms (critère +100 ms tenu). Playwright : 11 verts, changement de cran **33 ms** en médiane (pire 46 ms), modèle prêt 1,2 s (machine chargée).
+- **Tests** : Vitest 267 (rejeu des 200 listes calibrées ; deux anciens tests qui supposaient l'ordre du modèle à ∞ adaptés : le top 10 de `recommend()` est celui de la liste calibrée, et le score relatif par carte a la même base pour tous les films) ; `pytest` (référence incrémentale = version par lots, table de λ d'une valeur par cran).
+- **Résultat sur l'export de Thibault** (16 premières, part de films ; historique entre parenthèses) : **Animation (11 %) : 19, 19, 25, 19, 31, 31, 31, 25 %** de ∞ à 200 (avant : 25, 19, 31, 50, 94, 81, 100, 75) ; Thriller (33 %) 19-31 % ; Crime (27 %) 6-38 % ; Drama (55 %) 50-75 %. Exemple : Animation (5 %) 31, 44, 38, 13, 6, 6, 6, 6 %.
+- ⚠️ **Voisins mal notés** (recos dont un des 2 films de l'historique les plus proches est mal noté, < 0,3) : export de Thibault **1, 2, 3, 10, 9, 8, 8, 7** /16 de ∞ à 200 (après D2 seul : 0, 1, 3, 5, 1, 2, 3, 5 ; avant 6c : 0, 2, 5, 5, 4, 3, 5, 8). En écartant l'animation, la calibration prend dans le vivier des films proches de films que Thibault a mal notés. Exemple : 2, 0, 1, 2, 4, 0, 0, 0. **Le critère « films mal notés » de la section 4 échoue aux crans 5 000 à 200 avec la configuration complète** : arrêt avant Q5 (Q5 consomme l'évaluation unique sur le test).
+- **Pistes** (à décider) :
+  - **a.** accepter : la mesure regarde la ressemblance avec un film mal noté, pas la qualité ; à juger sur l'écran et avec les volontaires ;
+  - **b.** retirer du vivier de calibration (crans bas) les films dont un des 2 voisins les plus proches de l'historique est mal noté (cosinus, déjà calculé pour les explications) : simple, à mesurer (validation + exports) ;
+  - **c.** baisser λ aux crans bas (par ex. 0,5 : animation 69-94 % → à mesurer) ;
+  - **d.** mettre les films mal notés dans le profil comme un « anti-profil » (pénaliser les genres que l'utilisateur a mal notés) : plus long.
+
 ---
 
 ## 6. À reporter
@@ -251,7 +271,7 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 - **Genres TMDB** (plus fins que MovieLens, et utiles pour la mention « spectacle ») : enrichissement par `enrich_tmdb.py` puis `catalog.json` ; si Q1 les retient, la calibration les utilisera.
 - **Pondération douce des films mal notés** (au lieu d'un retrait : `r = 1 + β × p` avec un β plus grand, ou un poids nul sous le seuil et réduit au-dessus) : non mesurée ; à essayer si D2 déçoit les volontaires.
 - **Calibration sur d'autres axes** (décennies, pays, langues) : `etat-de-l-art.md` ; plus tard.
-- **Seuils** (percentile 0,3, λ, vivier de 150) : à recaler avec les volontaires (étape 7).
+- **Seuils** (percentile 0,3, λ, vivier de 150) : à recaler avec les volontaires (étape 7). **λ des crans bas (0,9)** en particulier : la question des volontaires (« combien de ces films ne connaissais-tu pas et as-tu envie de voir ? ») est la vraie mesure à ces crans.
 
 ---
 

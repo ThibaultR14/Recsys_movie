@@ -57,6 +57,7 @@ async function main() {
     const importMs: number[] = [];
     const recoMs: number[] = [];
     const explainMs: number[] = [];
+    const calibrationMs: number[] = [];
     let used = 0;
     for (let run = 0; run < RUNS; run++) {
       const a = performance.now();
@@ -67,12 +68,14 @@ async function main() {
       importMs.push(b - a);
       recoMs.push(c - b);
       explainMs.push(reco.explainMs ?? 0);
+      calibrationMs.push(reco.calibrationMs ?? 0);
       used = imported.summary.nHistoryFilms;
     }
     console.log(
       `${label.padEnd(18)} ${String(used).padStart(5)} films utilisés · lecture + correspondance ` +
         `${median(importMs).toFixed(1)} ms · recommend (8 positions × 48) ` +
-        `${median(recoMs).toFixed(1)} ms, dont explications ${median(explainMs).toFixed(1)} ms ` +
+        `${median(recoMs).toFixed(1)} ms, dont calibration ${median(calibrationMs).toFixed(1)} ms ` +
+        `et explications ${median(explainMs).toFixed(1)} ms ` +
         `(médiane de ${RUNS})`,
     );
   }

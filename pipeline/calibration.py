@@ -58,6 +58,118 @@ OUT = RESULTS_DIR / "quality" / "calibration_val_{}.json"
 MODES = ("mass", "share")
 
 
+# Production (step 6c, Q3, option B): share mode, λ per slider position (∞, 20 000, 10 000, 5 000,
+# 2 000, 1 000, 500, 200). The -3 % NDCG@20 rule holds at ∞, where the metric measures what we want;
+# at the low positions NDCG@20 (≈ 0.008) barely sees anything and the genre drift dominates.
+# Written to model-meta.json by export.py (to be recalibrated with the volunteers, step 7).
+PRODUCTION = {
+    "mode": "share",
+    "pool": POOL,
+    "n_list": N_LIST,
+    "alpha": ALPHA,
+    "lambda_by_position": [0.1, 0.1, 0.1, 0.9, 0.9, 0.9, 0.9, 0.9],
+}
+
+
+# --- one user, incremental: the reference of the TypeScript engine (calibrate.ts) -----------------
+
+
+def genre_lists(path=ev.CATALOG_PARQUET) -> list[list[int]]:
+    """Per item_idx: sorted indices of its MovieLens genres (same order as catalog.json)."""
+    cat = pl.read_parquet(path, columns=["item_idx", "ml_genres"]).sort("item_idx")
+    lists = [[g for g in (gs or []) if g != NO_GENRE] for gs in cat["ml_genres"].to_list()]
+    names = sorted({g for gs in lists for g in gs})
+    col = {g: j for j, g in enumerate(names)}
+    return [sorted(col[g] for g in gs) for gs in lists]
+
+
+def share_profile_one(genres: list[list[int]], n_genres: int, items, weights) -> list[float]:
+    """p_g: weighted share of the films that have genre g (films without genre left out), summed
+    in history order, as the TypeScript engine does."""
+    v = [0.0] * n_genres
+    total = 0.0
+    for item, w in zip(items, weights, strict=True):
+        gs = genres[int(item)]
+        if not gs:
+            continue
+        w = float(w)
+        total += w
+        for g in gs:
+            v[g] += w
+    return [x / total for x in v] if total > 0 else v
+
+
+def _bernoulli_term(p: float, q: float, alpha: float) -> float:
+    qt = (1.0 - alpha) * q + alpha * p
+    t = 0.0
+    if p > 0:
+        t += p * math.log(p / qt)
+    if p < 1:
+        t += (1.0 - p) * math.log((1.0 - p) / (1.0 - qt))
+    return t
+
+
+def calibrate_one(
+    pool, scores, p: list[float], genres: list[list[int]], lam: float, n: int, alpha: float = ALPHA
+) -> list[int]:
+    """Greedy calibrated list (share mode), incremental: at each step, with c = films with genres
+    in the list + 1, base = Σ_g f(p_g, Q_g / c) and Δ_g = f(p_g, (Q_g + 1) / c) − f(p_g, Q_g / c);
+    a candidate with genres scores base + Σ_{g in its genres} Δ_g (ascending g); a candidate without
+    genre leaves q as is. Ties: the first film of the pool. Mirrors calibrate.ts exactly."""
+    pool = [int(i) for i in pool]
+    scores = [float(x) for x in scores]
+    if not pool:
+        return []
+    smax = max(scores)
+    s = [x / (smax if smax > 0 else 1.0) for x in scores]
+    n_g = len(p)
+    sum_q = [0.0] * n_g
+    n_q = 0
+    sum_s = 0.0
+    taken = [False] * len(pool)
+    out: list[int] = []
+    for _ in range(min(n, len(pool))):
+        if lam != 0.0:
+            c = n_q + 1
+            base = 0.0
+            delta = [0.0] * n_g
+            for g in range(n_g):
+                f0 = _bernoulli_term(p[g], sum_q[g] / c, alpha)
+                base += f0
+                delta[g] = _bernoulli_term(p[g], (sum_q[g] + 1.0) / c, alpha) - f0
+            none = 0.0
+            for g in range(n_g):
+                none += _bernoulli_term(p[g], sum_q[g] / n_q if n_q else 0.0, alpha)
+        best, best_obj = -1, -math.inf
+        for k, item in enumerate(pool):
+            if taken[k]:
+                continue
+            if lam == 0.0:
+                obj = s[k]
+            else:
+                gs = genres[item]
+                if gs:
+                    div = base
+                    for g in gs:
+                        div += delta[g]
+                else:
+                    div = none
+                obj = (1.0 - lam) * (sum_s + s[k]) - lam * div
+            if obj > best_obj:
+                best, best_obj = k, obj
+        if best < 0:
+            break
+        taken[best] = True
+        out.append(pool[best])
+        sum_s += s[best]
+        gs = genres[pool[best]]
+        for g in gs:
+            sum_q[g] += 1.0
+        if gs:
+            n_q += 1
+    return out
+
+
 def genre_matrix(path=ev.CATALOG_PARQUET, mode: str = "mass") -> tuple[np.ndarray, list[str]]:
     """(n_items, n_genres) float64: 1/k (mass) or 1 (share) on each of the k MovieLens genres of a
     film, 0 if none."""

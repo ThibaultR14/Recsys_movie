@@ -13,7 +13,8 @@ import { matchHistory, toUserHistory, type MatchedEntry, type UserFilm } from '.
 import { ImdbIdIndex } from '../matching/imdbIds';
 import { Matcher, type MatchStatus } from '../matching/match';
 import { TitleIndex, type TitleIndexFile } from '../matching/titleIndex';
-import { foldIn, keptForFoldIn } from './foldIn';
+import { calibrateShare, lambdaOf, shareProfile } from './calibrate';
+import { foldIn, keptForFoldIn, signal } from './foldIn';
 import { buildModelFiles, fetchModelFiles, type FetchFn, type ModelFiles } from './modelFiles';
 import { rankCandidates, scoreAll, topByPosition, type PositionResult } from './recommend';
 
@@ -199,7 +200,40 @@ export function versionExclusions(
   return out;
 }
 
+/** Calibrated positions (step 6c, D1): each pool reordered, cut to `n`; the relative score of the
+ * position (model order) is kept. */
+export function calibratePositions(
+  pools: readonly PositionResult[],
+  scores: Float64Array,
+  profile: readonly number[],
+  genres: readonly (readonly number[])[],
+  calibration: NonNullable<ModelFiles['meta']['calibration']>,
+  n: number,
+): PositionResult[] {
+  return pools.map((pos) => {
+    const lambda = lambdaOf(calibration, pos.cap);
+    const items = calibrateShare(
+      pos.items,
+      pos.scores,
+      profile,
+      genres,
+      lambda,
+      n,
+      calibration.alpha,
+    );
+    const s = items.map((i) => scores[i]!);
+    return {
+      ...pos,
+      items,
+      scores: s,
+      relativeScores: s.map((x) => (pos.base > 0 ? x / pos.base : 0)),
+    };
+  });
+}
+
 export interface Recommendations {
+  /** Time of the genre calibration (8 positions), for reco-bench. */
+  calibrationMs: number;
   positions: PositionResult[];
   history: UserFilm[];
   nExcluded: number;
@@ -232,8 +266,36 @@ export function recommend(
   for (const i of versionExclusions(engine.versions, seen)) excluded.add(i);
   const ranked = rankCandidates(scores, model.recommendable, excluded);
   const caps = options.caps ?? model.meta.slider.positions;
+  const n = options.n ?? 50;
+  const calibration = model.meta.calibration;
+  const raw = topByPosition(
+    ranked,
+    scores,
+    model.popularity,
+    caps,
+    calibration ? Math.max(n, calibration.pool) : n,
+  );
+  // step 6c (D1): genre calibration of each position, once, on its pool (the fold-in films' genres)
+  const t0 = performance.now();
+  const positions = calibration
+    ? calibratePositions(
+        raw,
+        scores,
+        shareProfile(
+          engine.catalog.genres,
+          engine.catalog.genre_names.length,
+          foldInFilms.map((h) => h.item),
+          foldInFilms.map((h) => signal(h.percentile, model.meta.beta)),
+        ),
+        engine.catalog.genres,
+        calibration,
+        n,
+      )
+    : raw;
+  const calibrationMs = performance.now() - t0;
   return {
-    positions: topByPosition(ranked, scores, model.popularity, caps, options.n ?? 50),
+    calibrationMs,
+    positions,
     history,
     nExcluded: excluded.size,
   };

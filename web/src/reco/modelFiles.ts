@@ -3,6 +3,8 @@
  * yty.bin, popularity.bin, model-meta.json. Little-endian binaries.
  */
 
+import type { CalibrationMeta } from './calibrate';
+
 export interface ModelMeta {
   format_version: number;
   n_items: number;
@@ -14,6 +16,8 @@ export interface ModelMeta {
   foldin_drop_below?: number;
   /** …unless fewer than this many films would remain. */
   foldin_min_kept?: number;
+  /** Step 6c (D1): genre calibration (share mode, λ per slider position). */
+  calibration?: CalibrationMeta;
   slider: { variant: string; positions: (number | null)[] };
   movie_ids: number[];
   non_recommendable_item_idx: number[];

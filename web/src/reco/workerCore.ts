@@ -97,6 +97,8 @@ export interface RecommendResult {
   profileDirectors: string[];
   /** Time spent on the explanations (step 6b, D6), for reco-bench. */
   explainMs?: number;
+  /** Time spent on the genre calibration (step 6c, D1), for reco-bench. */
+  calibrationMs?: number;
   positions: {
     cap: number | null;
     relativeScore: number;
@@ -189,6 +191,7 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     nExcluded: res.nExcluded,
     profileDirectors: profileDirectors(res.history, engine.catalog),
     explainMs,
+    calibrationMs: res.calibrationMs,
     positions: res.positions.map((p) => ({
       cap: p.cap,
       relativeScore: p.relativeScore,

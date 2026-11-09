@@ -159,6 +159,37 @@ async function main() {
         `λ ${String(lam).padEnd(5)} ${cells.map((c) => c.padStart(13)).join(' ')}  (${ms.toFixed(0)} ms)`,
       );
     }
+
+    // ---- 4. λ per notch (--tables "name:λ∞,λ20000,…,λ200|…"): transitions between notches
+    const tablesAt = process.argv.indexOf('--tables');
+    if (tablesAt > 0) {
+      const tables = process.argv[tablesAt + 1]!.split('|').map((t) => {
+        const [name, values] = t.split(':');
+        return { name: name!, lams: values!.split(',').map(Number) };
+      });
+      const genreShares = (items: readonly number[]) =>
+        catalog.genre_names.map((g) => share(items, g));
+      console.log(
+        `\n── λ par cran : animation (16 premières) par cran ; entre crans voisins : films communs dans ` +
+          `les 16 premières · écart de genres (somme des |Δ part|) ──`,
+      );
+      for (const { name, lams } of tables) {
+        const lists = pools.positions.map((pos, i) =>
+          calibrate(pos.items, pos.scores, p, rows, lams[i]!, 48, mode).slice(0, SHOWN),
+        );
+        const anim = lists.map((l) => pct(share(l, 'Animation')).trim()).join(' ');
+        const steps = lists.slice(1).map((l, i) => {
+          const prev = new Set(lists[i]);
+          const common = l.filter((x) => prev.has(x)).length;
+          const a = genreShares(lists[i]!);
+          const b = genreShares(l);
+          const dist = a.reduce((t, x, g) => t + Math.abs(x - b[g]!), 0);
+          return `${common}/${SHOWN} · ${dist.toFixed(2)}`;
+        });
+        console.log(`${name.padEnd(8)} animation ${anim}`);
+        console.log(`${''.padEnd(8)} transitions ${steps.join(' | ')}`);
+      }
+    }
   }
 }
 

@@ -128,3 +128,123 @@ export function calibrate(
   }
   return out;
 }
+
+// --- production path (step 6c, Q4): share mode, incremental, mirror of Python `calibrate_one` ---
+
+/** model-meta.json `calibration` (written by pipeline/export.py). */
+export interface CalibrationMeta {
+  mode: 'share';
+  pool: number;
+  n_list: number;
+  alpha: number;
+  /** One λ per slider position, same order as `positions`. */
+  lambda_by_position: number[];
+  positions: (number | null)[];
+}
+
+/** p_g: weighted share of the films that have genre g (films without genre left out), summed in
+ * history order (Python `share_profile_one`). */
+export function shareProfile(
+  genres: readonly (readonly number[])[],
+  nGenres: number,
+  items: readonly number[],
+  weights: readonly number[],
+): number[] {
+  const v = new Array<number>(nGenres).fill(0);
+  let total = 0;
+  items.forEach((item, k) => {
+    const gs = genres[item] ?? [];
+    if (!gs.length) return;
+    const w = weights[k]!;
+    total += w;
+    for (const g of gs) v[g]! += w;
+  });
+  return total > 0 ? v.map((x) => x / total) : v;
+}
+
+function bernoulliTerm(p: number, q: number, alpha: number): number {
+  const qt = (1 - alpha) * q + alpha * p;
+  let t = 0;
+  if (p > 0) t += p * Math.log(p / qt);
+  if (p < 1) t += (1 - p) * Math.log((1 - p) / (1 - qt));
+  return t;
+}
+
+/**
+ * Greedy calibrated list (share mode), incremental: at each step, with c = films with genres in
+ * the list + 1, base = Σ_g f(p_g, Q_g / c) and Δ_g = f(p_g, (Q_g + 1) / c) − f(p_g, Q_g / c); a
+ * candidate with genres scores base + Σ_{g in its genres} Δ_g; a candidate without genre leaves q
+ * as is. O(n × (pool × genres per film + 2 × genres)). Ties: the first film of the pool.
+ */
+export function calibrateShare(
+  pool: readonly number[],
+  scores: readonly number[],
+  p: readonly number[],
+  genres: readonly (readonly number[])[],
+  lambda: number,
+  n: number,
+  alpha: number = ALPHA,
+): number[] {
+  if (!pool.length) return [];
+  let smax = -Infinity;
+  for (const x of scores) if (x > smax) smax = x;
+  const div = smax > 0 ? smax : 1;
+  const s = scores.map((x) => x / div);
+  const nG = p.length;
+  const sumQ = new Array<number>(nG).fill(0);
+  const delta = new Array<number>(nG).fill(0);
+  let nQ = 0;
+  let sumS = 0;
+  const taken = new Uint8Array(pool.length);
+  const out: number[] = [];
+  const steps = Math.min(n, pool.length);
+  for (let step = 0; step < steps; step++) {
+    let base = 0;
+    let none = 0;
+    if (lambda !== 0) {
+      const c = nQ + 1;
+      for (let g = 0; g < nG; g++) {
+        const f0 = bernoulliTerm(p[g]!, sumQ[g]! / c, alpha);
+        base += f0;
+        delta[g] = bernoulliTerm(p[g]!, (sumQ[g]! + 1) / c, alpha) - f0;
+      }
+      for (let g = 0; g < nG; g++) none += bernoulliTerm(p[g]!, nQ ? sumQ[g]! / nQ : 0, alpha);
+    }
+    let best = -1;
+    let bestObj = -Infinity;
+    for (let k = 0; k < pool.length; k++) {
+      if (taken[k]) continue;
+      let obj: number;
+      if (lambda === 0) obj = s[k]!;
+      else {
+        const gs = genres[pool[k]!] ?? [];
+        let d: number;
+        if (gs.length) {
+          d = base;
+          for (const g of gs) d += delta[g]!;
+        } else d = none;
+        obj = (1 - lambda) * (sumS + s[k]!) - lambda * d;
+      }
+      if (obj > bestObj) {
+        bestObj = obj;
+        best = k;
+      }
+    }
+    if (best < 0) break;
+    taken[best] = 1;
+    const item = pool[best]!;
+    out.push(item);
+    sumS += s[best]!;
+    const gs = genres[item] ?? [];
+    for (const g of gs) sumQ[g]! += 1;
+    if (gs.length) nQ++;
+  }
+  return out;
+}
+
+/** λ of a slider position (0 when the table does not list it: no calibration). */
+export function lambdaOf(meta: CalibrationMeta | undefined, cap: number | null): number {
+  if (!meta) return 0;
+  const i = meta.positions.indexOf(cap);
+  return i < 0 ? 0 : (meta.lambda_by_position[i] ?? 0);
+}
