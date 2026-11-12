@@ -1,6 +1,6 @@
 # Étape 8 — Films récents
 
-> Version 0.1 (12 novembre 2026) : diagnostic R0 fait (section 2), décisions **proposées**, **en attente de validation par Thibault** (questions en section 7). Rien n'est codé dans le site.
+> Version 0.2 (12 novembre 2026) : **validée par Thibault** avec ses réponses à la section 7 (périmètre 2022 → aujourd'hui, placés à ≥ 50 votes, recommandables à ≥ 100 ; `similar` écarté ; norme cible par tranche de votes TMDB ; fiches des 23 019 films ; seuil de D5 par tranche de votes, tranche < 500 non recommandable si elle échoue ; popularité calée sur les films 2019-2022 du catalogue ; ω mesuré sur la validation ; étape avant la mise en ligne). Version 0.1 (12 novembre 2026) : diagnostic R0 (section 2), décisions proposées.
 > Point de départ : les pistes retenues avec Claude Web (D1-D8) et le trou accepté au MVP (« films sortis après 2023 : trop récents pour nous »). Étape insérée après l'étape 6c, avant la mise en ligne (étape 7) ; le nom du fichier suit la demande de Thibault.
 
 ---
@@ -139,7 +139,7 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
 ### D0. Périmètre (nouveau)
 
 - Films TMDB **absents du catalogue**, sortis **depuis le 1ᵉʳ janvier 2022** (première sortie TMDB), **≥ 50 votes TMDB** : ~3 800 films aujourd'hui. Ils sont **placés** (vecteur estimé) : ils comptent dans le fold-in quand ils sont dans l'historique et sont « vus » (jamais recommandés à qui les a vus).
-- **Recommandables** seulement s'ils ont **≥ 100 votes** (~2 400 films ; à confirmer en R3) et passent les règles de D3 et D5. Documentaires : gardés, avec la mention et le filtre qui existent ; téléfilms (genre TMDB 10770, 33 films) : gardés comme les autres films.
+- **Recommandables** seulement s'ils ont **≥ 100 votes** (~2 400 films) et passent les règles de D3 et D5. **Placés mais non recommandables** (50-99 votes, ou tranche qui échoue en D5) : ils **comptent dans le profil** (fold-in) et sont « vus », jamais proposés (v0.2). Documentaires : gardés, avec la mention et le filtre qui existent ; téléfilms (genre TMDB 10770, 33 films) : gardés comme les autres films.
 - Pas de dataset IMDb ; pas de film adulte ; mêmes exclusions manuelles (`manual_overrides.csv` : `exclude` accepte aussi un `tmdb_id` récent, colonne à préciser en R1).
 
 ### D1. Voisins TMDB dans le catalogue
@@ -147,7 +147,7 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
 - Source : **`recommendations` seulement** (première page, 20 films) ; `similar` écarté du placement (2.3 : pire que le hasard une fois centré).
 - **k premiers voisins placés** (au catalogue, ou films récents déjà placés), **poids au rang** `1/r` ; k réglé en R3 (départ : 5).
 - Estimation **centrée et recalée** : `ŷ = μ + s × Σ w_r (y_r − μ) / Σ w_r`, puis norme ramenée à une **norme cible** (D1c). `μ` = vecteur moyen des films du catalogue ; `s` (rétrécissement) appris en R3.
-- **D1c. Norme cible** : régression de `log ‖y‖` sur `log(1 + votes TMDB)`, l'année de sortie et le nombre de voisins, apprise sur les films du catalogue ; sinon, norme médiane des films du catalogue de popularité voisine. Mesuré en R3.
+- **D1c. Norme cible** (v0.2) : **norme médiane des films du catalogue de la même tranche de votes TMDB** (tranches fixes : 50-99, 100-199, 200-499, 500-999, 1 000-1 999, 2 000-4 999, 5 000-9 999, ≥ 10 000 ; une tranche de moins de 30 films prend la voisine), pas une norme globale. Table dans `model-meta.json`.
 - **Placement chronologique** : films triés par date de sortie, chacun placé avec les voisins déjà placés (catalogue + films récents plus anciens). **Surveillance de la propagation** : profondeur de placement (0 = tous les voisins au catalogue) et part du poids venue de films estimés, rapportées en R3 ; un voisin estimé compte avec un poids réduit `γ` (réglé en R3, départ 0,5).
 
 ### D2. Contenu TMDB → vecteur ALS
@@ -179,21 +179,22 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
   3. **Apport de chaque ingrédient** : voisins seuls, contenu seul, mélange, ± chronologique, ± norme recalée, ± qualité (D4).
   4. **Stratification** : votes TMDB (< 500 et ≥ 500, la base étant plus connue que les films récents, 2.3) et notes MovieLens (< 100, ≥ 100).
   5. **Effet sur les autres films** : NDCG@20 des listes complètes à ∞, 2 000 et 500 avec les films de la base estimés, comparé à leurs vrais vecteurs (les films estimés ne doivent ni envahir ni disparaître : part des films de la base dans les top 20, estimé contre vrai).
-- **Seuil, fixé avant de mesurer** : sur la validation, Recall@20 (films de la base bien notés) avec vecteurs estimés **≥ 70 % de celui des vrais vecteurs**, et **meilleur que la popularité** hors des intervalles de confiance, sur la tranche **< 500 votes** comme sur l'ensemble.
+- **Seuil, fixé avant de mesurer** : sur la validation, Recall@20 **sur les films de la base bien notés seulement** (pertinence de l'étape 2 : note ≥ médiane du fold-in) avec vecteurs estimés **≥ 70 % de celui des vrais vecteurs**, et **meilleur que la popularité** hors de l'intervalle de confiance (différence appariée par utilisateur), sur l'ensemble **et par tranche de votes TMDB** (< 500, ≥ 500 ; la base est plus connue que les vrais films récents).
+- **Si la tranche < 500 votes rate le seuil** (v0.2) : les films estimés de moins de 500 votes sont **non recommandables mais comptent dans le profil** ; la tranche ≥ 500 suit sa propre mesure.
 - Si le seuil est atteint : les films récents entrent dans les listes normales, avec « (estimé) » sur la carte. Sinon : **rangée « sorties récentes (estimé) » seulement** si le classement bat la popularité, **rien** sinon ; dans les deux cas, ils comptent dans le fold-in si D6 le justifie.
 - **Test** : une seule fois, à la clôture (R7), sur la configuration retenue.
 
 ### D6. Moteur
 
 - **`YᵀY` reste celui des films entraînés** (23 019) : il représente la « négative implicite » d'ALS ; parité inchangée. La variante « `YᵀY` + films estimés » est mesurée en R3 (validation), pour information.
-- **Poids des films estimés dans le fold-in** : confiance `c = 1 + ω × (c_normal − 1)`, ω ∈ {0 ; 0,5 ; 1} mesuré en R3 (utilisateurs de validation dont le fold-in contient des films de la base, estimés). Règle de D2 de l'étape 6c (percentile < 0,3 retiré) appliquée comme aux autres films.
+- **Poids des films estimés dans le fold-in** : confiance `c = 1 + ω × (c_normal − 1)`, ω ∈ {0 ; 0,5 ; 1} mesuré en R3 sur la **validation** (v0.2 : les films 2022-2023 notés par les utilisateurs de validation sont mis dans leur fold-in **avec leur vecteur estimé**, NDCG@20 de la liste complète comparé aux vrais vecteurs). Règle de D2 de l'étape 6c (percentile < 0,3 retiré) appliquée comme aux autres films.
 - **`item_idx`** : les films estimés sont **ajoutés après** les films entraînés (`item_idx` ≥ 23 019), dans l'ordre du placement ; l'ordre des films entraînés ne change pas (règle de `CLAUDE.md`). `model-meta.json` donne `n_trained` (taille de `YᵀY`) et `n_items`.
 - Exclusions, calibration, explications, tags : inchangés et appliqués aux films estimés (voir D7). Cas partagés : `foldin_cases.json` régénéré hors du dépôt avec des historiques qui contiennent des films estimés ; rejeu à l'identique.
 
 ### D7. Site
 
-- **Popularité du curseur** des films estimés : **pas `0,285 × votes` tel quel** (2.4 : 89 % sous le plafond 200). Proposition : **correspondance par rang dans l'année** : un film au centile c des votes TMDB parmi les films de son année de sortie reçoit la popularité du film au centile c parmi des films de référence (catalogue 2015-2019, sur le même univers « ≥ 50 votes TMDB ») ; jamais moins que `0,285 × votes`. Alternatives mesurées en R3 : facteur d'âge sur les votes TMDB ; `year_all` prolongé. Choix à l'arrêt de R3, table dans `model-meta.json`.
-- **Carte** : « ★ x,x · TMDB » (note TMDB ramenée sur 5, une décimale, au lieu de la moyenne MovieLens) et **« (estimé) »** ; lien Letterboxd par `tmdb_id` (inchangé) ; tag « encore un <réalisateur> » (réalisateurs TMDB, même calcul) et tampon « ✱ pépite » (popularité D7) ; **pas** « ça divise » (pas de notes individuelles) ni « vieux trésor » (récents par définition) ; « parce que t'as aimé X et Y » permis (cosinus des vecteurs estimés), à vérifier en R6.
+- **Popularité du curseur** des films estimés : **pas `0,285 × votes` tel quel** (2.4 : 89 % sous le plafond 200). **Correspondance par rang dans l'année** (v0.2) : un film au centile c des votes TMDB parmi les films TMDB de son année de sortie (≥ 50 votes) reçoit la popularité au centile c de la **distribution de référence des films 2019-2022** (même univers : films TMDB ≥ 50 votes de ces années ; popularité `popularity.bin` pour ceux du catalogue, `0,285 × votes` pour les autres) ; jamais moins que `0,285 × votes`. **Contrôle** : les gros succès récents (films les plus votés de chaque année) tombent **au-dessus de 20 000**. Table dans `model-meta.json`. Dans le faux départ à froid, la référence est 2018-2021 (sans la base).
+- **Carte** : « ★ x,x · TMDB » (note TMDB ramenée sur 5, une décimale, au lieu de la moyenne MovieLens) et **« (estimé) »** ; lien Letterboxd par `tmdb_id` (inchangé) ; tag « encore un <réalisateur> » (réalisateurs TMDB, même calcul) et tampon « ✱ pépite » (popularité D7) **s'appliquent** ; **pas** « ça divise » (pas de notes individuelles) ; « vieux trésor » sans objet (récents par définition) ; « parce que t'as aimé X et Y » permis (cosinus des vecteurs estimés), à vérifier en R6.
 - **Rangée « sorties récentes »** : seulement si D5 le décide (seuil non atteint, popularité battue) ; sinon films mêlés aux autres.
 - **Calibration des genres** : genres TMDB des films estimés traduits en genres MovieLens (Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Fantasy, Horror, Mystery, Romance, Thriller, War, Western : même nom ; Science Fiction → Sci-Fi ; Family → Children ; Music → Musical ; History et TV Movie → aucun). Correspondance vérifiée en R1 sur les films du catalogue (accord par genre, rapporté).
 - **Écran d'analyse** : les films placés sont reconnus (statut `exact`) ; « trop récents » ne garde que les films non placés (et la phrase dit pourquoi : « trop récents ou trop peu vus pour nous ») ; texte de Claude Web.
@@ -276,14 +277,14 @@ Chiffres en section 2. Script `pipeline/recent_films_diagnostics.py` ; 4 743 app
 
 ---
 
-## 7. Questions pour la validation
+## 7. Questions pour la validation — réponses de Thibault (12 novembre 2026)
 
-1. **Périmètre (D0)** : inclure les **films 2022-2023 absents du catalogue** (~1 500, même trou) en plus des films sortis après le 13/10/2023 ? Seuils : **50 votes pour placer** (historique), **100 pour recommander** ?
-2. **`similar`** écarté du placement (pire que le hasard) : d'accord ? Le garder comme simple caractéristique de contenu si R3 le montre utile ?
-3. **Norme recalée (D1c)** et estimation centrée avec rétrécissement : d'accord pour l'ajouter à D1 ? (Sans elle, les films estimés écraseraient les listes.)
-4. **Collecte des 23 019 fiches du catalogue** (~20 min d'appels TMDB, une fois) pour apprendre D2 : d'accord ?
-5. **Seuil de D5** : Recall@20 des films de la base bien notés ≥ 70 % du vrai vecteur, meilleur que la popularité, sur l'ensemble **et** sous 500 votes : d'accord avec cette forme, fixée avant de mesurer ?
-6. **Popularité (D7)** : `0,285 × votes` fait passer 89 % des films récents sous le plafond 200. D'accord pour une **correspondance par rang dans l'année** (référence : catalogue 2015-2019), comparée en R3 à un facteur d'âge ?
-7. **D6** : `YᵀY` limité aux films entraînés (variante mesurée pour information) ; ω mesuré ∈ {0 ; 0,5 ; 1} : d'accord ?
-8. **Carte** : « ★ x,x · TMDB » (note sur 5) + « (estimé) » ; pas « ça divise » ni « vieux trésor » sur ces films : d'accord ?
-9. **Ordre et nom** : cette étape avant la mise en ligne (étape 7), qui reste bloquée par GroupLens ? Le point « 8. Ensuite » de `CLAUDE.md` (fiche film, dispo en France…) devient alors « 9. Ensuite » à la clôture.
+1. **Périmètre** : oui, films 2022-2023 absents inclus ; **placés à ≥ 50 votes, recommandables à ≥ 100** ; placés mais non recommandables = comptent dans le profil. → D0.
+2. **`similar`** : écarté du placement (anti-signal mesuré). → D1.
+3. **Estimation centrée + recalage de la norme** : oui ; cible = **norme médiane des films du catalogue de la même tranche de votes TMDB**, pas une norme globale. → D1c.
+4. **Fiches TMDB des 23 019 films** : oui, une seule fois, gardées dans `pipeline/data/` (non versionné). → D2, R1.
+5. **Seuil de D5** : oui, Recall@20 sur les films **bien notés seulement**, résultats **par tranche de votes** ; si la tranche < 500 votes rate le seuil, ces films sont **non recommandables mais comptent dans le profil**. → D5.
+6. **Popularité** : rang des votes au sein de l'année, **calé sur les films 2019-2022 du catalogue** ; vérifier que les gros succès récents tombent **au-dessus de 20 000**. → D7.
+7. **D6** : `YᵀY` limité aux films entraînés ; ω mesuré à 0 / 0,5 / 1 sur la validation (films 2022-2023 du fold-in avec leur vecteur estimé). → D6.
+8. **Carte** : « ★ x,x · TMDB » + « (estimé) » ; pas de « ça divise » ; « encore un … » et « ✱ pépite » s'appliquent. → D7.
+9. **Ordre** : cette étape passe **avant la mise en ligne** ; dans `CLAUDE.md`, « 8. Films récents », puis « 9. Ensuite ».
