@@ -1,5 +1,6 @@
 # Étape 8 — Films récents
 
+> **⏸ Arrêt de R3 (12 novembre 2026)** : faux départ à froid mesuré (section 5, R3) ; questions pour Thibault à la fin de R3.
 > Version 0.2 (12 novembre 2026) : **validée par Thibault** avec ses réponses à la section 7 (périmètre 2022 → aujourd'hui, placés à ≥ 50 votes, recommandables à ≥ 100 ; `similar` écarté ; norme cible par tranche de votes TMDB ; fiches des 23 019 films ; seuil de D5 par tranche de votes, tranche < 500 non recommandable si elle échoue ; popularité calée sur les films 2019-2022 du catalogue ; ω mesuré sur la validation ; étape avant la mise en ligne). Version 0.1 (12 novembre 2026) : diagnostic R0 (section 2), décisions proposées.
 > Point de départ : les pistes retenues avec Claude Web (D1-D8) et le trou accepté au MVP (« films sortis après 2023 : trop récents pour nous »). Étape insérée après l'étape 6c, avant la mise en ligne (étape 7) ; le nom du fichier suit la demande de Thibault.
 
@@ -265,6 +266,88 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
 ### R0 — Diagnostic (12 novembre 2026)
 
 Chiffres en section 2. Script `pipeline/recent_films_diagnostics.py` ; 4 743 appels TMDB au total (253 `discover`, 4 490 fiches), ~4 min 20 s, 0 erreur. Rapports de correspondance des exports régénérés dans `web/test-data/reports/` (ignoré).
+
+### R1 — Collecte TMDB (12 novembre 2026)
+
+`pipeline/recent_films.py` (`collect`, `table`, `popularity`), tests `tests/test_recent_films.py`.
+- `/discover/movie` de janvier 2010 à aujourd'hui (≥ 50 votes) : **18 933 films** ; une fiche complète (`credits`, `keywords`, `recommendations`, `similar`) par film du catalogue et par film absent depuis 2022 : **27 036 fiches demandées, 38 absentes** (404). Au total **23 337 appels HTTP** (22 824 pour la collecte, 513 pour prolonger `discover` jusqu'en 2010), ~22 min, 0 nouvel essai.
+- Table `pipeline/data/processed/tmdb_films.parquet` (non versionnée) : **26 998 fiches**, dont 22 972 films du catalogue (sur 23 019) et **4 026 films absents depuis 2022** (2 412 à ≥ 100 votes, 563 à ≥ 500 ; 2 437 sortis à partir du 13/10/2023). Fiches gardées dans `pipeline/data/` (cache des 6 mois).
+- **Genres TMDB → MovieLens** (D7), accord sur les films du catalogue (précision / rappel de la traduction) : Animation 97 / 98 %, Documentary 95 / 96 %, Comedy 86 / 93 %, Western 87 / 93 %, Horror 84 / 93 %, Drama 83 / 87 %, Sci-Fi 79 / 88 %, Action 76 / 81 %, War 75 / 75 %, Thriller 69 / 78 %, Children 66 / 88 %, Adventure 65 / 76 %, Crime 62 / 80 %, Romance 62 / 80 %, Fantasy 60 / 77 %, Mystery 49 / 66 %, **Musical 38 / 56 %** ; Film-Noir et IMAX n'existent pas dans TMDB. Assez bon pour la calibration (les genres qui pèsent sont au-dessus de 75 %) ; Musical est flou des deux côtés.
+
+### R2 — Estimation (12 novembre 2026)
+
+`pipeline/models/coldstart.py`, fonctions pures, tests `tests/test_coldstart.py` (12 tests) :
+- norme cible par tranche (D1c : votes TMDB, ou popularité du curseur pour la comparaison de R3), tranche de moins de 30 films → la voisine ;
+- placement chronologique (D1 : k premiers voisins placés, poids `1/r`, voisin estimé × γ, profondeur suivie) ;
+- contenu (D2 : réalisateurs, 5 premiers acteurs, genres, mots-clés, langue, pays, décennie, tranche de votes, tranche de note bayésienne ; ridge par `lsqr`) ;
+- mélange (D3) et règle « non placé » ;
+- note bayésienne (D4) ;
+- fold-in pondéré par ω (D6 ; ω = 1 rejoue `als.fold_in`, ω = 0 retire le film : testés) ;
+- popularité par rang dans l'année (D7).
+
+### R3 — Faux départ à froid (12 novembre 2026, validation) — ⏸ arrêt
+
+`pipeline/recent_eval.py` (`retrain`, `run`) ; résultats dans `pipeline/data/processed/results/recent/coldstart_val.json` (ignoré).
+
+**Protocole**
+- ALS (configuration A, même graine) **réentraîné sur les utilisateurs d'entraînement sans les notes des 463 films 2022-2023** (77 361 notes retirées, 171 s) : ni `YᵀY` ni les autres vecteurs ne les connaissent. C'est un vrai départ à froid.
+- Contenu appris sur les autres films du catalogue, pondérés par `min(1, notes MovieLens / 200)`. λ par validation croisée en 3 plis (cosinus centré moyen pondéré) : 0,51 (10), 0,55 (30), **0,57 (100, retenu)**, puis moins ; 21 653 caractéristiques.
+- 10 000 utilisateurs de validation, fold-in de l'étape 6c (percentile < 0,3 retiré, 5 films au moins). Seuls **306 utilisateurs** ont un film de la base bien noté dans leur held-out (1 879 couples utilisateur × film). **Tranche < 500 votes : 62 utilisateurs, 115 couples seulement.**
+- Popularité des films estimés (crans) : D7, référence 2018-2021. Popularité des autres films : `year_all` sur les comptes d'entraînement.
+
+**Résultats principaux** (Recall@20 sur les films de la base bien notés ; rang centile = place moyenne du film parmi les candidats, 1 = premier ; part de la base dans le top 20, alors que la base fait 2 % du catalogue)
+
+| Variante | Recall@20 base | ≥ 500 votes | rang centile (tout / < 500 votes) | NDCG@20 ∞ / 2 000 / 500 | part de la base dans le top 20 (∞ / 2 000 / 500) |
+|---|---|---|---|---|---|
+| vrai vecteur | 0,0008 ± 0,0010 | 0,0008 | 0,813 / 0,596 | **0,1635** / 0,0252 / 0,0070 | 0,0 / 0,1 / 0,0 % |
+| vraie direction, norme votes (D1c) | 0,0532 ± 0,0176 | 0,0548 | 0,878 / 0,729 | 0,1637 / 0,0251 / 0,0070 | 0,3 / 6,6 / 18,4 % |
+| vraie direction, norme popularité | 0,0317 ± 0,0144 | 0,0326 | 0,842 / 0,645 | 0,1638 / 0,0252 / 0,0071 | 0,2 / 1,2 / 2,3 % |
+| popularité (direction moyenne, norme votes) | 0,0365 ± 0,0157 | 0,0375 | 0,962 / 0,810 | 0,1623 / 0,0231 / 0,0055 | 0,4 / 10,9 / 23,2 % |
+| popularité, norme popularité | 0,0193 ± 0,0104 | 0,0199 | 0,931 / 0,722 | 0,1627 / 0,0252 / 0,0069 | 0,2 / 0,3 / 0,5 % |
+| voisins tirés au hasard | 0,0056 ± 0,0041 | 0,0058 | 0,748 / 0,622 | 0,1620 / 0,0187 / 0,0032 | 0,6 / 28,8 / 59,1 % |
+| **voisins** (D1, k = 5, γ = 0,5, chronologique) | 0,0434 ± 0,0144 | 0,0446 | 0,870 / 0,730 | 0,1611 / 0,0189 / 0,0037 | 1,7 / 36,5 / 68,0 % |
+| **contenu** (D2) | **0,1286 ± 0,0249** | 0,1337 | 0,900 / **0,388** | 0,1607 / 0,0190 / 0,0053 | 2,3 / **39,8 / 55,4 %** |
+| mélange κ = 3 (D3) | 0,0813 ± 0,0187 | 0,0846 | 0,928 / 0,620 | 0,1604 / 0,0185 / 0,0040 | 2,2 / 39,3 / 66,7 % |
+| mélange κ = 30 | 0,1276 ± 0,0250 | 0,1324 | 0,913 / 0,465 | 0,1606 / 0,0189 / 0,0049 | 2,3 / 40,6 / 60,2 % |
+| **contenu, norme popularité** | **0,0884 ± 0,0208** | 0,0915 | 0,874 / 0,336 | **0,1624 / 0,0243 / 0,0067** | **1,1 / 9,9 / 18,2 %** |
+| contenu, norme popularité, référence D7 2010-2017 | 0,1821 ± 0,0302 | 0,1910 | 0,884 / 0,337 | 0,1579 / 0,0240 / 0,0068 | 3,8 / 12,9 / 11,7 % |
+
+Écarts appariés avec « popularité » (Recall@20 base, par utilisateur, IC à 95 %) : voisins +0,007 ± 0,020 (non significatif) ; voisins sans chronologie +0,007 ± 0,020 ; **contenu +0,092 ± 0,024** ; mélange κ = 3 +0,045 ± 0,021 ; κ = 30 +0,091 ± 0,024 ; **contenu, norme popularité +0,052 ± 0,022** (et +0,069 par rapport à « popularité, norme popularité ») ; hasard −0,031 ± 0,015.
+
+**Autres mesures**
+- **Voisins** (D1) : k = 3 / 5 / 10 : 0,042 / 0,043 / 0,044 ; s = 0,5 / 1 / 2 : 0,045 / 0,043 / 0,041 ; chronologie sans effet (0,0434 contre 0,0436) : 397 films placés à la profondeur 0, 56 à 1, 9 à 2, 1 à 3 ; sans recalage de la norme : 60-94 % de la base dans le top 20 aux crans 2 000 et 500.
+- **ω** (D6), NDCG@20 à ∞ des 263 utilisateurs dont le fold-in contient un film de la base (vrai vecteur : 0,1893 ± 0,024) ; contenu, norme popularité : ω = 0 → 0,1889, ω = 0,5 → 0,1876, ω = 1 → 0,1882. Aucune différence mesurable.
+- **Qualité** (D4) : ρ = 0,05 / 0,1 / 0,2 : Recall@20 base inchangé (0,088 → 0,087-0,088), rang centile en baisse (0,874 → 0,850 / 0,835 / 0,818), surtout sous 500 votes (0,336 → 0,22-0,20). Aucun gain.
+- **`YᵀY` avec les estimés** (D6, pour information) : moins bon (mélange κ = 3 : 0,081 → 0,072).
+- **Contenu sans recalage de la norme** : 0,0015 (les prédictions ridge sont petites, rétrécies vers 0).
+- Placés : 463/463 avec les voisins ; 454/463 avec le contenu seul (9 films sans 2 éléments parlants connus). Sur les vrais films absents, 8 sur 4 026 n'ont pas 2 éléments parlants.
+
+**Popularité D7 sur les vrais films récents** (`recent_films.py popularity`, contrôle demandé en v0.2)
+- Référence **2019-2022** (décision v0.2) : **aucun des 10 films absents les plus votés de chaque année ne dépasse 20 000** (maximum 19 627 en 2025, 18 768 en 2024 ; le 10ᵉ est vers 2 000-3 500). Part des films absents sous les plafonds : 98 % sous 2 000, 93 % sous 500, 85 % sous 200, autant que la référence elle-même (98 / 91 / 82 %). La raison : même avec `year_all`, presque aucun film de 2019-2022 ne dépasse 20 000 dans MovieLens (qui s'arrête en 2023).
+- Référence **2010-2018** : 1 à 2 films sur 10 au-dessus de 20 000 par année (2024 : 27 872 et 21 361 ; 2025 : 30 408 et 20 298 ; 2026 : 23 116), le 10ᵉ vers 4 500-9 600. Référence **2015-2018** : 1 film sur 10 par an.
+
+**Lecture**
+1. **Le seuil « ≥ 70 % du vrai vecteur » ne veut rien dire ici.** Avec leur vrai vecteur, les films 2022-2023 ne sont presque **jamais** recommandés (Recall@20 0,0008, 0,01 % des top 20) : peu de notes MovieLens, donc des vecteurs de petite norme (biais de récence de MovieLens). Toutes les variantes le dépassent. Le plafond utile est la **vraie direction avec la norme recalée** (0,032 à 0,053) : **le contenu fait mieux** (0,088 à 0,129). Les vrais vecteurs de ces films sont mal appris ; le contenu, appris sur des films mûrs, donne une meilleure direction.
+2. **Le contenu (D2) est le seul ingrédient qui bat la popularité.** Les voisins TMDB (D1) ne font pas mieux que la popularité, chronologie ou non. Les mélanger au contenu le dégrade (κ = 3 : 0,081 ; κ = 30 ≈ contenu).
+3. **La norme par tranche de votes TMDB (D1c, v0.2) fait envahir les crans bas** : avec le contenu, 40 % des top 20 au cran 2 000 et 55 % à 500 sont des films estimés (2 % du catalogue), et NDCG@20 y perd 25 % (0,0252 → 0,0190 ; 0,0070 → 0,0053). La cause : la popularité D7 des films estimés est bien plus basse que celle des films du catalogue au même nombre de votes TMDB ; sous chaque plafond, ils gardent la norme de films plus connus qu'eux. **Avec une norme par tranche de popularité du curseur**, la part tombe à 10 % et 18 %, et NDCG@20 reste à 96-99 % du vrai à tous les crans.
+4. **Tranche < 500 votes : échec.** Recall@20 = 0 pour toutes les variantes, vrai vecteur compris (62 utilisateurs). Au rang centile, le contenu y est **pire que le hasard** (0,34 contre 0,62 ; popularité 0,72-0,81). Règle v0.2 : ces films sont **non recommandables mais comptent dans le profil**. Sur les vrais films absents, il resterait **563 films recommandables** (≥ 500 votes, dont 480 sortis après le 13/10/2023), et 3 463 placés pour le profil seulement.
+5. **ω et ρ** ne changent rien de mesurable : ω = 1 (le fold-in normal) et ρ = 0 (pas de pénalité de qualité).
+6. **Popularité D7** : le contrôle « gros succès au-dessus de 20 000 » **échoue** avec la référence 2019-2022 ; une référence plus ancienne s'en approche sans l'atteindre (1-2 films sur 10 par an), et dans le faux départ à froid elle coûte 3,4 % de NDCG@20 à ∞ (0,1579, sous la règle des 97 %).
+
+**Critères** (état à l'arrêt)
+- D5, Recall@20 (films bien notés) ≥ 70 % du vrai vecteur : atteint par toutes les variantes, mais dégénéré (lecture 1) ; contre la vraie direction recalée : contenu 166-279 %.
+- D5, meilleur que la popularité hors IC, sur l'ensemble et ≥ 500 votes : **contenu** ✅ (avec les deux normes) ; voisins ❌ ; mélange κ = 3 ✅ de justesse.
+- D5, tranche < 500 votes : ❌ (→ non recommandables, comptent dans le profil).
+- Films du catalogue, NDCG@20 à ∞ ≥ 97 % : ✅ pour toutes les variantes, sauf la référence D7 2010-2017 (96,6 %).
+- Popularité, gros succès récents > 20 000 : ❌.
+
+**Questions pour Thibault (arrêt de R3)**
+1. **Ingrédients** : **contenu seul (D2)** ; voisins TMDB (D1) et mélange (D3) abandonnés, puisqu'ils ne battent pas la popularité ? D3 se réduit alors à « non placé sans 2 éléments parlants » (8 films sur 4 026).
+2. **Norme (D1c)** : passer de la tranche de votes TMDB (v0.2) à la **tranche de popularité du curseur** (même grandeur que les plafonds), pour éviter l'invasion des crans bas (40 → 10 % au cran 2 000, 55 → 18 % à 500) ?
+3. **Tranche < 500 votes** : appliquer la règle de v0.2 (non recommandables, comptent dans le profil), soit 563 films récents recommandables ? Ou un autre seuil (le faux départ à froid ne sait pas trancher entre 100 et 500 : 62 utilisateurs seulement) ?
+4. **Popularité D7** : le contrôle des 20 000 échoue avec 2019-2022. Garder 2019-2022 (cohérent avec la popularité actuelle du catalogue, gros succès vers 10 000-20 000), passer à 2010-2018 (1-2 films par an au-dessus de 20 000, mais −3,4 % de NDCG@20 à ∞ au faux départ à froid), ou une autre règle (par exemple un plancher pour les N films les plus votés de chaque année) ?
+5. **ω = 1** et **ρ = 0** (pas de pénalité de qualité), puisque ni l'un ni l'autre ne change rien de mesurable ?
+6. **Seuil de D5** : remplacer « 70 % du vrai vecteur » par « 70 % de la vraie direction recalée » pour la suite (test de clôture) ?
 
 ---
 

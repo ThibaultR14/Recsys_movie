@@ -9,7 +9,7 @@ Counts only, nothing written to web/public/data, catalogue untouched.
     uv run python recent_films_diagnostics.py exports <report.json>...   # point 4, counts only
 
 TMDB calls go through `enrich_tmdb.Tmdb` (rate limit, retries, never logs a URL). Raw answers are
-slimmed and cached in `data/cache/tmdb/{discover,recent}/` (ignored by git, same 6-month rule).
+slimmed and cached in `data/cache/tmdb/{discover,full}/` (ignored by git, same 6-month rule).
 Results: `data/processed/results/recent/*.json` (ignored by git).
 """
 
@@ -20,7 +20,7 @@ import json
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -29,7 +29,8 @@ from tqdm import tqdm
 
 from build_catalog import CATALOG_PARQUET
 from config import PROCESSED, RESULTS_DIR
-from enrich_tmdb import TMDB_CACHE, WORKERS, Tmdb
+from enrich_tmdb import WORKERS, Tmdb
+from recent_films import discover_all, fetch_full, read_full
 from titles import normalize_title
 
 CUTOFF = date(2023, 10, 13)  # first day after the last MovieLens 32M rating (2023-10-12)
@@ -44,128 +45,21 @@ OUT = RESULTS_DIR / "recent"
 MODELS = PROCESSED / "models"
 
 
-# --- TMDB ---------------------------------------------------------------------------------------
-
-
-def month_windows(start: date, end: date) -> list[tuple[date, date]]:
-    out, cur = [], start
-    while cur <= end:
-        nxt = date(cur.year + (cur.month == 12), cur.month % 12 + 1, 1)
-        out.append((cur, min(end, nxt - timedelta(days=1))))
-        cur = nxt
-    return out
-
-
-def slim_discover(r: dict) -> dict:
-    return {
-        "id": r.get("id"),
-        "release_date": r.get("release_date") or None,
-        "vote_count": r.get("vote_count") or 0,
-        "genre_ids": r.get("genre_ids") or [],
-    }
-
-
-def discover_window(api: Tmdb, gte: date, lte: date) -> tuple[list[dict], int, int]:
-    """All films of one window with >= MIN_VOTES votes. Returns (films, total_results, pages)."""
-    films, page, total, pages = [], 1, 0, 1
-    while page <= pages:
-        key = f"{gte.isoformat()}_{lte.isoformat()}_v{MIN_VOTES}_p{page}"
-
-        def fetch(page=page):
-            raw = api._get(
-                "/discover/movie",
-                {
-                    "primary_release_date.gte": gte.isoformat(),
-                    "primary_release_date.lte": lte.isoformat(),
-                    "vote_count.gte": MIN_VOTES,
-                    "include_adult": "false",
-                    "include_video": "false",
-                    "sort_by": "vote_count.desc",
-                    "page": page,
-                },
-            )
-            raw = raw or {}
-            return {
-                "total_results": raw.get("total_results", 0),
-                "total_pages": raw.get("total_pages", 0),
-                "results": [slim_discover(r) for r in raw.get("results") or []],
-            }
-
-        data = api._cached("discover", key, fetch)
-        total, pages = data["total_results"], min(data["total_pages"], DISCOVER_MAX_PAGES)
-        films.extend(data["results"])
-        page += 1
-    return films, total, pages
+# --- TMDB (shared with recent_films.py) -------------------------------------------------------
 
 
 def cmd_discover(_args) -> int:
     api = Tmdb()
     t0 = time.monotonic()
-    films, capped = {}, []
-    for gte, lte in tqdm(month_windows(DISCOVER_FROM, date.today()), unit="mois"):
-        got, total, _ = discover_window(api, gte, lte)
-        if total > DISCOVER_MAX_PAGES * 20:
-            capped.append(gte.isoformat())
-        for f in got:
-            films[f["id"]] = f
+    rows = discover_all(api, DISCOVER_FROM)
     OUT.mkdir(parents=True, exist_ok=True)
-    rows = sorted(films.values(), key=lambda f: (f["release_date"] or "", f["id"]))
     (OUT / "discover.json").write_text(json.dumps(rows), encoding="utf-8")
     print(
         f"{len(rows)} films (>= {MIN_VOTES} votes, {DISCOVER_FROM} -> {date.today()}) ; "
         f"appels HTTP {api.stats['http']}, cache {api.stats['cache_hits']}, "
-        f"{time.monotonic() - t0:.0f} s ; fenêtres plafonnées : {capped or 'aucune'}"
+        f"{time.monotonic() - t0:.0f} s"
     )
     return 0
-
-
-def slim_full(raw: dict) -> dict:
-    """What step 8 may use from /movie/{id} (+ credits, keywords, recommendations, similar)."""
-    credits = raw.get("credits") or {}
-    directors = []
-    for p in credits.get("crew") or []:
-        if p.get("job") == "Director" and p.get("id") not in [d["id"] for d in directors]:
-            directors.append({"id": p.get("id"), "name": p.get("name")})
-    cast = sorted(credits.get("cast") or [], key=lambda p: p.get("order", 999))[:10]
-
-    def ids(block: str) -> dict:
-        b = raw.get(block) or {}
-        return {
-            "ids": [r.get("id") for r in b.get("results") or [] if r.get("id") is not None],
-            "total": b.get("total_results", 0),
-        }
-
-    return {
-        "id": raw.get("id"),
-        "imdb_id": raw.get("imdb_id") or None,
-        "title": raw.get("title") or None,
-        "original_title": raw.get("original_title") or None,
-        "release_date": raw.get("release_date") or None,
-        "runtime": raw.get("runtime"),
-        "genres": [g.get("id") for g in raw.get("genres") or []],
-        "vote_count": raw.get("vote_count") or 0,
-        "vote_average": raw.get("vote_average"),
-        "original_language": raw.get("original_language") or None,
-        "origin_country": raw.get("origin_country") or [],
-        "poster_path": raw.get("poster_path") or None,
-        "overview_len": len(raw.get("overview") or ""),
-        "directors": directors,
-        "cast": [p.get("id") for p in cast],
-        "keywords": [k.get("id") for k in (raw.get("keywords") or {}).get("keywords") or []],
-        "recommendations": ids("recommendations"),
-        "similar": ids("similar"),
-    }
-
-
-def fetch_full(api: Tmdb, tmdb_id: int) -> dict | None:
-    def fetch():
-        raw = api._get(
-            f"/movie/{tmdb_id}",
-            {"append_to_response": "credits,keywords,recommendations,similar"},
-        )
-        return None if raw is None else slim_full(raw)
-
-    return api._cached("recent", str(tmdb_id), fetch)
 
 
 def load_catalog() -> pl.DataFrame:
@@ -202,11 +96,9 @@ def load_details(ids: list[int]) -> dict[int, dict]:
     """Cached /movie answers (cache reader only: no credentials, no HTTP)."""
     out = {}
     for i in ids:
-        f = TMDB_CACHE / "recent" / f"{i}.json"
-        if f.exists():
-            data = json.loads(f.read_text(encoding="utf-8"))["data"]
-            if data is not None:
-                out[i] = data
+        d = read_full(i)
+        if d is not None:
+            out[i] = d
     return out
 
 

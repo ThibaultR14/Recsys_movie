@@ -3,9 +3,9 @@
 > Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : films récents (spec en validation)
+## En cours : films récents (étape 8, arrêt de R3)
 
-Spec `docs/etape-8-films-recents.md` v0.1 (12 novembre 2026) : diagnostic R0 fait (≈ 2 300 films TMDB sortis après le 13/10/2023 et ≈ 1 500 films 2022-2023 absents du catalogue, à ≥ 50 votes ; voisins `recommendations` au catalogue pour 94-99 % ; moyenne brute des voisins médiocre, norme à recaler ; popularité des films récents à corriger) ; décisions D0-D8 proposées, **arrêt pour validation** (questions en section 7). Rien de codé dans le site.
+Spec `docs/etape-8-films-recents.md` v0.2 validée le 12 novembre 2026. R1 (collecte TMDB : 26 998 fiches, 4 026 films absents depuis 2022) et R2 (`models/coldstart.py`) faits ; **R3 (faux départ à froid, validation) mesuré, arrêt pour décision** : le contenu TMDB est le seul ingrédient qui bat la popularité (voisins TMDB non) ; la norme par tranche de votes fait envahir les crans bas (norme par tranche de popularité proposée) ; tranche < 500 votes en échec (non recommandables, comptent dans le profil) ; contrôle « gros succès > 20 000 » de la popularité en échec. Questions à la fin de R3 (section 5). Rien de codé dans le site.
 
 ## Fait : tags des cartes (après l'étape 6c)
 
