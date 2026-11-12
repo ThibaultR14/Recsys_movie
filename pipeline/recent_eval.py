@@ -2,7 +2,7 @@
 docs/etape-8-films-recents.md). Validation split only; the test is evaluated once, at closing.
 
     uv run python recent_eval.py retrain    # ALS config A on the training users, base films removed
-    uv run python recent_eval.py run [--only NAME,...] [--tag T]   # scenarios -> results JSON
+    uv run python recent_eval.py run [--only "NAME;NAME"] [--tag T]   # scenarios -> results JSON
 
 Protocol:
 - base = the 463 catalogue films released in 2022-2023 (year column). They lose their vector:
@@ -347,6 +347,7 @@ def run_variant(data: Data, es: ev.EvalSet, Y_true: np.ndarray, placer: Placer, 
     recall = {s: [] for s in strata}
     pcts = {s: [] for s in strata}
     user_rec = {}  # user row -> recall on all base (paired comparison)
+    user_bad = {}  # user row -> share of the top 20 = base films seen and disliked (R3b)
     ndcg = {c: [] for c in CAPS}
     share = {c: [] for c in CAPS}
     ndcg_fold = []  # users with a base film in their fold-in (D6)
@@ -388,6 +389,11 @@ def run_variant(data: Data, es: ev.EvalSet, Y_true: np.ndarray, placer: Placer, 
                     if in_fold:
                         ndcg_fold.append(val)
                     rel = es.relevant[g]
+                    held = es.heldout[g]
+                    bad = held[~np.isin(held, rel)]  # held-out rating below the fold-in median
+                    bad = bad[data.base[bad]]
+                    if len(bad):
+                        user_bad[g] = float(np.isin(ranked[u], bad).sum() / TOP_K)
                     for s, mask in strata.items():
                         rb = rel[mask[rel]]
                         if len(rb) == 0:
@@ -418,6 +424,8 @@ def run_variant(data: Data, es: ev.EvalSet, Y_true: np.ndarray, placer: Placer, 
         "base_share_top20": {str(c): float(np.mean(x)) for c, x in share.items()},
         "ndcg_users_base_in_foldin": mt.mean_ci(ndcg_fold),
         "user_recall": user_rec,
+        "user_bad_share": user_bad,
+        "bad_share_top20": mt.mean_ci(user_bad.values()),
     }
     if info:
         placed = [k for k, x in info.items() if x.get("placed")]
@@ -566,7 +574,7 @@ def main() -> int:
     args = p.parse_args()
     if args.cmd == "retrain":
         return cmd_retrain()
-    return cmd_run([s for s in args.only.split(",") if s] or None, args.tag)
+    return cmd_run([s.strip() for s in args.only.split(";") if s.strip()] or None, args.tag)
 
 
 if __name__ == "__main__":

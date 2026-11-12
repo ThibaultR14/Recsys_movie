@@ -306,3 +306,18 @@ def rank_popularity(percentiles, reference_popularity, votes, r_ref: float) -> n
     q = np.quantile(ref, np.clip(np.asarray(percentiles, dtype=np.float64), 0.0, 1.0))
     floor = np.rint(r_ref * np.asarray(votes, dtype=np.float64))
     return np.maximum(np.rint(q), floor).astype(np.int64)
+
+
+def reference_by_rank(year_popularities: list[list[float]]) -> np.ndarray:
+    """Median, over the reference years, of the r-th highest popularity of the year (r = 0..)."""
+    ref = [sorted(p, reverse=True) for p in year_popularities]
+    depth = max(len(r) for r in ref)
+    return np.array([np.median([r[k] if k < len(r) else 0.0 for r in ref]) for k in range(depth)])
+
+
+def absolute_rank_popularity(ranks, by_rank: np.ndarray, votes, r_ref: float) -> np.ndarray:
+    """Popularity of the film ranked r (by TMDB votes, 0 = most voted) in its year: the r-th
+    value of `by_rank` (last value beyond it), never below r_ref * votes."""
+    r = np.minimum(np.asarray(ranks, dtype=np.int64), len(by_rank) - 1)
+    floor = np.rint(r_ref * np.asarray(votes, dtype=np.float64))
+    return np.maximum(np.rint(by_rank[r]), floor).astype(np.int64)

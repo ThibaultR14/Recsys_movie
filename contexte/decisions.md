@@ -1,7 +1,7 @@
 # Décisions
 
 > Toutes les décisions prises du 6 au 8 novembre 2026 (étapes 1 à 6b), une ligne chacune : décision — raison — où c'est détaillé. Les décisions **écartées** importantes sont marquées ✗.
-> Abréviations : `projet` = `docs/projet-reco-films.md`, `stack` = `docs/stack-technique.md`, `é2` à `é6` = `docs/etape-2-modele.md` … `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md`, `DS` = `docs/design-system.md`.
+> Abréviations : `projet` = `docs/projet-reco-films.md`, `stack` = `docs/stack-technique.md`, `é2` à `é6` = `docs/etape-2-modele.md` … `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md`, `é8` = `docs/etape-8-films-recents.md`, `DS` = `docs/design-system.md`.
 
 ## Données et licences
 
@@ -40,6 +40,18 @@
 - ✗ **Configuration B** (alpha 10) : moins bonne que A à ∞ et au-dessus de ~5 000 notes, là où la plupart des utilisateurs commencent — `é2` D5.
 - ✗ 128 facteurs : il fallait ≥ 3 % de gain pour doubler la taille — `é2` D6.
 - Seuil ≥ 10 notes (catalogue plus grand) : optionnel, **pas fait** — `é2` D9.
+
+## Films récents (étape 8)
+
+- **Films TMDB absents de MovieLens, sortis depuis 2022, placés dans l'espace ALS hors ligne** (≥ 50 votes : comptent dans le profil ; ≥ 500 : recommandables, 563 films) — MovieLens 32M s'arrête le 12/10/2023 et le trou commence avant (films 2022-2023 sous 20 notes) — `é8` D0, R0.
+- **Vecteur = contenu TMDB seul** (ridge des vecteurs ALS centrés sur réalisateurs, acteurs, genres, mots-clés, langue, pays, décennie, votes, note) — seul ingrédient qui bat la popularité au faux départ à froid (Recall@20 base 0,129 contre 0,037) — `é8` D2, R3.
+- ✗ **Voisins TMDB `recommendations`** (moyenne pondérée, placement chronologique) et **mélange voisins / contenu** : pas mieux que la popularité (+0,007 ± 0,020), le mélange dégrade le contenu — `é8` D1, D3, R3.
+- ✗ **`similar` TMDB** : pire que le hasard une fois centré — `é8` 2.3.
+- **Norme du vecteur estimé = norme médiane des films du catalogue de la même tranche de popularité du curseur** — sans recalage, les films estimés sont invisibles ou envahissants — `é8` D1c.
+- ✗ **Norme par tranche de votes TMDB** : 40-55 % des top 20 aux crans 2 000 et 500 pour 2 % du catalogue — `é8` D1c, R3.
+- **ω = 1** (films estimés comptés comme les autres dans le fold-in) ; **`YᵀY` limité aux films entraînés** — aucune différence mesurable pour ω ; `YᵀY` avec les estimés moins bon — `é8` D6, R3.
+- **Popularité des films estimés : rang des votes TMDB dans l'année, calé sur les films 2019-2022** ; contrôle : aucun des 10 films les plus votés de chaque année sous 10 000 (✗ « au-dessus de 20 000 », intenable) — `é8` D7.
+- ✗ **« ≥ 70 % du vrai vecteur »** comme seuil : dégénéré (vrai vecteur des films 2022-2023 presque jamais recommandé) ; remplacé par la vraie direction avec norme recalée — `é8` D5.
 
 ## Curseur et popularité
 

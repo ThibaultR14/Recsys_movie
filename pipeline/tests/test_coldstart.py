@@ -153,3 +153,10 @@ def test_within_year_percentile_and_rank_popularity():
 def test_popularity_floor_norm():
     v = cs.popularity_floor(np.array([3.0, 4.0]), 10.0)
     assert np.allclose(v, [6.0, 8.0])
+
+
+def test_absolute_rank_popularity():
+    by_rank = cs.reference_by_rank([[10, 30, 20], [40, 5], [25, 35, 15]])
+    assert by_rank.tolist() == [35.0, 20.0, 10.0]  # medians of the 1st, 2nd, 3rd (missing = 0)
+    pop = cs.absolute_rank_popularity([0, 2, 9], by_rank, [10, 10, 1_000], r_ref=0.285)
+    assert pop.tolist() == [35, 10, 285]  # beyond the reference: last value, then the floor

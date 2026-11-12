@@ -3,9 +3,9 @@
 > Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : films récents (étape 8, arrêt de R3)
+## En cours : films récents (étape 8, arrêt de R3c)
 
-Spec `docs/etape-8-films-recents.md` v0.2 validée le 12 novembre 2026. R1 (collecte TMDB : 26 998 fiches, 4 026 films absents depuis 2022) et R2 (`models/coldstart.py`) faits ; **R3 (faux départ à froid, validation) mesuré, arrêt pour décision** : le contenu TMDB est le seul ingrédient qui bat la popularité (voisins TMDB non) ; la norme par tranche de votes fait envahir les crans bas (norme par tranche de popularité proposée) ; tranche < 500 votes en échec (non recommandables, comptent dans le profil) ; contrôle « gros succès > 20 000 » de la popularité en échec. Questions à la fin de R3 (section 5). Rien de codé dans le site.
+Spec `docs/etape-8-films-recents.md` v0.3 (décisions de Thibault à l'arrêt de R3 : contenu seul, norme par tranche de popularité, ≥ 500 votes pour recommander, ω = 1, référence de popularité 2019-2022). R3b : ρ = 0 (règle appliquée, aucun effet mesuré). **R3c : arrêt, le contrôle « aucun des 10 films les plus votés de chaque année sous 10 000 » échoue** ; seule la règle « rang absolu dans l'année, référence 2010-2018 » le passe pour 2024-2026 ; 2022-2023 échouent à cause des films du catalogue (`year_all`). Questions en section 5 (R3c). Rien de codé dans le site.
 
 ## Fait : tags des cartes (après l'étape 6c)
 

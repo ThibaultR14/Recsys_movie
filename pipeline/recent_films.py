@@ -39,7 +39,8 @@ CUTOFF = date(2023, 10, 13)  # first day after the last MovieLens 32M rating (20
 FIRST_YEAR = 2022  # D0: missing films released since 2022-01-01 are placed
 DISCOVER_FROM = date(2010, 1, 1)  # D7 references (2019-2022 adopted; older ones compared)
 MIN_VOTES = 50  # D0: placed from 50 TMDB votes
-MIN_VOTES_RECOMMENDABLE = 100  # D0: recommendable from 100 votes
+MIN_VOTES_RECOMMENDABLE = 100  # D0 v0.2 (kept for the reports)
+MIN_VOTES_RECOMMENDABLE_V03 = 500  # D0 v0.3: the 50-499 votes bin failed the cold-start test
 DISCOVER_MAX_PAGES = 500  # TMDB caps /discover at page 500
 FULL_KIND = "full"  # cache sub-folder of the full /movie answers
 GENRE_DOCUMENTARY = 99
@@ -377,7 +378,10 @@ SLIDER_CAPS = (20_000, 10_000, 5_000, 2_000, 1_000, 500, 200)
 
 
 def recent_popularity(
-    discovered: pl.DataFrame, missing: pl.DataFrame, reference_years=REFERENCE_YEARS
+    discovered: pl.DataFrame,
+    missing: pl.DataFrame,
+    reference_years=REFERENCE_YEARS,
+    rule: str = "percentile",
 ) -> tuple[np.ndarray, dict]:
     """D7 popularity of the missing films: rank of their TMDB votes within the release year
     (among the TMDB films of that year, >= 50 votes), mapped to the popularity distribution of
@@ -402,28 +406,51 @@ def recent_popularity(
     out = np.zeros(missing.height, dtype=np.int64)
     years = missing["year"].to_numpy()
     votes = missing["vote_count"].to_numpy().astype(np.float64)
+    info = {
+        "r_ref": r_ref,
+        "n_reference": len(ref_pop),
+        "reference_years": [lo, hi],
+        "reference": np.asarray(ref_pop),
+        "rule": rule,
+        "pop_of": pop_of,
+    }
+    if rule == "rank":  # R3c: r-th most voted film of its year <- r-th most popular reference
+        by_rank = cs.reference_by_rank(
+            [
+                [
+                    pop_of.get(t, round(r_ref * v))
+                    for t, v in zip(d["id"].to_list(), d["vote_count"].to_list(), strict=True)
+                ]
+                for d in (disc.filter(pl.col("year") == y) for y in range(lo, hi + 1))
+            ]
+        )
+        for y in np.unique(years):
+            sel = np.flatnonzero(years == y)
+            same = np.sort(
+                disc.filter(pl.col("year") == int(y))["vote_count"].to_numpy().astype(float)
+            )[::-1]
+            ranks = [int(np.searchsorted(-same, -v, side="left")) for v in votes[sel]]
+            out[sel] = cs.absolute_rank_popularity(ranks, by_rank, votes[sel], r_ref)
+        return out, info
     for y in np.unique(years):
         sel = np.flatnonzero(years == y)
         same = disc.filter(pl.col("year") == int(y))["vote_count"].to_numpy().astype(np.float64)
         allv = np.concatenate([same, votes[sel]])
         pct = cs.within_year_percentile(allv, np.zeros(len(allv)))[len(same) :]
         out[sel] = cs.rank_popularity(pct, ref_pop, votes[sel], r_ref)
-    return out, {
-        "r_ref": r_ref,
-        "n_reference": len(ref_pop),
-        "reference_years": [lo, hi],
-        "reference": np.asarray(ref_pop),
-    }
+    return out, info
 
 
 def cmd_popularity(args) -> int:
     films = pl.read_parquet(FILMS_PARQUET)
     missing = films.filter(~pl.col("in_catalog") & (pl.col("vote_count") >= MIN_VOTES))
     ref_years = tuple(int(x) for x in args.ref.split("-"))
-    pop, info = recent_popularity(pl.read_parquet(DISCOVER_PARQUET), missing, ref_years)
+    disc = pl.read_parquet(DISCOVER_PARQUET)
+    pop, info = recent_popularity(disc, missing, ref_years, args.rule)
     missing = missing.with_columns(popularity=pl.Series(pop))
     print(
-        f"référence {info['reference_years']} : {info['n_reference']} films TMDB ≥ {MIN_VOTES} "
+        f"règle {info['rule']}, référence {info['reference_years']} : "
+        f"{info['n_reference']} films TMDB ≥ {MIN_VOTES} "
         f"votes ; r_ref {info['r_ref']:.4f} ; part sous chaque plafond : "
         + ", ".join(f"≤ {c} {100 * (info['reference'] <= c).mean():.0f} %" for c in SLIDER_CAPS)
     )
@@ -443,6 +470,21 @@ def cmd_popularity(args) -> int:
     for lo, hi in ((2019, 2022),):
         sel = cat["year"].is_between(lo, hi).fill_null(False).to_numpy()
         row(f"catalogue {lo}-{hi}", pop_bin[sel])
+    rec = missing.filter(pl.col("vote_count") >= MIN_VOTES_RECOMMENDABLE_V03)
+    row(f"recommandables (≥ {MIN_VOTES_RECOMMENDABLE_V03} votes)", rec["popularity"].to_numpy())
+    est = dict(zip(missing["tmdb_id"].to_list(), missing["popularity"].to_list(), strict=True))
+    years_disc = disc.with_columns(
+        year=pl.col("release_date").str.slice(0, 4).cast(pl.Int64, strict=False)
+    )
+    print("\ncontrôle v0.3 : 10 films les plus votés de chaque année (catalogue compris) < 10 000")
+    failed = False
+    for y in sorted(missing["year"].unique().to_list()):
+        top = years_disc.filter(pl.col("year") == y).sort("vote_count", descending=True).head(10)
+        p = [est.get(t, info["pop_of"].get(t)) for t in top["id"].to_list()]
+        under = sum(x is not None and x < 10_000 for x in p)
+        failed |= under > 0
+        print(f"  {y} : {under}/10 sous 10 000 ; popularités {p}")
+    print("  contrôle : " + ("échoue" if failed else "atteint"))
     print("\nles 10 films absents les plus votés de chaque année (popularité D7) :")
     for y in sorted(missing["year"].unique().to_list()):
         top = missing.filter(pl.col("year") == y).sort("vote_count", descending=True).head(10)
@@ -462,6 +504,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("table").set_defaults(fn=cmd_table)
     pp = sub.add_parser("popularity")
     pp.add_argument("--ref", default=f"{REFERENCE_YEARS[0]}-{REFERENCE_YEARS[1]}")
+    pp.add_argument("--rule", choices=("percentile", "rank"), default="percentile")
     pp.set_defaults(fn=cmd_popularity)
     args = p.parse_args(argv)
     return args.fn(args)

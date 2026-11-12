@@ -175,9 +175,9 @@ npx tsx scripts/tags-report.ts <export | csv IMDb>
 ```sh
 uv run python recent_films.py collect      # /discover 2010 -> aujourd'hui + fiches TMDB (catalogue + films absents depuis 2022), ~20 min sans cache
 uv run python recent_films.py table        # data/processed/tmdb_films.parquet + accord des genres TMDB / MovieLens
-uv run python recent_films.py popularity [--ref 2019-2022]   # popularité D7 des films absents
+uv run python recent_films.py popularity [--rule percentile|rank] [--ref 2019-2022]   # popularité D7 des films absents + contrôle v0.3
 uv run python recent_eval.py retrain       # ALS sans les films 2022-2023 (~3 min)
-uv run python recent_eval.py run [--only "contenu,popularité"] [--tag T]   # faux départ à froid, validation (~8 min)
+uv run python recent_eval.py run [--only "contenu;popularité"] [--tag T]   # faux départ à froid, validation (~8 min)
 ```
 
 Diagnostic popularité (pipeline) : `uv run python recency_diagnostics.py years | validation | user <rapport>` (titres dans le terminal seulement ; ne modifie pas `popularity.bin`).
