@@ -3,7 +3,11 @@
 > Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : tags des cartes (après l'étape 6c)
+## En cours : films récents (spec en validation)
+
+Spec `docs/etape-8-films-recents.md` v0.1 (12 novembre 2026) : diagnostic R0 fait (≈ 2 300 films TMDB sortis après le 13/10/2023 et ≈ 1 500 films 2022-2023 absents du catalogue, à ≥ 50 votes ; voisins `recommendations` au catalogue pour 94-99 % ; moyenne brute des voisins médiocre, norme à recaler ; popularité des films récents à corriger) ; décisions D0-D8 proposées, **arrêt pour validation** (questions en section 7). Rien de codé dans le site.
+
+## Fait : tags des cartes (après l'étape 6c)
 
 L'étape 6c (qualité des résultats) est close le 12 novembre 2026 (`é6c` v0.6) : versions, films mal notés hors du fold-in, calibration des genres (λ par cran), pénalité D1b écartée, test évalué une fois, textes de « comment ça marche ».
 
