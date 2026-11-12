@@ -94,6 +94,7 @@
 - Résultats : départ au cran 2 000, 8 cartes puis « encore des films » 8 par 8 (48 au plus) ; phrase du titre selon le cran — `é5` D5.
 - Profil « (t'aimes bien X, Y et Z, non ?) » : réalisateurs aimés (≥ 2 films chacun), noms complets — couper au nom de famille se tromperait sur les noms asiatiques — `é5` D5, G4.
 - Indicateur « loin de tes goûts » si le score relatif est **< 0,04** (0,10 écarté : il s'affichait pour tout le monde dès 1 000 notes) — à recaler avec les volontaires — `é5` D5.
+- **Tags des cartes** (étape 6c, Q6) : un seul par carte, même emplacement et même style que le tampon, pas de couleur ; hiérarchie ✱ pépite > « encore un <réalisateur> » (phrase de profil) > « ça divise » (écart-type rétréci de 50 notes fictives, 10 % les plus dispersés : l'écart-type brut mettait le tag sur les films à 20-50 notes) > « vieux trésor » (avant 1960 et popularité ≤ 1 000 : avant 1970, 26-30 cartes sur 48 aux crans bas d'un profil classique) ; 2 au plus par rangée de 8 ; le tag s'ajoute aux annotations — lisible, explicable — `é6c` Q6.
 - Tampon **« ✱ pépite »** : au plus un par rangée de 8, sur le moins connu s'il a au plus la moitié de la popularité médiane de la rangée — signale le film qui détonne dans ce qu'on voit — `é5` D6, G6.
 - ✗ Tampon à popularité ≤ 1 000 (v0.1), puis ≤ 1 000 avec plafond > 1 000 (v0.2) : soit partout aux crans bas, soit presque jamais — `é5` D6, G6.
 - ✗ **Mention « spectacle »** (stand-up) par une règle sur les titres : 61 % de précision, reportée aux genres TMDB — `é5` G4, G6.

@@ -20,6 +20,9 @@ export function CommentCaMarche() {
       <PageSection id="curseur" title={T.curseur.titre}>
         <Paragraphs items={T.curseur.paragraphes} />
       </PageSection>
+      <PageSection id="tampons" title={T.tampons.titre}>
+        <Paragraphs items={T.tampons.paragraphes} />
+      </PageSection>
       <PageSection id="donnees" title={T.donnees.titre}>
         <Paragraphs items={T.donnees.paragraphes} />
         <p className="m-0">compatible avec les exports Letterboxd et IMDb.</p>

@@ -15,3 +15,11 @@ export function becauseText(kind: 'liked' | 'seen', titles: readonly string[]): 
   const quoted = titles.map((t) => `« ${t} »`);
   return `(parce que t'as ${verb} ${quoted.join(' et ')})`;
 }
+
+/** Card tags (step 6c, Q6), all at the place and in the style of the « ✱ pépite » stamp. */
+export const TAG_TEXT = {
+  pepite: '✱ pépite',
+  realisateur: (director: string) => `encore un ${director}`,
+  divise: 'ça divise',
+  vieux: 'vieux trésor',
+};

@@ -337,6 +337,65 @@ test.describe('phone (375 × 812)', () => {
   });
 });
 
+const PEPITE = '[data-testid=card-tag][data-tag=pepite]';
+const TAG_LABEL = /^(✱ pépite|encore un .+|ça divise|vieux trésor)$/;
+
+// step 6c, Q6: one tag per card, at most 2 per row of 8, on the poster and inside the card
+for (const [label, viewport] of [
+  ['téléphone', { width: 375, height: 812 }],
+  ['grand écran', { width: 1440, height: 900 }],
+] as const) {
+  test(`card tags (${label}): at most 2 per row of 8 at every notch, known labels, on the poster`, async ({
+    page,
+    baseURL,
+  }) => {
+    const net = await guardNetwork(page, baseURL!);
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await exampleToResults(page);
+    await page.getByRole('button', { name: 'encore des films' }).click();
+    await expect(cards(page)).toHaveCount(16);
+    const slider = page.getByRole('slider');
+    await slider.focus();
+    await page.keyboard.press('Home');
+    let total = 0;
+    for (let notch = 0; notch < 8; notch++) {
+      if (notch > 0) await page.keyboard.press('ArrowRight');
+      await expect(slider).toHaveValue(String(notch));
+      const n = await cards(page).count();
+      for (let row = 0; row * 8 < n; row++) {
+        let inRow = 0;
+        for (let k = row * 8; k < Math.min(n, row * 8 + 8); k++) {
+          const card = cards(page).nth(k);
+          const tags = card.getByTestId('card-tag');
+          const count = await tags.count();
+          expect(count, 'un tag par carte au plus').toBeLessThanOrEqual(1);
+          if (!count) continue;
+          inRow++;
+          expect((await tags.textContent())!.trim()).toMatch(TAG_LABEL);
+          const box = (await tags.boundingBox())!;
+          const cardBox = (await card.getByTestId('film-card').boundingBox())!;
+          const poster = (await card
+            .locator('img, [data-testid=no-poster]')
+            .first()
+            .boundingBox())!;
+          expect(box.y + box.height, 'tag sur l’affiche').toBeLessThanOrEqual(
+            poster.y + poster.height,
+          );
+          expect(box.x, 'tag dans la carte').toBeGreaterThanOrEqual(cardBox.x - 4);
+          expect(box.x + box.width, 'tag dans la carte').toBeLessThanOrEqual(
+            cardBox.x + cardBox.width + 16,
+          );
+        }
+        expect(inRow, `cran ${notch}, rangée ${row + 1}`).toBeLessThanOrEqual(2);
+        total += inRow;
+      }
+    }
+    expect(total, 'des tags quelque part').toBeGreaterThan(0);
+    expect(net.blocked).toEqual([]);
+  });
+}
+
 for (const [label, viewport] of [
   ['téléphone', { width: 375, height: 812 }],
   ['tablette', { width: 768, height: 1024 }],
@@ -364,7 +423,7 @@ for (const [label, viewport] of [
     await exampleToResults(page);
     await page.getByRole('slider').focus();
     await page.keyboard.press('Home'); // ∞: the notch with a stamp in the example
-    await expect(page.getByTestId('pepite-stamp')).toHaveCount(1);
+    await expect(page.locator(PEPITE)).toHaveCount(1);
     expect(await noHScroll(), 'résultats').toBe(true);
     expect(await left('h1')).toBe(await left('header a'));
     const width = await page.locator('main').evaluate((e) => e.getBoundingClientRect().width);
@@ -373,8 +432,8 @@ for (const [label, viewport] of [
     for (const theme of ['sombre', 'clair'] as const) {
       if (theme === 'clair') await page.getByRole('button', { name: 'passer en clair' }).click();
       // the stamp sits on the poster, never over the explanation or the texts below it
-      const card = cards(page).filter({ has: page.getByTestId('pepite-stamp') });
-      const stamp = (await card.getByTestId('pepite-stamp').boundingBox())!;
+      const card = cards(page).filter({ has: page.locator(PEPITE) });
+      const stamp = (await card.locator(PEPITE).boundingBox())!;
       const poster = (await card.locator('img, [data-testid=no-poster]').first().boundingBox())!;
       expect(stamp.y + stamp.height, 'tampon sur l’affiche').toBeLessThanOrEqual(
         poster.y + poster.height,

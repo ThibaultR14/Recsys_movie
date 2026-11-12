@@ -688,6 +688,23 @@ def write_compact_json(path: Path, obj) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
+SPLIT_FILES = ("train", "val_foldin", "val_heldout", "test_foldin", "test_heldout")
+
+
+def catalog_divisive(cat: pl.DataFrame) -> list[int]:
+    """« ça divise » films (step 6c, Q6): the union of the split files is exactly the catalogue's
+    MovieLens ratings (merged ids); checked against ml_rating_count."""
+    import site_catalog as sc
+
+    ratings = pl.concat([pl.scan_parquet(ev.SPLIT_DIR / f"{f}.parquet") for f in SPLIT_FILES])
+    disp = cat.select("item_idx", "movie_id", "ml_rating_count").join(
+        sc.rating_dispersion(ratings), left_on="movie_id", right_on="movieId", how="left"
+    )
+    disp = disp.sort("item_idx")
+    assert (disp["n"] == disp["ml_rating_count"]).all(), "split ratings != catalogue counts"
+    return sc.divisive_items(disp["std"].to_numpy(), disp["n"].to_numpy())
+
+
 def cmd_catalog(out_dir: Path) -> dict:
     """catalog.json + title-index.json (step 3, D2/D3), in the item order saved at training, with
     the manual display titles (`title` action of manual_overrides.csv, step 5 D7)."""
@@ -700,8 +717,11 @@ def cmd_catalog(out_dir: Path) -> dict:
     overrides = load_manual_overrides()
     manual = sc.title_overrides(cat, overrides)
     versions = sc.version_pairs(cat, overrides)
+    divisive = catalog_divisive(cat)
     out_dir.mkdir(parents=True, exist_ok=True)
-    write_compact_json(out_dir / "catalog.json", sc.build_catalog_json(cat, manual, versions))
+    write_compact_json(
+        out_dir / "catalog.json", sc.build_catalog_json(cat, manual, versions, divisive)
+    )
     write_compact_json(out_dir / "title-index.json", sc.build_title_index(cat, manual))
     sizes = file_sizes(out_dir)
     total = sum(v["gzip_bytes"] for v in sizes.values())
@@ -712,6 +732,7 @@ def cmd_catalog(out_dir: Path) -> dict:
         "total_gzip_bytes": total,
         "within_5mb_gzip": total <= WEB_DATA_GZIP_BUDGET,
         "manual_titles": len(manual),
+        "divisive": len(divisive),
     }
     (RESULTS_DIR / "catalog_export_report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
@@ -752,6 +773,8 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
     manual = sc.title_overrides(cat, overrides)
     assert cat_json["version_of"] == sc.version_pairs(cat, overrides), "version_of"
     assert all(0 <= i < n for pair in cat_json["version_of"] for i in pair), "version_of"
+    assert cat_json["divisive"] == catalog_divisive(cat), "divisive"
+    assert abs(len(cat_json["divisive"]) - sc.DIVISIVE_TOP_SHARE * n) <= 0.01 * n, "divisive share"
     manual_bad = [
         i
         for i, t in manual.items()
@@ -766,6 +789,7 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
         "manual_titles": len(manual),
         "manual_titles_not_applied": manual_bad,
         "version_pairs": len(cat_json["version_of"]),
+        "divisive": len(cat_json["divisive"]),
     }
     assert films_without_key == 0 and missing == 0 and not manual_bad, out
     print(json.dumps(out, indent=2))

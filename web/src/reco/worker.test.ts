@@ -113,6 +113,10 @@ describe.skipIf(!ready)('worker protocol on the real files', () => {
       }
     }
     expect(reco.positions[0]!.relativeScore).toBe(1);
+    // « ça divise » (step 6c, Q6): flag from catalog.json `divisive`, on some films only
+    const flagged = reco.positions.flatMap((p) => p.films).filter((f) => f.divisive);
+    expect(flagged.length).toBeGreaterThan(0);
+    expect(flagged.every((f) => f.divisive === true)).toBe(true);
     // explanations (step 6b, D6): cited films come from the history, never with a series note
     const all = reco.positions.flatMap((p) => p.films);
     expect(all.some((f) => f.because)).toBe(true);

@@ -18,11 +18,14 @@ import { Underline } from './Underline';
 import {
   byline,
   cardRotation,
+  cardTags,
   citationPicks,
   hasFarRow,
   pepiteStamps,
   ratingLine,
+  tagLabel,
   tapeRotation,
+  type TaggedFilm,
 } from './cardRules';
 import { capLabel } from './sliderText';
 
@@ -256,10 +259,32 @@ describe('FilmCard', () => {
   });
 
   it('pépite stamp only when the grid asks for it', () => {
-    const { rerender } = render(<FilmCard film={film()} stamp />);
+    const { rerender } = render(<FilmCard film={film()} tag={{ kind: 'pepite' }} />);
     expect(screen.getByText('✱ pépite')).toBeInTheDocument();
     rerender(<FilmCard film={film()} />);
     expect(screen.queryByText('✱ pépite')).not.toBeInTheDocument();
+  });
+
+  it('tags (Q6): same place and style as the stamp; a long director name is cut, full for screen readers', () => {
+    const { rerender } = render(<FilmCard film={film()} tag={{ kind: 'vieux' }} />);
+    const tag = screen.getByTestId('card-tag');
+    expect(tag).toHaveTextContent('vieux trésor');
+    expect(tag).toHaveAttribute('data-tag', 'vieux');
+    const style = tag.className;
+    rerender(<FilmCard film={film()} tag={{ kind: 'pepite' }} />);
+    expect(screen.getByTestId('card-tag').className).toBe(style);
+    rerender(
+      <FilmCard
+        film={film()}
+        tag={{ kind: 'realisateur', director: 'Apichatpong Weerasethakul' }}
+      />,
+    );
+    const long = screen.getByTestId('card-tag');
+    expect(within(long).getByText('encore un Apichatpong Wee…')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+    expect(within(long).getByText('encore un Apichatpong Weerasethakul')).toHaveClass('sr-only');
   });
 
   it('documentary mention from the MovieLens genre', () => {
@@ -453,5 +478,87 @@ describe('rows far from the taste (step 6b, Q4 revised)', () => {
     expect(hasFarRow([...Array(8).fill(0.1), 0.03, 0.1, 0.1], t)).toBe(false); // 1 / 3
     expect(hasFarRow([], t)).toBe(false);
     expect(hasFarRow([0.04], t)).toBe(false); // strictly below
+  });
+});
+
+describe('card tags (step 6c, Q6)', () => {
+  const f = (over: Partial<TaggedFilm> = {}): TaggedFilm => ({
+    popularity: 5000,
+    year: 2000,
+    directors: ['X'],
+    ...over,
+  });
+
+  it('labels: « encore un » + full name, cut at 26 characters with « … »', () => {
+    expect(tagLabel({ kind: 'realisateur', director: 'Denis Villeneuve' })).toEqual({
+      visible: 'encore un Denis Villeneuve',
+      full: 'encore un Denis Villeneuve',
+    });
+    const long = tagLabel({ kind: 'realisateur', director: 'Apichatpong Weerasethakul' });
+    expect([...long.visible]).toHaveLength(26);
+    expect(long.visible.endsWith('…')).toBe(true);
+    expect(tagLabel({ kind: 'divise' }).visible).toBe('ça divise');
+    expect(tagLabel({ kind: 'vieux' }).visible).toBe('vieux trésor');
+  });
+
+  it('one tag per card, by the hierarchy: pépite > réalisateur > ça divise > vieux trésor', () => {
+    // 8 cards: card 7 is the least known (stamp); it is also by a liked director, divisive, old
+    const films = [
+      ...Array.from({ length: 7 }, () => f()),
+      f({ popularity: 100, year: 1950, directors: ['Ozu'], divisive: true }),
+    ];
+    expect(cardTags(films, ['Ozu'])[7]).toEqual({ kind: 'pepite' });
+    const noStamp = films.map((x) => ({ ...x, popularity: 900 }));
+    expect(cardTags(noStamp, ['Ozu'])[7]).toEqual({ kind: 'realisateur', director: 'Ozu' });
+    expect(cardTags(noStamp, [])[7]).toEqual({ kind: 'divise' });
+    expect(
+      cardTags(
+        noStamp.map((x) => ({ ...x, divisive: false })),
+        [],
+      )[7],
+    ).toEqual({
+      kind: 'vieux',
+    });
+  });
+
+  it('vieux trésor: before 1960 and popularity at most 1 000', () => {
+    const tag = (over: Partial<TaggedFilm>) => cardTags([f(over)], [])[0];
+    expect(tag({ year: 1959, popularity: 1000 })).toEqual({ kind: 'vieux' });
+    expect(tag({ year: 1960, popularity: 500 })).toBeNull();
+    expect(tag({ year: 1959, popularity: 1001 })).toBeNull();
+    expect(tag({ year: null, popularity: 10 })).toBeNull();
+  });
+
+  it('at most 2 tags per row of 8, by the hierarchy then the list order; the stamp is kept', () => {
+    // row 1: all divisive and old, card 5 the stamp, card 6 by a liked director
+    const row = Array.from({ length: 8 }, (_, i) =>
+      f({
+        popularity: i === 5 ? 50 : 800,
+        year: 1950,
+        divisive: true,
+        directors: [i === 6 ? 'Ozu' : 'X'],
+      }),
+    );
+    const tags = cardTags([...row, ...row], ['Ozu']);
+    expect(tags.slice(0, 8).filter(Boolean)).toHaveLength(2);
+    expect(tags[5]).toEqual({ kind: 'pepite' });
+    expect(tags[6]).toEqual({ kind: 'realisateur', director: 'Ozu' });
+    // the second row is counted on its own
+    expect(tags.slice(8).filter(Boolean)).toHaveLength(2);
+    // without stamp or director: the first two divisive cards of the row
+    const plain = cardTags(
+      Array.from({ length: 8 }, () => f({ divisive: true })),
+      [],
+    );
+    expect(plain.map((t) => t?.kind ?? null)).toEqual([
+      'divise',
+      'divise',
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 });

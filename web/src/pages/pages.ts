@@ -16,6 +16,7 @@ const SECTION_PAGE: Record<string, Page> = {
   '#percentiles': 'comment-ca-marche',
   '#equilibre': 'comment-ca-marche',
   '#curseur': 'comment-ca-marche',
+  '#tampons': 'comment-ca-marche',
   '#donnees': 'comment-ca-marche',
   '#on-garde-rien': 'comment-ca-marche',
   '#limites': 'comment-ca-marche',

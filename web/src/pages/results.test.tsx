@@ -259,6 +259,7 @@ describe('pages (step 6b, D2)', () => {
       'percentiles',
       'equilibre',
       'curseur',
+      'tampons',
       'donnees',
       'on-garde-rien',
       'limites',
@@ -273,6 +274,7 @@ describe('pages (step 6b, D2)', () => {
     expect(pageOfHash('#comment-ca-marche')).toBe('comment-ca-marche');
     expect(pageOfHash('#on-garde-rien')).toBe('comment-ca-marche');
     expect(pageOfHash('#equilibre')).toBe('comment-ca-marche');
+    expect(pageOfHash('#tampons')).toBe('comment-ca-marche');
     expect(pageOfHash('#mentions')).toBe('a-propos');
     expect(pageOfHash('')).toBeNull();
     expect(pageOfHash('#nimporte')).toBeNull();

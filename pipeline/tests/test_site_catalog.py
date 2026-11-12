@@ -1,3 +1,4 @@
+import numpy as np
 import polars as pl
 import pytest
 
@@ -147,3 +148,31 @@ def test_version_pairs_written_to_catalog_json():
     assert sc.build_catalog_json(frame())["version_of"] == []
     with pytest.raises(ValueError):
         sc.version_pairs(frame(), _title_lines([(999, "version_of", 50, None, "not in catalogue")]))
+
+
+# --- « ça divise » (step 6c, Q6) -------------------------------------------------------------
+
+
+def test_rating_dispersion_is_the_population_std():
+    ratings = pl.LazyFrame({"movieId": [1, 1, 2, 2, 2, 2], "rating": [1.0, 5.0, 3.0, 3, 3, 3]})
+    d = sc.rating_dispersion(ratings).sort("movieId")
+    assert d["std"].to_list() == [2.0, 0.0] and d["n"].to_list() == [2, 4]
+
+
+def test_shrunk_std_pulls_small_samples_towards_the_mean():
+    std, n = np.array([2.0, 2.0, 0.0]), np.array([20, 20_000, 1000])
+    s = sc.shrunk_std(std, n, k=50)
+    vbar = (4 + 4 + 0) / 3
+    assert s[0] == pytest.approx(np.sqrt((20 * 4 + 50 * vbar) / 70))
+    assert s[1] > s[0] and s[1] == pytest.approx(2.0, abs=0.01)  # many ratings: almost the raw std
+
+
+def test_divisive_items_are_the_top_share_sorted():
+    rng = np.random.default_rng(0)
+    std, n = rng.random(1000) + 0.5, rng.integers(20, 5000, 1000)
+    out = sc.divisive_items(std, n, share=0.10)
+    assert out == sorted(out) and 95 <= len(out) <= 105
+    s = sc.shrunk_std(std, n)
+    assert min(s[out]) >= max(np.delete(s, out))  # exactly the most dispersed ones
+    assert sc.build_catalog_json(frame(), None, None, [2])["divisive"] == [2]
+    assert sc.build_catalog_json(frame())["divisive"] == []

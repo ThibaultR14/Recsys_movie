@@ -40,6 +40,18 @@ export const COMMENT_CA_MARCHE = {
       "le tampon « ✱ pépite » signale le film le moins connu d'une rangée, quand il l'est nettement plus que les autres.",
     ],
   },
+  // step 6c, Q6: card tags
+  tampons: {
+    titre: 'les tampons',
+    paragraphes: [
+      'sur certaines affiches, un petit tampon te dit pourquoi le film sort du lot. un seul par film, deux au plus par rangée, pour que ça reste lisible.',
+      "✱ pépite : le film le moins connu de sa rangée, quand il l'est nettement plus que les autres. pas de tampon quand ils se valent tous.",
+      "encore un… : un réalisateur que t'as l'air d'aimer, d'après tes films.",
+      'ça divise : un film que les gens adorent ou détestent, avec des notes très dispersées.',
+      'vieux trésor : un film sorti avant 1960 et peu vu.',
+      'quand un film en mérite plusieurs, on garde le premier de cette liste.',
+    ],
+  },
   donnees: {
     titre: "d'où viennent les données",
     paragraphes: [

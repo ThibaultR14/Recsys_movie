@@ -24,6 +24,7 @@ import sys
 import numpy as np
 import polars as pl
 
+import site_catalog as sc
 from config import PROCESSED, RESULTS_DIR, WEB_DATA
 
 SPLIT_FILES = ("train", "val_foldin", "val_heldout", "test_foldin", "test_heldout")
@@ -32,16 +33,7 @@ OUT = RESULTS_DIR / "quality" / "tags_stats.json"
 TOP_SHARES = (0.05, 0.10, 0.15, 0.20)
 YEARS = (1960, 1970, 1980)
 POP_CAPS = (200, 500, 1_000, 2_000, 5_000, 10_000)
-SHRINK_K = 50
-
-
-def rating_std(ratings: pl.LazyFrame) -> pl.DataFrame:
-    """movieId -> (population) standard deviation and count of its ratings."""
-    return (
-        ratings.group_by("movieId")
-        .agg(pl.col("rating").std(ddof=0).alias("std"), pl.len().alias("n"))
-        .collect()
-    )
+SHRINK_K = sc.DIVISIVE_SHRINK_K
 
 
 def cmd_stats() -> dict:
@@ -53,7 +45,7 @@ def cmd_stats() -> dict:
         PROCESSED / "catalog.parquet",
         columns=["item_idx", "movie_id", "ml_rating_count", "year", "recommendable"],
     ).sort("item_idx")
-    stats = rating_std(ratings)
+    stats = sc.rating_dispersion(ratings)
     cat = cat.join(stats, left_on="movie_id", right_on="movieId", how="left").sort("item_idx")
     assert (cat["n"] == cat["ml_rating_count"]).all(), "ratings of the split != catalogue counts"
     std = cat["std"].to_numpy()
@@ -98,8 +90,7 @@ def cmd_stats() -> dict:
     out["old_films"] = old
     # shrunk variant: the variance pulled towards the catalogue mean with SHRINK_K pseudo-ratings,
     # so that a film with 20 ratings needs more evidence than one with 20 000
-    vbar = float((std**2).mean())
-    shrunk = np.sqrt((n * std**2 + SHRINK_K * vbar) / (n + SHRINK_K))
+    shrunk = sc.shrunk_std(std, n, SHRINK_K)
     th10s = float(np.quantile(shrunk, 0.9))
     out["shrunk"] = {
         "k": SHRINK_K,

@@ -151,10 +151,10 @@ Détail complet, chiffres et figures : `docs/etape-2-modele.md` (décisions D1-D
 | `yty.bin` | `YᵀY` 64 × 64 en float32, calculé sur les vecteurs déquantifiés (fold-in) | 16 Ko (12 Ko) |
 | `popularity.bin` | popularité hybride (uint32 par film) : le plafond du curseur porte sur elle | 92 Ko (42 Ko) |
 | `model-meta.json` | hyperparamètres, formules (signal, confiance, fold-in, popularité), positions du curseur, `movie_id` par `item_idx`, films non recommandables, versions des données ; étape 6c : règle du fold-in (`foldin_drop_below` 0,3, `foldin_min_kept` 5) et table `calibration` (mode, vivier, α, λ par cran) | 140 Ko (58 Ko) |
-| `catalog.json` | en colonnes, ordre = `item_idx` : titre affiché, titre original (s'il diffère), `year`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, réalisateurs, `poster_path`, genres MovieLens ; v2 (6b) : `ml_mean`, `ml_count` ; 6c : `version_of` (paires d'`item_idx`) | 2,5 Mo (1,12 Mo) |
+| `catalog.json` | en colonnes, ordre = `item_idx` : titre affiché, titre original (s'il diffère), `year`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, réalisateurs, `poster_path`, genres MovieLens ; v2 (6b) : `ml_mean`, `ml_count` ; 6c : `version_of` (paires d'`item_idx`), `divisive` (films « ça divise », 2 302 `item_idx`) | 2,5 Mo (1,12 Mo) |
 | `title-index.json` | clés de titre normalisées → `4 × item_idx + source` (titre TMDB, titre MovieLens, titre original, titre alternatif ML) ; `ml_year` quand il diffère | 1,07 Mo (0,37 Mo) |
 
-Total mesuré : **3,06 Mo** gzip (5,4 Mo bruts) à l'étape 3, **3,12 Mo** gzip depuis l'étape 6c (note du public, `version_of`), sous la cible de 5 Mo.
+Total mesuré : **3,06 Mo** gzip (5,4 Mo bruts) à l'étape 3, **3,12 Mo** gzip depuis l'étape 6c (note du public, `version_of`, `divisive`), sous la cible de 5 Mo.
 
 Les **cas de test du fold-in** (`foldin_cases.json`, 25 cas depuis l'étape 6c : vecteur et top 10 attendus aux positions ∞, 2 000 et 500, et listes calibrées de 48 aux 8 crans) contiennent des notes MovieLens brutes : ils sont écrits dans `web/test-data/` (ignoré par git, hors de `web/public/`, donc jamais servi) et ne sont **jamais versionnés**.
 
@@ -190,7 +190,7 @@ Les **cas de test du fold-in** (`foldin_cases.json`, 25 cas depuis l'étape 6c :
 4. On retire les films déjà vus, les films non recommandables (`model-meta.json`), et par prudence les candidats des correspondances ambiguës et le candidat principal d'une correspondance floue (films peut-être vus, jamais utilisés pour le fold-in) ; étape 6c (D3) : les autres versions d'un film vu (`version_of`).
 5. **Curseur** : on ne garde que les films dont la popularité (`popularity.bin`) est au plus le plafond de la position choisie (∞ = pas de filtre), classés par score.
 6. Étape 6c (D1) : **calibration des genres** à chaque cran, une seule fois après l'analyse : 48 films choisis un à un dans un vivier des 150 meilleurs, en équilibrant le score et l'écart entre la part de films de chaque genre (MovieLens) de la liste et celle de l'historique gardé (Steck 2018, variante « part de films ») ; λ = 0,1 de ∞ à 10 000, 0,9 de 5 000 à 200 (`calibrate.ts`, 3-7,5 ms pour les 8 crans).
-7. On affiche 8 films, puis 8 par 8 (48 au plus) ; le curseur n'est plus qu'un affichage.
+7. On affiche 8 films, puis 8 par 8 (48 au plus) ; le curseur n'est plus qu'un affichage. Sur les cartes affichées : un **tag** au plus par carte (✱ pépite > encore un <réalisateur> > ça divise > vieux trésor), 2 au plus par rangée de 8 (`cardTags`, étape 6c Q6).
 
 Mise en œuvre (étape 4, `docs/etape-4-navigateur.md`) :
 - `web/src/reco/` : `modelFiles.ts` (lecture et contrôles), `foldIn.ts` (Cholesky 64 × 64 en float64), `recommend.ts` (scores, curseur), `engine.ts` (moteur commun) ;

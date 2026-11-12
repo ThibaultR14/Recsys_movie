@@ -7,7 +7,7 @@
 
 L'étape 6c (qualité des résultats) est close le 12 novembre 2026 (`é6c` v0.6) : versions, films mal notés hors du fold-in, calibration des genres (λ par cran), pénalité D1b écartée, test évalué une fois, textes de « comment ça marche ».
 
-1. **Tags des cartes** (Q6, section 8 et section 5 de la spec 6c) : **mesure faite, arrêt**. Un tag par carte, même style, pas de couleur ; hiérarchie pépite > réalisateur > ça divise > vieux trésor. Propositions : « ça divise » = écart-type rétréci (k = 50) dans les 10 % les plus dispersés, embarqué comme liste d'`item_idx` ; « vieux trésor » = avant 1960 et popularité ≤ 1 000 ; 2 tags au plus par rangée de 8 ; libellés de Claude Web. Ensuite : code (pipeline, `catalog.json`, règle pure + tests, carte), Playwright.
+1. **Tags des cartes** (Q6, section 8 et section 5 de la spec 6c) : **seuils décidés et branchés sur le site** le 12 novembre 2026 (« ça divise » = 2 302 films, `catalog.json` `divisive` ; vieux trésor avant 1960 et ≤ 1 000 ; 2 par rangée ; section « les tampons ») ; **arrêt pour l'essai à l'écran**. Historique : mesure faite, arrêt. Un tag par carte, même style, pas de couleur ; hiérarchie pépite > réalisateur > ça divise > vieux trésor. Propositions : « ça divise » = écart-type rétréci (k = 50) dans les 10 % les plus dispersés, embarqué comme liste d'`item_idx` ; « vieux trésor » = avant 1960 et popularité ≤ 1 000 ; 2 tags au plus par rangée de 8 ; libellés de Claude Web. Ensuite : code (pipeline, `catalog.json`, règle pure + tests, carte), Playwright.
 
 ## Ensuite : étape 7, mise en ligne et volontaires
 
@@ -50,7 +50,8 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 
 ### Suivi de l'étape 6c
 
-- **Essai sur un vrai téléphone** (versions 6b et 6c, deux thèmes, section « l'équilibre des genres ») : à faire par Thibault, **non confirmé** à la clôture (12 novembre 2026).
+- **Essai sur un vrai téléphone de la version 6b** : **fait, OK** (Thibault, 12 novembre 2026).
+- **Essai sur un vrai téléphone de la version 6c** (équilibre des genres, tags des cartes, deux thèmes) : à faire par Thibault.
 - **μ de D1b** et **λ des crans bas** : à recaler avec les volontaires (voir « Étape 7 »).
 
 ### Suivi de l'étape 6

@@ -15,12 +15,15 @@ catalog.json v2 (step 6b, D5): `ml_mean` (MovieLens mean rating x 10, int) and `
 (number of MovieLens ratings) for the « ★ 3,9 · 1 240 notes » line of the cards.
 `version_of` (step 6c, D3): [item_idx, target item_idx] pairs from the `version_of` lines of
 manual_overrides.csv; the site never recommends one film of a pair once the other is seen.
+`divisive` (step 6c, Q6): sorted item_idx of the « ça divise » films (10 % most dispersed
+MovieLens ratings, shrunk std); aggregates only.
 """
 
 from __future__ import annotations
 
 import math
 
+import numpy as np
 import polars as pl
 
 from titles import NORMALIZATION_VERSION, ml_title_variants, normalize_title, title_keys
@@ -89,10 +92,42 @@ def version_pairs(cat: pl.DataFrame, overrides: pl.DataFrame) -> list[list[int]]
     return sorted(pairs)
 
 
+# « ça divise » card tag (step 6c, Q6): the most dispersed MovieLens ratings, with the variance
+# pulled towards the catalogue mean by DIVISIVE_SHRINK_K pseudo-ratings (the raw std of a film with
+# 20 ratings is noisy: it would put the tag on little-known films by chance).
+DIVISIVE_SHRINK_K = 50
+DIVISIVE_TOP_SHARE = 0.10
+
+
+def rating_dispersion(ratings: pl.LazyFrame) -> pl.DataFrame:
+    """movieId -> population std (`std`) and number (`n`) of its ratings."""
+    return (
+        ratings.group_by("movieId")
+        .agg(pl.col("rating").std(ddof=0).alias("std"), pl.len().alias("n"))
+        .collect()
+    )
+
+
+def shrunk_std(std: np.ndarray, n: np.ndarray, k: int = DIVISIVE_SHRINK_K) -> np.ndarray:
+    """√((n·v + k·v̄) / (n + k)), v = std², v̄ = mean of v over the films."""
+    v = np.asarray(std, dtype=np.float64) ** 2
+    n = np.asarray(n, dtype=np.float64)
+    return np.sqrt((n * v + k * v.mean()) / (n + k))
+
+
+def divisive_items(std: np.ndarray, n: np.ndarray, share: float = DIVISIVE_TOP_SHARE) -> list[int]:
+    """Sorted item_idx (positions in `std`) of the `share` most dispersed films (shrunk std at or
+    above its 1 − share quantile)."""
+    s = shrunk_std(std, n)
+    threshold = np.quantile(s, 1.0 - share)
+    return [int(i) for i in np.flatnonzero(s >= threshold)]
+
+
 def build_catalog_json(
     cat: pl.DataFrame,
     manual_titles: dict[int, str] | None = None,
     versions: list[list[int]] | None = None,
+    divisive: list[int] | None = None,
 ) -> dict:
     manual = manual_titles or {}
     rows = cat.to_dicts()
@@ -125,6 +160,8 @@ def build_catalog_json(
         "ml_count": [r["ml_rating_count"] for r in rows],
         # Other cuts of a film (step 6c, D3): never recommended once the other one is seen.
         "version_of": versions or [],
+        # « ça divise » card tag (step 6c, Q6): sorted item_idx
+        "divisive": divisive or [],
     }
 
 

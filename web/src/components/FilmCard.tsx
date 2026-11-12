@@ -6,6 +6,8 @@ import {
   byline,
   ratingLine,
   cardRotation,
+  tagLabel,
+  type CardTag,
   isDocumentary,
   letterboxdUrl,
   tapeRotation,
@@ -13,8 +15,9 @@ import {
 
 interface FilmCardProps {
   film: FilmData;
-  /** « ✱ pépite » stamp, decided by the grid (`pepiteStamps`). */
-  stamp?: boolean;
+  /** Card tag (« ✱ pépite », « encore un … », « ça divise », « vieux trésor »), decided by the
+   * grid (`cardTags`, step 6c Q6). */
+  tag?: CardTag;
   /** Title of a seen film of the same series, for « (même série que « X », que t'as vu) ». */
   seriesOf?: string;
   /** « (parce que t'as aimé X et Y) » (step 6b, D6); hidden far from the user's taste (Q4). */
@@ -35,7 +38,8 @@ const CARD_CLASS =
   'relative flex flex-col gap-3 bg-surface px-3 pt-3 pb-[18px] text-ink no-underline shadow-photo';
 
 /** « Taped photo » card (design system §5). The whole card links to the film on Letterboxd. */
-export function FilmCard({ film, stamp = false, seriesOf, because }: FilmCardProps) {
+export function FilmCard({ film, tag, seriesOf, because }: FilmCardProps) {
+  const label = tag ? tagLabel(tag) : undefined;
   const content = (
     <>
       <span
@@ -78,15 +82,23 @@ export function FilmCard({ film, stamp = false, seriesOf, because }: FilmCardPro
           <span className="sr-only">{becauseText(because.kind, because.titles)}</span>
         </HandNote>
       )}
-      {stamp && (
+      {tag && label && (
         // top right of the poster (step 6b, R9), on a small surface label: readable on any poster
-        // and never over the explanation below
+        // and never over the explanation below; every tag looks like the « ✱ pépite » stamp (Q6)
         <span
-          data-testid="pepite-stamp"
-          className="absolute top-5 right-[-8px] rounded-[3px] bg-surface px-1.5 font-hand text-[24px] leading-tight font-bold text-pen shadow-photo"
+          data-testid="card-tag"
+          data-tag={tag.kind}
+          className="absolute top-5 right-[-8px] max-w-[calc(100%-4px)] rounded-[3px] bg-surface px-1.5 font-hand text-[24px] leading-tight font-bold text-balance text-pen shadow-photo"
           style={{ transform: 'rotate(-12deg)' }}
         >
-          ✱ pépite
+          {label.visible === label.full ? (
+            label.full
+          ) : (
+            <>
+              <span aria-hidden="true">{label.visible}</span>
+              <span className="sr-only">{label.full}</span>
+            </>
+          )}
         </span>
       )}
     </>

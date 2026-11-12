@@ -382,7 +382,7 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 
 **Étape 6c close le 12 novembre 2026.**
 
-### Q6 — Tags des cartes : mesure (12 novembre 2026) — ⏸ arrêt : seuils, plafond par rangée, libellés
+### Q6 — Tags des cartes : mesure (12 novembre 2026) — décision : voir plus bas
 
 **Règles rappelées par Thibault** :
 - un seul tag par carte, « ✱ pépite » compris ;
@@ -441,6 +441,41 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 - **libellés définitifs** : Claude Web (« encore un <réalisateur> que t'as pas vu », « ça divise », « vieux trésor », à confirmer).
 - **à confirmer** : le tag s'ajoute aux annotations sous la carte (explication, série…), il ne les remplace pas (rien de prévu d'autre).
 
+**Décision de Thibault (12 novembre 2026)** :
+- **ça divise** : écart-type rétréci (50 notes fictives), 10 % les plus dispersés (seuil 1,12), embarqué comme liste de films dans `catalog.json` ;
+- **vieux trésor** : sorti avant 1960 et popularité ≤ 1 000 ;
+- **plafond** : 2 tags par rangée de 8, dans l'ordre de la hiérarchie puis du classement ; « ✱ pépite » jamais retiré ;
+- le tag **s'ajoute** aux annotations sous la carte, sans en remplacer aucune ;
+- **libellés**, tous au même emplacement et dans le même style que « ✱ pépite » : « ✱ pépite », « encore un <nom complet du réalisateur> » (coupé avec « … » au-delà de 26 caractères, texte complet pour les lecteurs d'écran ; pas de « que t'as pas vu »), « ça divise », « vieux trésor » ;
+- nouvelle section **« les tampons »** de « comment ça marche » (ancre `#tampons`), textes de Claude Web.
+
+### Q6 — Tags des cartes : sur le site (12 novembre 2026) — ⏸ arrêt : essai à l'écran
+
+**Pipeline** :
+- `site_catalog.py` : `rating_dispersion`, `shrunk_std`, `divisive_items` ; constantes `DIVISIVE_SHRINK_K = 50` et `DIVISIVE_TOP_SHARE = 0,10`.
+- `export.py catalog` écrit `catalog.json` `divisive` : 2 302 `item_idx` triés, soit 10,0 % du catalogue. Les notes viennent de l'union des fichiers du découpage, vérifiée égale à `ml_rating_count`.
+- `catalog-verify` recalcule la liste et contrôle la part de 10 % ± 1 point.
+- `web/public/data/` : **3 121 977 octets gzip** (+6,1 Ko).
+- `tag_diagnostics.py` réutilise les mêmes fonctions.
+
+**Site** :
+- **Moteur** : `engine.ts` lit `divisive` (`Engine.divisive`), et `filmCard` ajoute `divisive: true` aux films concernés.
+- **Règle pure** `cardTags` (`cardRules.ts`) : hiérarchie, réalisateur = premier réalisateur du film parmi ceux de la phrase de profil, vieux trésor (`OLD_BEFORE = 1960`, `OLD_MAX_POPULARITY = 1 000`), plafond `MAX_TAGS_PER_BLOCK = 2` par bloc de 8. Le tampon ne peut pas être retiré : au plus un par bloc, et il passe en premier.
+- **Libellés** : `tagLabel`, avec les textes dans `content/cards.ts` (`TAG_TEXT`).
+- **Grille et carte** : `FilmGrid` calcule les tags sur les cartes affichées (après le filtre des documentaires, comme le tampon). `FilmCard` affiche un tag unique (`data-testid="card-tag"`, `data-tag`) à la place et dans le style du tampon.
+- **Libellés longs** : un libellé coupé est en `aria-hidden`, avec le texte complet en `sr-only`. Un long libellé peut passer sur **deux lignes** (`text-balance`, largeur limitée à la carte), sans réduire la police. Mesure du pire cas (26 caractères) : 253 px sur une ligne ; sur une carte de 243 px, deux lignes, dans la carte ; une seule ligne sur téléphone (carte de 336 px) et sur grand écran (269 px).
+- **« comment ça marche »** : section « les tampons » (`#tampons`), entre « le curseur » et « d'où viennent les données ».
+
+**Tests** :
+- `pytest` 253 (écart-type, rétrécissement, 10 % les plus dispersés, `catalog.json`).
+- Vitest 274 : hiérarchie, vieux trésor aux bornes, plafond par rangée (tampon gardé), libellés et coupe à 26 caractères, même classe CSS pour tous les tags, texte complet pour les lecteurs d'écran, sections et ancres, drapeau `divisive` sur les vraies données.
+- Playwright 13/13, dont un nouveau test sur téléphone et grand écran. Il parcourt les 8 crans, sur 16 cartes : un tag par carte au plus, 2 au plus par rangée, libellés connus, tag sur l'affiche et dans la carte, aucune requête nouvelle.
+- axe : 0 violation dans les deux thèmes ; changement de cran **33 ms** en médiane (pire 35 ms) ; modèle prêt 0,88 s.
+
+**Fréquences attendues** (mesure de Q6, variante B = la décision, plafond 2) : 0,3 à 2,0 tags par rangée de 8 en moyenne selon le cran et l'export ; première rangée : 0 à 2.
+
+**Reste** : essai à l'écran par Thibault (et sur un vrai téléphone, versions 6c : équilibre des genres, tampons).
+
 
 ---
 
@@ -467,7 +502,7 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 
 ## 8. Ensuite : tags des cartes (après Q5, nouvelle sous-étape Q6)
 
-> 12 novembre 2026 : mesure faite (section 5, Q6), **arrêt** pour les seuils, le plafond et les libellés. Règles revues par Thibault : un seul tag par carte, même emplacement et même style pour tous, **pas de couleur par tag** (le paragraphe « Couleurs » ci-dessous est caduc).
+> 12 novembre 2026 : mesure faite puis **seuils décidés et tags branchés sur le site** (section 5, Q6) ; arrêt pour l'essai à l'écran. Règles revues par Thibault : un seul tag par carte, même emplacement et même style pour tous, **pas de couleur par tag** (le paragraphe « Couleurs » ci-dessous est caduc).
 
 À coder **seulement après les corrections de qualité** (Q1-Q5), dans une sous-étape Q6 qui commence par une mesure et un **arrêt** pour fixer les seuils.
 

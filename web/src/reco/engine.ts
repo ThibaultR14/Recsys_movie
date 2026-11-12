@@ -36,6 +36,8 @@ export interface CatalogFile {
   ml_count?: (number | null)[];
   /** Step 6c (D3): [item, target] pairs of other cuts (`version_of` of manual_overrides.csv). */
   version_of?: [number, number][];
+  /** Step 6c (Q6): sorted item_idx of the « ça divise » films (most dispersed MovieLens ratings). */
+  divisive?: number[];
 }
 
 export interface Engine {
@@ -47,6 +49,8 @@ export interface Engine {
   ids: ImdbIdIndex;
   /** item -> its other cuts, both ways (step 6c, D3). */
   versions: Map<number, number[]>;
+  /** « ça divise » films (step 6c, Q6). */
+  divisive: ReadonlySet<number>;
   timings: { fetchMs: number; modelMs: number; indexMs: number; matcherMs: number };
 }
 
@@ -79,6 +83,7 @@ export async function loadEngine(fetchFn: FetchFn, base = '/data/'): Promise<Eng
     matcher,
     ids,
     versions,
+    divisive: new Set(catalog.divisive ?? []),
     timings: { fetchMs: t1 - t0, modelMs: t2 - t1, indexMs: t3 - t2, matcherMs: t4 - t3 },
   };
 }

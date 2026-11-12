@@ -1,6 +1,6 @@
 # État du projet
 
-> Mis à jour le 12 novembre 2026 : étape 6c close ; **Q6 (tags des cartes) mesurée, arrêt** pour les seuils, le plafond par rangée et les libellés (`docs/etape-6c-qualite.md`, section 5, Q6). Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
+> Mis à jour le 12 novembre 2026 : étape 6c close ; **tags des cartes (Q6) branchés sur le site, arrêt pour l'essai à l'écran** (`docs/etape-6c-qualite.md`, section 5, Q6). Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
 > Dépôt : https://github.com/ThibaultR14/Recsys_movie
 
 ## Le projet en 5 lignes
@@ -147,7 +147,7 @@ Chaque spec d'étape suit le même plan : décisions (D1, D2…), sous-étapes e
 
 ## En attente
 
-- **Essai sur un vrai téléphone** des versions 6b et 6c (deux thèmes, section « l'équilibre des genres ») : à faire par Thibault, non confirmé à la clôture de 6c.
+- **Essai à l'écran des tags des cartes** (Q6) par Thibault, puis sur un vrai téléphone (versions 6c : équilibre des genres, tampons ; l'essai de la version 6b est fait, OK, le 12 novembre 2026).
 - **Essai sur un vrai téléphone** de la version de l'étape 6b (deux thèmes) : non confirmé à la clôture, à faire au début de l'étape 7.
 - **Réponse de GroupLens** sur la licence MovieLens (mail envoyé le 6 novembre 2026). **Elle bloque la mise en ligne** (étape 7) et le versionnement de `web/public/data/`, mais pas le développement en local.
 - **Exports de 10 à 20 cinéphiles volontaires** (étape 7). Ils serviront à mesurer la correspondance des titres et à recaler les seuils de l'interface : « loin de tes goûts » et tampon « ✱ pépite ».
