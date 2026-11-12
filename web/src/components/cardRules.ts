@@ -182,6 +182,12 @@ export function ratingLine(mean10: number, count: number): { visible: string; sp
   };
 }
 
+/** « ★ 3,4 · TMDB » (step 8): TMDB rating of an estimated film, out of 5, one decimal. */
+export function tmdbRatingLine(mean10: number): { visible: string; spoken: string } {
+  const mean = `${Math.floor(mean10 / 10)},${mean10 % 10}`;
+  return { visible: `${mean} · TMDB`, spoken: `note TMDB ${mean} sur 5` };
+}
+
 /** « réalisateur, année »: up to two directors joined with « et ». */
 export function byline(directors: readonly string[], year: number | null): string {
   const who = directors.slice(0, 2).join(' et ');

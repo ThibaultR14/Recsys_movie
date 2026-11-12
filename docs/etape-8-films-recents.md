@@ -1,6 +1,7 @@
 # Étape 8 — Films récents
 
-> **⏸ Arrêt de R3d (12 novembre 2026)** : nouvelle popularité faite et contrôlée ((a), (b) ✅ ; `popularity.bin` et cas du fold-in régénérés, parité verte) ; NDCG@20 à ∞ à 95 % avec la norme D1c, 97,7 % avec un facteur 0,8 (question en section 5, R3d).
+> **⏸ Arrêt de R6 (12 novembre 2026) : essai à l'écran.** Site branché (films estimés dans les listes et le profil, cartes « ★ x,x · TMDB (estimé) », nouvelle popularité) ; parité, tests, Playwright, axe et temps verts ; emplacements de texte pour « comment ça marche » (section 5, R6).
+> Version 0.5 (12 novembre 2026) : **facteur 0,8 sur la norme cible** (D1c ; rétrécissement d'une estimation incertaine) ; nouvelle popularité validée par Thibault.
 > Version 0.4 (12 novembre 2026) : décisions de Thibault à l'arrêt de R3c : popularité par **rang absolu dans l'année, référence 2010-2018**, pour les films estimés et pour les films du catalogue sortis à partir de 2019 (`year_all` ✗ à partir de 2019) ; contrôles (a), (b), (c) ; ρ = 0 (R3b).
 > Version 0.3 (12 novembre 2026) : **décisions de Thibault à l'arrêt de R3** : contenu seul (voisins TMDB et mélange ✗) ; norme cible par tranche de **popularité du curseur** (tranche de votes ✗) ; < 500 votes non recommandables, comptent dans le profil ; popularité référence 2019-2022, contrôle « aucun des 10 films les plus votés de chaque année sous 10 000 » ; ω = 1 ; ρ tranché par une mesure de plus (règle en D4) ; test de clôture contre la vraie direction recalée (D5).
 > Version 0.2 (12 novembre 2026) : **validée par Thibault** avec ses réponses à la section 7 (périmètre 2022 → aujourd'hui, placés à ≥ 50 votes, recommandables à ≥ 100 ; `similar` écarté ; norme cible par tranche de votes TMDB ; fiches des 23 019 films ; seuil de D5 par tranche de votes, tranche < 500 non recommandable si elle échoue ; popularité calée sur les films 2019-2022 du catalogue ; ω mesuré sur la validation ; étape avant la mise en ligne). Version 0.1 (12 novembre 2026) : diagnostic R0 (section 2), décisions proposées.
@@ -152,7 +153,7 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
 
 ### D1c. Norme cible (v0.3)
 
-- L'estimation est ramenée à la **norme médiane des films du catalogue de la même tranche de popularité du curseur** (tranches aux plafonds : < 200, 200-499, 500-999, 1 000-1 999, 2 000-4 999, 5 000-9 999, 10 000-19 999, ≥ 20 000 ; une tranche de moins de 30 films prend la voisine). La popularité est celle de D7. Table dans `model-meta.json`.
+- L'estimation est ramenée à **0,8 × la norme médiane des films du catalogue de la même tranche de popularité du curseur** (v0.5 : facteur 0,8, rétrécissement d'une estimation incertaine : les vecteurs prédits par le contenu pointent vers la direction moyenne, à norme pleine ils envahissent les listes ; réglé sur la validation, R3d ; vérifié une fois sur le test à la clôture) (tranches aux plafonds : < 200, 200-499, 500-999, 1 000-1 999, 2 000-4 999, 5 000-9 999, 10 000-19 999, ≥ 20 000 ; une tranche de moins de 30 films prend la voisine). La popularité est celle de D7. Table dans `model-meta.json`.
 - ✗ **Norme par tranche de votes TMDB** (v0.2) : en R3, les films estimés prenaient 40 % des top 20 au cran 2 000 et 55 % à 500 (2 % du catalogue), NDCG@20 −25 % à ces crans ; avec la popularité du curseur : 10 % et 18 %, NDCG@20 à 96-99 % du vrai.
 
 ### D2. Contenu TMDB → vecteur ALS
@@ -443,6 +444,81 @@ Décisions de Thibault à l'arrêt de R3c : rang absolu dans l'année, référen
 **Critères** (état à l'arrêt) : (a) ✅, (b) ✅ (rang 100 de justesse) ; NDCG@20 de validation à 2 000 et 500 inchangé pour le catalogue ✅ ; films du catalogue, NDCG@20 à ∞ ≥ 97 % avec les films estimés ❌ avec la norme D1c (95,0 %), ✅ avec × 0,8 (97,7 %).
 
 **Question pour Thibault (arrêt de R3d)** : ajouter à D1c un **facteur 0,8 sur la norme cible** (réglé sur la validation, dans `model-meta.json`), qui passe tous les critères ? Sinon : garder la norme D1c et accepter 95 % à ∞, ou une autre forme (par exemple la norme de la tranche de popularité inférieure).
+
+
+### R3d — suite : facteur 0,8 sur la norme (v0.5, décision de Thibault)
+
+**Facteur 0,8 accepté** : la norme cible des films estimés vaut **0,8 × la norme médiane** des films du catalogue de la même tranche de popularité.
+- **Raison** : c'est le rétrécissement d'une estimation incertaine. Les vecteurs prédits par le contenu pointent vers la direction moyenne ; à norme pleine, ils envahissent les listes.
+- Le facteur est réglé sur la validation et écrit dans `model-meta.json` (`estimated.norm_factor`). Il sera vérifié **une seule fois sur le test**, à la clôture.
+
+Pour information (validation, nouvelle popularité ; le choix ne change pas) :
+
+| Facteur | Recall@20 base | NDCG@20 ∞ / 2 000 / 500 | part des estimés dans le top 20 ∞ / 2 000 / 500 |
+|---|---|---|---|
+| 1 | 0,2178 | 0,1553 (95,0 %) / 0,0242 / 0,0068 | 5,3 / 14,0 / 10,4 % |
+| 0,9 | 0,1763 | 0,1577 (96,5 %) / 0,0245 / 0,0068 | 3,9 / 10,6 / 7,8 % |
+| **0,8** | **0,1414** | **0,1598 (97,7 %)** / 0,0248 / 0,0069 | **2,7 / 7,4 / 5,6 %** |
+| 0,7 | 0,1100 | 0,1614 (98,7 %) / 0,0250 / 0,0069 | 1,7 / 4,8 / 3,6 % |
+| 0,6 | 0,0650 | 0,1626 (99,4 %) / 0,0251 / 0,0069 | 0,9 / 2,6 / 2,1 % |
+
+0,8 est le facteur le plus fort qui garde NDCG@20 à ∞ au-dessus de 97 %. À 0,7, Recall@20 = 91 % de la vraie direction recalée (0,1204) ; à 0,6, 54 %.
+
+### R4 — Export (12 novembre 2026)
+
+`recent_films.py estimate` produit `pipeline/data/processed/estimated_films.parquet` et `estimated_vectors.npy` (non versionnés) :
+- **Contenu** (ridge, λ = 100) appris sur les 22 972 films du catalogue qui ont une fiche, vecteurs du **modèle final** ; 22 010 caractéristiques.
+- **Films absents** à ≥ 50 votes : 4 026. **Placés : 3 358** ; il faut au moins 2 éléments parlants connus du modèle (réalisateurs, acteurs, mots-clés vus au moins 3 fois dans le catalogue). **668 ne le sont pas** : leurs réalisateurs, acteurs et mots-clés sont inconnus du catalogue, et ils restent « trop récents ».
+- **Recommandables : 559** (≥ 500 votes).
+- Popularité : rang dans l'année (R3d). Norme : 0,8 × médiane de la tranche de popularité. Normes médianes : estimés 0,0139, catalogue 0,0331.
+
+`export.py` :
+- les films estimés sont **ajoutés après les 23 019 films entraînés** (`item_idx` 23 019 à 26 376, triés par date de sortie puis `tmdb_id`) ;
+- `yty.bin` = YᵀY des **seuls films entraînés** (D6) ;
+- `model-meta.json` : `n_trained`, `estimated` (règle, seuils, λ, `norm_factor`, ρ = 0) et les films non recommandables (estimés sous 500 votes compris) ;
+- `catalog.json` **v3** : `n_trained`, `tmdb_mean` (note TMDB sur 5 × 10), `tmdb_count` ; `ml_mean` / `ml_count` nuls pour les estimés ; genres TMDB traduits en genres MovieLens ;
+- `title-index.json` : titre TMDB (source 0) et titre original des estimés ; `imdb_id` de TMDB pour l'import IMDb.
+
+Résultats :
+- `foldin_cases.json` (hors du dépôt) : **27 cas**, dont 2 nouveaux, `with_estimated` (un vrai historique + 3 estimés recommandables et 3 non recommandables) et `estimated_only`.
+- `export.py verify` : 81 listes top 10 et **216 listes calibrées identiques**, écart des vecteurs 0. `catalog-verify` : 26 377 films, 38 890 clés, aucun titre TMDB sans clé.
+- **Taille de `web/public/data/` : 3,58 Mo gzip** (critère ≤ 3,8 Mo).
+
+### R5 — Moteur (12 novembre 2026)
+
+- **Aucun changement du calcul** : le moteur lit `yty.bin` et la taille des fichiers. ω = 1 (fold-in habituel) et ρ = 0, donc pas de nouveau code de calcul.
+- `workerCore.ts` : une carte d'un film estimé porte `estimated` et `tmdbRating` (`isEstimated` : `item ≥ n_trained`).
+- **Parité** : Vitest rejoue les 27 cas (vecteurs, 81 listes, 216 listes calibrées) ; nouveau `estimated.test.ts` sur les vrais fichiers : films estimés après les entraînés, *Anora* et *The Substance* de l'exemple reconnus et comptés dans le profil, seuls des estimés recommandables proposés.
+- **Temps** (`reco-bench`, médiane de 7) : export A (217 films) 30,4 ms ; 3 000 films 113,7 ms (étape 6c : 123-255 ms) ✅.
+- **Exports réels** (`npx tsx scripts/recent-report.ts`, comptes seulement) :
+
+| Export | Films de l'historique (avant → après) | Films estimés sur 48 par cran (∞ → 200) | dans les 8 premiers |
+|---|---|---|---|
+| Letterboxd A | 188 → **217** (+29 estimés) | 5, 10, 9, 8, 15, 15, 4, 0 | 0, 2, 1, 0, 2, 3, 1, 0 |
+| Letterboxd B | 381 → **491** (112 estimés dans l'historique) | 7, 9, 7, 5, 8, 5, 1, 0 | 3, 4, 2, 0, 2, 0, 1, 0 |
+| exemple | 61 → 63 | 2, 3, 3, 3, 0, 1, 0, 0 | 0, 0, 0, 1, 0, 0, 0, 0 |
+
+### R6 — Interface (12 novembre 2026) — ⏸ arrêt : essai à l'écran
+
+- **Carte d'un film estimé** : « ★ 3,4 · TMDB (estimé) » sous la ligne réalisateur/année (lecteur d'écran : « note TMDB 3,4 sur 5, (estimé) »). Sans note TMDB : « (estimé) » seul. Les tags « encore un … » et « ✱ pépite » s'appliquent ; « ça divise » jamais (pas dans `divisive`) ; « vieux trésor » sans objet.
+- **Exemples synthétiques** (`npm run make-example`) : *Anora* et *The Substance* (2024) sont maintenant reconnus ; l'exemple IMDb prend le vrai id d'*Anora* (fourni par TMDB) au lieu de l'id inventé `tt99000002`. L'exemple ne montre donc plus de « trop récents » ; la règle reste testée par les tests unitaires.
+- **Emplacements de texte** (Claude Web, à cet arrêt ; affichés « [texte à venir : … ] » ; `content.test.ts` non bloquant pendant l'étape, à remettre bloquant à la clôture) :
+  - « comment ça marche », nouvelle section **`#recents`** (après « le curseur ») : `recents.titre`, `recents.pourquoi`, `recents.comment`, `recents.carte`, `recents.limites` ;
+  - `curseur.recents` (une phrase sur la popularité à partir de 2019) ;
+  - `donnees.noteTmdb` (la note TMDB sur les cartes des films estimés) ;
+  - `limites.recents` (remplace « les films sortis après 2023 : nos données s'arrêtent là »).
+  - Phrase de l'écran d'analyse « N films sont sortis après 2023 : trop récents pour nous, désolé. » : gardée, elle reste juste pour les films non placés ; à reformuler si tu veux.
+- **Tests** :
+  - Vitest **280/280**, dont les tests de la carte d'un film estimé ; `tsc`, ESLint, Prettier, `build` verts ; pytest 274/274.
+  - **Playwright 13/13** (parcours, téléphone simulé, réseau : aucune requête nouvelle, stockage, **axe 0 dans les deux thèmes**) ; **changement de cran : médiane 33 ms** (max 35) ; modèle prêt 674 ms ; analyse 9 ms.
+
+**Critères** (état à l'arrêt) :
+- Moteur : parité Python / TypeScript à l'identique ✅.
+- Temps ✅ ; taille ✅ ; licences ✅ (rien d'IMDb dans `web/public/data/`) ; qualité du code ✅.
+- Exports réels : les films « trop récents » retrouvés dans `discover` sont reconnus, sauf ceux qui ne sont pas placés (sur l'export A : 29 films estimés dans l'historique, pour 30 retrouvés en R0) ✅.
+- Restent pour la clôture : les textes, le test (une seule fois) et l'essai sur un vrai téléphone.
+
+**À voir à l'écran** (`npm run dev`, ton export A) : les cartes « (estimé) » (aux crans 20 000, 2 000 et 1 000, 1 à 3 dans les 8 premières), la section `#recents` de « comment ça marche » (textes à venir) et l'écran d'analyse (les films de 2024-2025 reconnus).
 
 ---
 

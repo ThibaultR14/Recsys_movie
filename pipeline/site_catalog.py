@@ -17,6 +17,12 @@ catalog.json v2 (step 6b, D5): `ml_mean` (MovieLens mean rating x 10, int) and `
 manual_overrides.csv; the site never recommends one film of a pair once the other is seen.
 `divisive` (step 6c, Q6): sorted item_idx of the « ça divise » films (10 % most dispersed
 MovieLens ratings, shrunk std); aggregates only.
+
+catalog.json v3 (step 8): the estimated films (TMDB films missing from MovieLens) follow the
+trained ones, from item_idx `n_trained` on; their `ml_mean` / `ml_count` are null and
+`tmdb_mean` / `tmdb_count` (TMDB rating out of 5 x 10, number of TMDB votes; one value per
+estimated film, in item order) give the « ★ 3,4 · TMDB » line. Their genres are TMDB genres
+translated to MovieLens genres (`recent_films.TMDB_TO_ML_GENRE`).
 """
 
 from __future__ import annotations
@@ -48,7 +54,7 @@ CATALOG_COLUMNS = [
     "ml_rating_count",
 ]
 
-CATALOG_JSON_VERSION = 2  # v2 (step 6b, D5): ml_mean, ml_count
+CATALOG_JSON_VERSION = 3  # v2 (step 6b, D5): ml_mean, ml_count; v3 (step 8): estimated films
 
 
 def mean_x10(mean: float | None) -> int | None:
@@ -123,11 +129,46 @@ def divisive_items(std: np.ndarray, n: np.ndarray, share: float = DIVISIVE_TOP_S
     return [int(i) for i in np.flatnonzero(s >= threshold)]
 
 
+def estimated_frame(est: pl.DataFrame, n_trained: int, schema: pl.Schema) -> pl.DataFrame:
+    """Rows of the estimated films (step 8) with the catalogue columns, item_idx from n_trained."""
+    rows = []
+    for k, r in enumerate(est.iter_rows(named=True)):
+        rows.append(
+            {
+                "item_idx": n_trained + k,
+                "movie_id": None,
+                "tmdb_title": r["title"],
+                "tmdb_original_title": r["original_title"],
+                "ml_title": "",
+                "year": r["year"],
+                "ml_year": None,
+                "tmdb_id": r["tmdb_id"],
+                "imdb_id": r["imdb_id"],
+                "imdb_id_aliases": [],
+                "tmdb_directors": list(r["director_names"] or []),
+                "poster_path": r["poster_path"],
+                "ml_genres": list(r["ml_genres"] or []),
+                "ml_mean_rating": None,
+                "ml_rating_count": None,
+            }
+        )
+    return pl.DataFrame(rows, schema=schema)
+
+
+def tmdb_mean_x10(vote_average: float | None) -> int | None:
+    """TMDB rating out of 10 -> out of 5 x 10, rounded half up: 6.85 -> 3.425 -> 34 (« 3,4 »)."""
+    if vote_average is None:
+        return None
+    return math.floor(vote_average * 5 + 0.5)
+
+
 def build_catalog_json(
     cat: pl.DataFrame,
     manual_titles: dict[int, str] | None = None,
     versions: list[list[int]] | None = None,
     divisive: list[int] | None = None,
+    n_trained: int | None = None,
+    estimated: pl.DataFrame | None = None,
 ) -> dict:
     manual = manual_titles or {}
     rows = cat.to_dicts()
@@ -162,6 +203,12 @@ def build_catalog_json(
         "version_of": versions or [],
         # « ça divise » card tag (step 6c, Q6): sorted item_idx
         "divisive": divisive or [],
+        # Estimated films (step 8): item_idx >= n_trained; TMDB rating on their cards
+        "n_trained": len(rows) if n_trained is None else n_trained,
+        "tmdb_mean": []
+        if estimated is None
+        else [tmdb_mean_x10(v) for v in estimated["vote_average"].to_list()],
+        "tmdb_count": [] if estimated is None else estimated["vote_count"].to_list(),
     }
 
 

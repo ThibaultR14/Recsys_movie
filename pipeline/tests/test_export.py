@@ -5,8 +5,9 @@ import pytest
 
 import export
 
-# synthetic cases: single_film, all_ties (step 4); version_seen, ties_at_threshold, guard_small (6c)
-N_SYNTHETIC = 5
+# synthetic cases: single_film, all_ties (step 4); version_seen, ties_at_threshold,
+# guard_small (6c); with_estimated, estimated_only (step 8)
+N_SYNTHETIC = 7
 
 
 def test_quantize_by_hand_and_zero_row():

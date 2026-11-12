@@ -47,7 +47,8 @@ def test_catalog_json_columns_and_sparse_fields():
     assert c["imdb_id_aliases"] == {"1": ["tt9999999"]}
     assert c["genre_names"] == ["Comedy", "Crime", "Romance", "Thriller"]
     assert c["genres"] == [[1, 3], [], [0, 2]]
-    assert c["v"] == 2
+    assert c["v"] == 3
+    assert c["n_trained"] == 3 and c["tmdb_mean"] == [] and c["tmdb_count"] == []
     assert c["ml_mean"] == [43, 39, 38]  # x 10, half up
     assert c["ml_count"] == [102929, 20, 1240]
 
@@ -176,3 +177,32 @@ def test_divisive_items_are_the_top_share_sorted():
     assert min(s[out]) >= max(np.delete(s, out))  # exactly the most dispersed ones
     assert sc.build_catalog_json(frame(), None, None, [2])["divisive"] == [2]
     assert sc.build_catalog_json(frame())["divisive"] == []
+
+
+def test_estimated_films_follow_the_trained_ones():
+    cat = frame()
+    est = pl.DataFrame(
+        {
+            "tmdb_id": [1001],
+            "title": ["Un film récent"],
+            "original_title": ["Ein neuer Film"],
+            "year": [2025],
+            "imdb_id": ["tt30000001"],
+            "director_names": [["A. Réalisatrice"]],
+            "poster_path": ["/c.jpg"],
+            "ml_genres": [["Drama"]],
+            "vote_average": [6.85],
+            "vote_count": [812],
+        }
+    )
+    full = pl.concat([cat, sc.estimated_frame(est, cat.height, cat.schema)])
+    c = sc.build_catalog_json(full, n_trained=cat.height, estimated=est)
+    assert c["n"] == 4 and c["n_trained"] == 3
+    assert c["title"][3] == "Un film récent" and c["original_title"]["3"] == "Ein neuer Film"
+    assert c["ml_mean"][3] is None and c["ml_count"][3] is None
+    assert c["tmdb_mean"] == [34] and c["tmdb_count"] == [812]  # 6.85 / 2 = 3.425 -> « 3,4 »
+    assert c["genres"][3] == [c["genre_names"].index("Drama")]
+    idx = sc.build_title_index(full)
+    keys = {k for k, post in zip(idx["keys"], idx["post"], strict=True) if 4 * 3 in post}
+    assert keys == {"un film recent"}  # TMDB title as source 0
+    assert sc.tmdb_mean_x10(None) is None

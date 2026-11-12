@@ -56,7 +56,11 @@ from config import (  # noqa: E402
     WEB_DATA,
 )
 from models import als  # noqa: E402
-from recent_films import DISCOVER_PARQUET  # noqa: E402
+from recent_films import (  # noqa: E402
+    DISCOVER_PARQUET,
+    ESTIMATED_PARQUET,
+    ESTIMATED_VECTORS,
+)
 
 FINAL_CONFIG = {"factors": 64, "regularization": 0.05, "alpha": 1.0, "beta": 1.0, "iterations": 30}
 # Fold-in of the site's user (step 6c, D2): rated films with percentile < 0.3 left out, unless
@@ -368,8 +372,11 @@ def fixture_cases(
     recommendable: np.ndarray,
     popularity: np.ndarray,
     movie_ids: np.ndarray,
+    genres: list[list[int]],
+    n_trained: int,
 ) -> list[dict]:
-    """20 real test histories (random, SEED) + 2 synthetic edge cases, from the exported data."""
+    """20 real test histories (random, SEED) + synthetic edge cases, from the exported data.
+    `movie_ids`: per item_idx (estimated films: -tmdb_id)."""
     catalog = ev.load_catalog()
     eval_set = ev.load_eval_set("test", catalog)
     sizes = np.diff(eval_set.foldin.indptr)
@@ -404,9 +411,29 @@ def fixture_cases(
         histories.append(
             ("version_seen", np.array([a, *first[:4]]), np.array([5, 4, 3, 2, 1], dtype=np.float32))
         )
+    # step 8 (D6): estimated films in the history (vector estimated from TMDB, omega = 1),
+    # recommendable or not (>= 500 votes), next to a real history; and a profile of them only
+    est = np.arange(n_trained, len(Y))
+    if len(est) >= 6:
+        est_rec = est[recommendable[est]][:3]
+        est_low = est[~recommendable[est]][:3]
+        base_items, base_ratings = histories[0][1], histories[0][2]
+        histories.append(
+            (
+                "with_estimated",
+                np.concatenate([base_items, est_rec, est_low]),
+                np.concatenate([base_ratings, np.array([5, 4.5, 4, 3.5, 3, 1], np.float32)]),
+            )
+        )
+        histories.append(
+            (
+                "estimated_only",
+                np.concatenate([est_rec, est_low]),
+                np.array([5, 4, 3, 2.5, 2, 1], dtype=np.float32),
+            )
+        )
     import calibration as cal
 
-    genres = cal.genre_lists()
     cfg = FINAL_CONFIG
     cases = []
     for name, items, ratings in histories:
@@ -475,6 +502,54 @@ def file_sizes(folder: Path) -> dict:
     return out
 
 
+def site_items(catalog: ev.Catalog) -> dict:
+    """Items of the site: the trained films (item_idx 0..n_trained-1, order saved at training),
+    then the estimated films of step 8 (`recent_films.py estimate`), if present. YᵀY only ever
+    covers the trained films (D6)."""
+    import calibration as cal
+
+    movie_ids = trained_movie_ids(catalog)
+    Y = np.load(FINAL_FACTORS)  # noqa: N806
+    pop, pop_info = popm.production_popularity_v8(ev.CATALOG_PARQUET, DISCOVER_PARQUET)
+    rec = catalog.recommendable.copy()
+    genres = cal.genre_lists()
+    n_trained = len(Y)
+    ext_ids = movie_ids.astype(np.int64)
+    est = None
+    if ESTIMATED_PARQUET.exists():
+        est = pl.read_parquet(ESTIMATED_PARQUET)
+        vec = np.load(ESTIMATED_VECTORS)
+        assert len(vec) == est.height, "estimated_vectors.npy != estimated_films.parquet"
+        Y = np.vstack([Y, vec.astype(Y.dtype)])  # noqa: N806
+        pop = np.concatenate([pop, est["popularity"].to_numpy().astype(np.int64)])
+        rec = np.concatenate([rec, est["recommendable"].to_numpy()])
+        names = sorted(
+            {
+                g
+                for gs in pl.read_parquet(ev.CATALOG_PARQUET, columns=["ml_genres"])[
+                    "ml_genres"
+                ].to_list()
+                for g in (gs or [])
+                if g != cal.NO_GENRE
+            }
+        )
+        col = {g: j for j, g in enumerate(names)}
+        genres = genres + [sorted(col[g] for g in gs) for gs in est["ml_genres"].to_list()]
+        # estimated films have no MovieLens id: -tmdb_id in the fixtures only
+        ext_ids = np.concatenate([ext_ids, -est["tmdb_id"].to_numpy().astype(np.int64)])
+    return {
+        "Y": Y,
+        "popularity": pop,
+        "pop_info": pop_info,
+        "recommendable": rec,
+        "genres": genres,
+        "movie_ids": movie_ids,
+        "ext_ids": ext_ids,
+        "n_trained": n_trained,
+        "estimated": est,
+    }
+
+
 def trained_movie_ids(catalog: ev.Catalog) -> np.ndarray:
     """item_idx -> movie_id order saved at training; refuse to export if the catalogue moved."""
     if not FINAL_MOVIE_IDS.exists():
@@ -489,19 +564,44 @@ def fixture_path(out_dir: Path) -> Path:
     return WEB_FIXTURE if out_dir == WEB_DATA else out_dir / FIXTURE_NAME
 
 
+def estimated_meta(est: pl.DataFrame | None, n_trained: int) -> dict:
+    """model-meta.json `estimated` (step 8): where the estimated films start and how."""
+    from recent_films import CONTENT_LAMBDA, MIN_VOTES, MIN_VOTES_RECOMMENDABLE_V03, NORM_FACTOR
+
+    return {
+        "first_item_idx": int(n_trained),
+        "n": 0 if est is None else int(est.height),
+        "n_recommendable": 0 if est is None else int(est["recommendable"].sum()),
+        "rule": "step 8 (docs/etape-8-films-recents.md): TMDB films missing from MovieLens, "
+        "released since 2022; vector = mean + ridge prediction from TMDB content (directors, "
+        "5 first actors, genres, keywords, language, countries, decade, votes, rating), "
+        "rescaled to norm_factor x the median norm of the trained films of the same slider "
+        "popularity bin; never in yty.bin; counted in the fold-in like any film (omega = 1)",
+        "min_votes_placed": MIN_VOTES,
+        "min_votes_recommendable": MIN_VOTES_RECOMMENDABLE_V03,
+        "content_lambda": CONTENT_LAMBDA,
+        "norm_factor": NORM_FACTOR,
+        "norm_factor_why": "shrinkage of an uncertain estimate: content predictions point to "
+        "the mean direction; at full norm they flood the lists (R3d)",
+        "quality_penalty_rho": 0.0,
+    }
+
+
 def cmd_export(out_dir: Path) -> None:
     if out_dir == WEB_DATA:
         print("writing to web/public/data/ (explicit request)")
     catalog = ev.load_catalog()
-    movie_ids = trained_movie_ids(catalog)
-    year_pop, pop_info = popm.production_popularity_v8(ev.CATALOG_PARQUET, DISCOVER_PARQUET)
-    assert year_pop.max() < 2**32
-    popularity = year_pop.astype(np.uint32)
-    Y = np.load(FINAL_FACTORS)
+    items = site_items(catalog)
+    movie_ids, n_trained, est = items["movie_ids"], items["n_trained"], items["estimated"]
+    pop_info = items["pop_info"]
+    assert items["popularity"].max() < 2**32
+    popularity = items["popularity"].astype(np.uint32)
+    Y = items["Y"]
     info = json.loads(FINAL_INFO.read_text())
     q, scales = quantize(Y)
     Yq = dequantize(q, scales)
-    yty32 = (Yq.astype(np.float64).T @ Yq.astype(np.float64)).astype("<f4")
+    Yt = Yq[:n_trained].astype(np.float64)  # noqa: N806
+    yty32 = (Yt.T @ Yt).astype("<f4")  # D6: trained films only
 
     out_dir.mkdir(parents=True, exist_ok=True)
     write_embeddings(out_dir / "embeddings.bin", q, scales)
@@ -513,6 +613,7 @@ def cmd_export(out_dir: Path) -> None:
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "model": "ALS (implicit 0.7.3), configuration A, trained on all MovieLens users",
         "n_items": int(len(Y)),
+        "n_trained": int(n_trained),
         "dims": int(Y.shape[1]),
         "factors": cfg["factors"],
         "regularization": cfg["regularization"],
@@ -565,7 +666,8 @@ def cmd_export(out_dir: Path) -> None:
             "positions": list(SLIDER_POSITIONS),
         },
         "movie_ids": movie_ids.tolist(),
-        "non_recommendable_item_idx": np.flatnonzero(~catalog.recommendable).tolist(),
+        "estimated": estimated_meta(est, n_trained),
+        "non_recommendable_item_idx": np.flatnonzero(~items["recommendable"]).tolist(),
         "data_version": {
             "catalog_sha256": info["catalog_sha256"],
             "ratings_sha256": info["ratings_sha256"],
@@ -586,7 +688,13 @@ def cmd_export(out_dir: Path) -> None:
     Yr = dequantize(q2, s2)
     yty = read_yty(out_dir / "yty.bin", Y.shape[1]).astype(np.float64)
     cases = fixture_cases(
-        Yr, yty, catalog.recommendable, read_popularity(out_dir / "popularity.bin"), movie_ids
+        Yr,
+        yty,
+        items["recommendable"],
+        read_popularity(out_dir / "popularity.bin"),
+        items["ext_ids"],
+        items["genres"],
+        n_trained,
     )
     fixture = {
         "description": "Fold-in reference cases for the TypeScript implementation (step 4). "
@@ -619,18 +727,24 @@ def cmd_verify(out_dir: Path) -> dict:
     meta = json.loads((out_dir / "model-meta.json").read_text())
     assert_web_safe(meta, "model-meta.json")
     q, scales = read_embeddings(out_dir / "embeddings.bin")
-    Y = np.load(FINAL_FACTORS)
+    items = site_items(ev.load_catalog())
+    Y = items["Y"]  # noqa: N806
+    n_trained = items["n_trained"]
+    assert meta["n_trained"] == n_trained
     q0, s0 = quantize(Y)
     assert np.array_equal(q, q0) and np.array_equal(scales, s0), "embeddings.bin != quantised model"
     Yq = dequantize(q, scales)
     assert np.array_equal(Yq, dequantize(q0, s0)), "read-back vectors differ"
     yty = read_yty(out_dir / "yty.bin", meta["dims"])
-    expected = (Yq.astype(np.float64).T @ Yq.astype(np.float64)).astype("<f4")
-    assert np.array_equal(yty, expected), "yty.bin != YᵀY of the dequantised vectors"
+    Yt = Yq[:n_trained].astype(np.float64)  # noqa: N806
+    expected = (Yt.T @ Yt).astype("<f4")
+    assert np.array_equal(yty, expected), "yty.bin != YᵀY of the dequantised trained vectors"
     pop = read_popularity(out_dir / "popularity.bin")
-    assert len(pop) == meta["n_items"] == len(meta["movie_ids"]) == len(Y)
-    expected_pop, pop_info = popm.production_popularity_v8(ev.CATALOG_PARQUET, DISCOVER_PARQUET)
-    assert np.array_equal(pop, expected_pop.astype(np.uint32)), "popularity.bin != formula"
+    assert len(pop) == meta["n_items"] == len(Y)
+    assert len(meta["movie_ids"]) == n_trained
+    pop_info = items["pop_info"]
+    assert np.array_equal(pop, items["popularity"].astype(np.uint32)), "popularity.bin != formula"
+    assert meta["estimated"] == estimated_meta(items["estimated"], n_trained)
     assert meta["popularity"]["r"] == pop_info["r_ref"]
     assert meta["popularity"]["year_factors"] == pop_info["factors"]
     assert meta["popularity"]["rank_rule"]["first_year"] == pop_info["rank_first_year"]
@@ -640,9 +754,7 @@ def cmd_verify(out_dir: Path) -> dict:
     rec[meta["non_recommendable_item_idx"]] = False
     cfg = fixture["config"]
     partners = version_partners(np.array(meta["movie_ids"]))
-    import calibration as cal
-
-    genres = cal.genre_lists()
+    genres = items["genres"]
     assert meta["calibration"] == calibration_meta(), "model-meta.json calibration"
     max_vec_err, n_tops, n_cal = 0.0, 0, 0
     for case in fixture["cases"]:
@@ -717,6 +829,16 @@ def catalog_divisive(cat: pl.DataFrame) -> list[int]:
     return sc.divisive_items(disp["std"].to_numpy(), disp["n"].to_numpy())
 
 
+def site_catalog_frame(cat: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame | None]:
+    """Catalogue frame of the site: trained films, then the estimated films (step 8)."""
+    import site_catalog as sc
+
+    if not ESTIMATED_PARQUET.exists():
+        return cat, None
+    est = pl.read_parquet(ESTIMATED_PARQUET)
+    return pl.concat([cat, sc.estimated_frame(est, cat.height, cat.schema)]), est
+
+
 def cmd_catalog(out_dir: Path) -> dict:
     """catalog.json + title-index.json (step 3, D2/D3), in the item order saved at training, with
     the manual display titles (`title` action of manual_overrides.csv, step 5 D7)."""
@@ -730,11 +852,13 @@ def cmd_catalog(out_dir: Path) -> dict:
     manual = sc.title_overrides(cat, overrides)
     versions = sc.version_pairs(cat, overrides)
     divisive = catalog_divisive(cat)
+    full, est = site_catalog_frame(cat)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_compact_json(
-        out_dir / "catalog.json", sc.build_catalog_json(cat, manual, versions, divisive)
+        out_dir / "catalog.json",
+        sc.build_catalog_json(full, manual, versions, divisive, cat.height, est),
     )
-    write_compact_json(out_dir / "title-index.json", sc.build_title_index(cat, manual))
+    write_compact_json(out_dir / "title-index.json", sc.build_title_index(full, manual))
     sizes = file_sizes(out_dir)
     total = sum(v["gzip_bytes"] for v in sizes.values())
     report = {
@@ -767,8 +891,14 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
     for col in (*cols, "ml_mean", "ml_count"):
         assert len(cat_json[col]) == n, col
     assert cat_json["v"] == sc.CATALOG_JSON_VERSION
-    assert all(isinstance(m, int) and 5 <= m <= 50 for m in cat_json["ml_mean"]), "ml_mean"
-    assert all(isinstance(c, int) and c >= 1 for c in cat_json["ml_count"]), "ml_count"
+    nt = cat_json["n_trained"]
+    assert nt == meta["n_trained"] and len(cat_json["tmdb_mean"]) == n - nt
+    assert len(cat_json["tmdb_count"]) == n - nt
+    ml_mean, ml_count = cat_json["ml_mean"], cat_json["ml_count"]
+    assert all(isinstance(m, int) and 5 <= m <= 50 for m in ml_mean[:nt]), "ml_mean"
+    assert all(isinstance(c, int) and c >= 1 for c in ml_count[:nt]), "ml_count"
+    assert all(m is None for m in ml_mean[nt:]) and all(c is None for c in ml_count[nt:])
+    assert all(m is None or 0 <= m <= 50 for m in cat_json["tmdb_mean"]), "tmdb_mean"
     assert index["keys"] == sorted(set(index["keys"])) and len(index["keys"]) == len(index["post"])
     where: dict[int, dict[str, int]] = {}
     for key, post in zip(index["keys"], index["post"], strict=True):
@@ -776,8 +906,9 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
             assert 0 <= code // 4 < n
             where.setdefault(code // 4, {})[key] = code % 4
     cat = sc.load_catalog_frame(ev.CATALOG_PARQUET)
+    full, _ = site_catalog_frame(cat)
     missing = 0
-    for r in cat.iter_rows(named=True):
+    for r in full.iter_rows(named=True):
         key = normalize_title(r["tmdb_title"]) if r["tmdb_title"] else None
         if key and where.get(r["item_idx"], {}).get(key) != sc.SRC_TMDB:
             missing += 1
@@ -786,7 +917,7 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
     assert cat_json["version_of"] == sc.version_pairs(cat, overrides), "version_of"
     assert all(0 <= i < n for pair in cat_json["version_of"] for i in pair), "version_of"
     assert cat_json["divisive"] == catalog_divisive(cat), "divisive"
-    assert abs(len(cat_json["divisive"]) - sc.DIVISIVE_TOP_SHARE * n) <= 0.01 * n, "divisive share"
+    assert abs(len(cat_json["divisive"]) - sc.DIVISIVE_TOP_SHARE * nt) <= 0.01 * nt, "divisive"
     manual_bad = [
         i
         for i, t in manual.items()

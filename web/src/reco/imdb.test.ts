@@ -41,20 +41,20 @@ describe.skipIf(!ready)('IMDb example export (real files)', () => {
     });
     if (!imp.ok) throw new Error(imp.error);
     const { summary, unrecognized } = imp.result as ImportResult;
-    expect(summary.nEntries).toBe(68);
+    expect(summary.nEntries).toBe(69);
     expect(summary.counts).toMatchObject({
-      exact: 63,
+      exact: 65, // Anora and The Substance by id: estimated films (step 8)
       ambiguous: 1,
-      not_found: 4,
+      not_found: 3,
       probable_fuzzy: 0,
       probable_variant: 0,
     });
-    expect(summary.nHistoryFilms).toBe(63);
+    expect(summary.nHistoryFilms).toBe(65);
 
     const groups = groupUnrecognized(unrecognized);
     expect(groups.toVerify.map((u) => [u.title, u.byTitle])).toEqual([[CHERBOURG, true]]);
     expect(groups.nonFilm.map((u) => u.title)).toEqual(['Chernobyl', 'Twin Peaks', 'Pilote']);
-    expect(groups.tooRecent.map((u) => u.title)).toEqual(['Anora']);
+    expect(groups.tooRecent).toEqual([]);
     expect(groups.notInCatalog).toEqual([]);
 
     const cherbourg = groups.toVerify[0]!;
@@ -68,7 +68,7 @@ describe.skipIf(!ready)('IMDb example export (real files)', () => {
       return { res, items: new Set(res.positions.flatMap((p) => p.films.map((f) => f.item))) };
     };
     const before = await recommended(3);
-    expect(before.res.nHistory).toBe(63);
+    expect(before.res.nHistory).toBe(65);
     expect(before.items.has(candidate.item)).toBe(false); // excluded, not in the fold-in
 
     const conf = await handle({
@@ -76,9 +76,9 @@ describe.skipIf(!ready)('IMDb example export (real files)', () => {
       type: 'confirm',
       choices: { [cherbourg.index]: candidate.item },
     });
-    expect(conf.ok && conf.result).toMatchObject({ nHistoryFilms: 64 });
+    expect(conf.ok && conf.result).toMatchObject({ nHistoryFilms: 66 });
     const after = await recommended(5);
-    expect(after.res.nHistory).toBe(64);
+    expect(after.res.nHistory).toBe(66);
     expect(after.items.has(candidate.item)).toBe(false);
     // no network beyond the site's own /data/ files (D9)
     expect(urls.length).toBeGreaterThan(0);

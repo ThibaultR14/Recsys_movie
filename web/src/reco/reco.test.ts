@@ -220,7 +220,7 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
     );
 
   it('uses the same model files as the fixture', () => {
-    expect(fixture!.cases).toHaveLength(25); // 22 + version_seen, ties_at_threshold, guard_small (6c)
+    expect(fixture!.cases).toHaveLength(27); // 22 + 3 cases of 6c + with_estimated, estimated_only (8)
     expect(fixture!.embeddings_sha256).toBe(engine!.model.meta.embeddings_sha256);
   });
 
@@ -243,7 +243,7 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
     expect(worst).toBeLessThanOrEqual(1e-14);
   });
 
-  it('75 top-10 lists identical (item_idx and order), scores within 1e-14', () => {
+  it('81 top-10 lists identical (item_idx and order), scores within 1e-14', () => {
     const model = engine!.model;
     let lists = 0;
     let worst = 0;
@@ -266,11 +266,11 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
       }
     }
     console.info(`top-10 lists: ${lists} identical, max |Δscore| = ${worst.toExponential(2)}`);
-    expect(lists).toBe(75);
+    expect(lists).toBe(81);
     expect(worst).toBeLessThanOrEqual(1e-14);
   });
 
-  it('200 calibrated lists identical to Python (step 6c, D1: share mode, λ per position)', () => {
+  it('216 calibrated lists identical to Python (step 6c, D1: share mode, λ per position)', () => {
     const model = engine!.model;
     const cal = model.meta.calibration!;
     expect(cal.lambda_by_position).toEqual([0.1, 0.1, 0.1, 0.9, 0.9, 0.9, 0.9, 0.9]);
@@ -300,7 +300,7 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
         lists++;
       }
     }
-    expect(lists).toBe(200);
+    expect(lists).toBe(216);
   });
 
   it('recommend(): never a seen, excluded or non-recommendable film', () => {

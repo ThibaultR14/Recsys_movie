@@ -5,6 +5,7 @@ import {
   POSTER_BASE,
   byline,
   ratingLine,
+  tmdbRatingLine,
   cardRotation,
   tagLabel,
   type CardTag,
@@ -30,6 +31,22 @@ function PublicRating({ mean10, count }: { mean10: number; count: number }) {
     <span className="text-[13px] text-muted" data-testid="public-rating">
       <span aria-hidden="true">★ {visible}</span>
       <span className="sr-only">{spoken}</span>
+    </span>
+  );
+}
+
+/** Step 8: « ★ 3,4 · TMDB (estimé) » on the card of an estimated film. */
+function EstimatedRating({ mean10 }: { mean10: number | null }) {
+  const line = mean10 === null ? null : tmdbRatingLine(mean10);
+  return (
+    <span className="text-[13px] text-muted" data-testid="estimated-rating">
+      {line && (
+        <>
+          <span aria-hidden="true">★ {line.visible} </span>
+          <span className="sr-only">{line.spoken}, </span>
+        </>
+      )}
+      <span className="italic">(estimé)</span>
     </span>
   );
 }
@@ -73,6 +90,7 @@ export function FilmCard({ film, tag, seriesOf, because }: FilmCardProps) {
         <span className="text-[16px] leading-tight font-bold">{film.title}</span>
         <span className="text-[13px] text-muted">{byline(film.directors, film.year)}</span>
         {film.publicRating && <PublicRating {...film.publicRating} />}
+        {film.estimated && <EstimatedRating mean10={film.tmdbRating?.mean10 ?? null} />}
         {isDocumentary(film.genres) && (
           <span className="text-[13px] text-muted italic">documentaire</span>
         )}

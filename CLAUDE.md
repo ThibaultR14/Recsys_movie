@@ -149,6 +149,7 @@ npm run reco-report -- test-data/exports/<export>  # top 20 à ∞ / 2 000 / 500
 npm run reco-bench -- [--export <export>]          # temps du moteur
 npm run make-example        # régénère public/exemple/letterboxd-exemple.zip et imdb-exemple.csv (synthétiques ; l'IMDb lit public/data) ; --check : statuts
 npm run spectacles          # heuristique « spectacle » → docs/figures/etape-5-spectacles.md
+npx tsx scripts/recent-report.ts <export>   # étape 8 : films estimés dans l'historique et par cran (comptes seulement)
 npx playwright install chromium   # une fois
 npm run e2e                 # Playwright (build + vite preview, port 4173) : parcours, téléphone, réseau, stockage, axe, temps
 ```
@@ -177,6 +178,8 @@ uv run python recent_films.py collect      # /discover 2010 -> aujourd'hui + fic
 uv run python recent_films.py table        # data/processed/tmdb_films.parquet + accord des genres TMDB / MovieLens
 uv run python recent_films.py popularity [--rule percentile|rank] [--ref 2019-2022]   # popularité D7 des films absents + contrôle v0.3 (comparaisons R3c)
 uv run python recent_films.py popularity-check   # règle retenue (R3d) : contrôles (a) (b) (c) + docs/figures/etape8-popularite-rangs.png
+uv run python recent_films.py estimate     # films estimés du site (contenu, norme × 0,8, popularité) → data/processed/estimated_*
+# puis export.py export [--out web] et export.py catalog [--out web] (films estimés après les films entraînés)
 uv run python recent_eval.py retrain       # ALS sans les films 2022-2023 (~3 min)
 uv run python recent_eval.py run [--only "contenu;popularité"] [--tag T] [--pop rank|old]   # faux départ à froid, validation (~8 min)
 ```

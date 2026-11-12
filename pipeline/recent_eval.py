@@ -498,7 +498,7 @@ def variants() -> list[Variant]:
                 f"contenu ×{cs_:g}, norme pop.", params=replace(ct, content_scale=cs_), norm_by=pp
             )
         )
-    for ns in (0.8, 0.6):
+    for ns in (0.9, 0.8, 0.7, 0.6):
         out.append(
             Variant(f"contenu, norme pop. ×{ns:g}", params=replace(ct, norm_scale=ns), norm_by=pp)
         )

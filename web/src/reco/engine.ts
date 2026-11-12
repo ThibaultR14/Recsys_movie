@@ -38,6 +38,11 @@ export interface CatalogFile {
   version_of?: [number, number][];
   /** Step 6c (Q6): sorted item_idx of the « ça divise » films (most dispersed MovieLens ratings). */
   divisive?: number[];
+  /** v3 (step 8): items >= n_trained are estimated films (TMDB films missing from MovieLens). */
+  n_trained?: number;
+  /** v3 (step 8): TMDB rating out of 5 x 10 (34 = 3,4) and votes, one per estimated film. */
+  tmdb_mean?: (number | null)[];
+  tmdb_count?: number[];
 }
 
 export interface Engine {

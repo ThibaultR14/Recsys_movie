@@ -79,8 +79,8 @@ const FILMS: [string, number, number | null][] = [
   ['Milk', 2008, 4], // ambiguous
   ['Dr. Strangelove', 1964, 4.5], // probable_fuzzy
   ["Harry Potter and the Sorcerer's Stone", 2001, 2.5],
-  ['Anora', 2024, 4], // after 2023
-  ['The Substance', 2024, 3.5], // after 2023
+  ['Anora', 2024, 4], // after 2023: an estimated film since step 8
+  ['The Substance', 2024, 3.5], // after 2023: an estimated film since step 8
   ['Chernobyl', 2019, 4.5], // TV series
 ];
 
@@ -132,7 +132,6 @@ const IMDB_HEADER =
 const IMDB_SPECIAL: [string, string, string, string, number, number | null][] = [
   // id not in the catalogue, title in it (via Original Title): « à vérifier », never automatic
   ['tt99000001', 'Die Regenschirme von Cherbourg', 'Les Parapluies de Cherbourg', 'Film', 1964, 9],
-  ['tt99000002', 'Anora', 'Anora', 'Film', 2024, 8], // after 2023
   ['tt99000003', 'Chernobyl', 'Chernobyl', 'Série télévisée', 2019, 9], // not a film (mini-series: French label not seen yet)
   ['tt99000004', 'Twin Peaks', 'Twin Peaks', 'Série télévisée', 1990, 9], // not a film
   ['tt99000005', 'Pilote', 'Pilot', 'Épisode télévisé', 1990, 8], // not a film
@@ -157,7 +156,7 @@ const engine = await loadEngine(
 const imdbRows = [IMDB_HEADER];
 let nById = 0;
 FILMS.forEach(([title, year, rating], i) => {
-  if (year >= 2024 || title === 'Chernobyl') return; // replaced by the IMDb test rows
+  if (title === 'Chernobyl') return; // replaced by the IMDb test rows
   const t = IMDB_TITLE[title] ?? title;
   const r = engine.matcher.match(t, year);
   const item = r.item ?? r.candidates[0]?.item; // « Milk »: the most popular of the two

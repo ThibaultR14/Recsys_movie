@@ -28,16 +28,15 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   // analysis
   await page.getByRole('link', { name: 'montre-moi un exemple →' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('on a lu tes 66 films.');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('on en a reconnu 61.');
-  await expect(
-    page.getByText('2 films sont sortis après 2023 : trop récents pour nous, désolé.'),
-  ).toBeVisible();
+  // Anora and The Substance (2024) are estimated films since step 8: recognised
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('on en a reconnu 63.');
+  await expect(page.getByText(/trop récent/)).toHaveCount(0);
   expect(await violationsBothThemes(page), 'axe: analyse').toEqual([]);
   await settle(page);
   await page.screenshot({ path: `${SHOTS}/2-analyse.png`, fullPage: true });
   const milk = page.getByRole('group', { name: 'dans ton fichier : « Milk » (2008)' });
   await milk.getByRole('radio').first().check();
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('on en a reconnu 62.');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('on en a reconnu 64.');
   await page.getByRole('button', { name: 'voir mes films' }).click();
 
   // results: start at 2 000, 8 cards
@@ -62,6 +61,9 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   // « ✱ pépite »: at most one stamp per block of 8 cards (D6); counts recorded at ∞, 2 000, 500
   const stamps = () => page.getByText('✱ pépite').count();
   const stampCounts: Record<string, number> = { '2000': await stamps() };
+  // estimated films (step 8): cards « (estimé) » per notch, recorded only
+  const estimated = () => page.getByTestId('estimated-rating').count();
+  const estimatedCounts: Record<string, number> = { '2000': await estimated() };
 
   // slider on 3 notches with the keyboard (native range: arrow keys)
   const first = () => cards(page).first().textContent();
@@ -77,11 +79,12 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
     await expect(page.getByRole('heading', { level: 1 })).toContainText(sentence);
     seen.add(await first());
     stampCounts[{ '5': '1000', '6': '500', '0': '∞' }[value]] = await stamps();
+    estimatedCounts[{ '5': '1000', '6': '500', '0': '∞' }[value]] = await estimated();
   }
   expect(seen.size).toBe(4); // a different first film at each notch
   for (const n of Object.values(stampCounts)) expect(n).toBeLessThanOrEqual(1);
   test.info().annotations.push({ type: 'stamps', description: JSON.stringify(stampCounts) });
-  console.log(JSON.stringify({ stamps: stampCounts }));
+  console.log(JSON.stringify({ stamps: stampCounts, estimated: estimatedCounts }));
   await expect(page.getByText(/^moins de/)).toHaveCount(0); // nothing shown at ∞
 
   // more films
@@ -137,8 +140,8 @@ test('IMDb example CSV: title fallback to verify (unticked), series apart, resul
   await page.goto('/');
   await page.getByLabel(/glisse ton fichier ici/).setInputFiles('public/exemple/imdb-exemple.csv');
   const h1 = page.getByRole('heading', { level: 1 });
-  await expect(h1).toContainText('on a lu tes 68 films.');
-  await expect(h1).toContainText('on en a reconnu 63.');
+  await expect(h1).toContainText('on a lu tes 69 films.');
+  await expect(h1).toContainText('on en a reconnu 65.'); // + Anora, The Substance by id (step 8)
   const verify = page.getByRole('region', { name: 'à vérifier' });
   await expect(verify.getByRole('group')).toHaveCount(1);
   const cherbourg = verify.getByRole('group', {
@@ -147,16 +150,14 @@ test('IMDb example CSV: title fallback to verify (unticked), series apart, resul
   for (const radio of await cherbourg.getByRole('radio').all())
     await expect(radio).not.toBeChecked();
   await expect(page.getByText('3 séries, épisodes ou jeux : on fait que les films.')).toBeVisible();
-  await expect(
-    page.getByText('1 film est sorti après 2023 : trop récent pour nous, désolé.'),
-  ).toBeVisible();
+  await expect(page.getByText(/trop récent/)).toHaveCount(0);
   expect(await violationsBothThemes(page), 'axe: analyse imdb').toEqual([]);
   await settle(page);
   await page.screenshot({ path: `${SHOTS}/2-analyse-imdb.png`, fullPage: true });
 
   // choosing the candidate counts it, then results
   await cherbourg.getByRole('radio').first().check();
-  await expect(h1).toContainText('on en a reconnu 64.');
+  await expect(h1).toContainText('on en a reconnu 66.');
   await page.getByRole('button', { name: 'voir mes films' }).click();
   await expect(cards(page)).toHaveCount(8);
 

@@ -40,7 +40,7 @@ describe.skipIf(!existsSync(FIXTURE))('percentiles vs Python fold-in cases', () 
     const fixture = JSON.parse(readFileSync(FIXTURE, 'utf-8')) as {
       cases: { name: string; rating: number[]; percentile: number[] }[];
     };
-    expect(fixture.cases.length).toBe(25); // 22 + 3 cases of step 6c
+    expect(fixture.cases.length).toBe(27); // 22 + 3 cases of step 6c + 2 of step 8
     for (const c of fixture.cases) {
       expect(percentiles(c.rating), c.name).toEqual(c.percentile);
     }

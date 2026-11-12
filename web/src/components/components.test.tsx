@@ -24,6 +24,7 @@ import {
   pepiteStamps,
   ratingLine,
   tagLabel,
+  tmdbRatingLine,
   tapeRotation,
   type TaggedFilm,
 } from './cardRules';
@@ -409,6 +410,29 @@ describe('public rating (step 6b, D5)', () => {
     expect(within(line).getByText('note moyenne 3,9 sur 5, 1 240 notes')).toHaveClass('sr-only');
     rerender(<FilmCard film={film()} />);
     expect(screen.queryByTestId('public-rating')).not.toBeInTheDocument();
+  });
+});
+
+describe('estimated film (step 8)', () => {
+  it('« ★ 3,4 · TMDB », spoken without the star', () => {
+    expect(tmdbRatingLine(34).visible).toBe('3,4 · TMDB');
+    expect(tmdbRatingLine(40).spoken).toBe('note TMDB 4,0 sur 5');
+  });
+
+  it('on the card: TMDB rating and « (estimé) »; « (estimé) » alone without a rating', () => {
+    const { rerender } = render(
+      <FilmCard film={film({ estimated: true, tmdbRating: { mean10: 34 } })} />,
+    );
+    const line = screen.getByTestId('estimated-rating');
+    expect(within(line).getByText('★ 3,4 · TMDB')).toHaveAttribute('aria-hidden', 'true');
+    expect(within(line).getByText('note TMDB 3,4 sur 5,')).toHaveClass('sr-only');
+    expect(within(line).getByText('(estimé)')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-rating')).not.toBeInTheDocument();
+    rerender(<FilmCard film={film({ estimated: true, tmdbRating: { mean10: null } })} />);
+    expect(screen.getByTestId('estimated-rating')).toHaveTextContent('(estimé)');
+    expect(screen.queryByText(/TMDB/)).not.toBeInTheDocument();
+    rerender(<FilmCard film={film()} />);
+    expect(screen.queryByTestId('estimated-rating')).not.toBeInTheDocument();
   });
 });
 

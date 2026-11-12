@@ -3,9 +3,9 @@
 > Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : films récents (étape 8, arrêt de R3d)
+## En cours : films récents (étape 8, arrêt visuel de R6)
 
-Spec `docs/etape-8-films-recents.md` v0.4. Fait : collecte TMDB, placement par le contenu, faux départ à froid, ρ = 0, **nouvelle popularité à partir de 2019** (rang des votes dans l'année, référence 2010-2018, catalogue compris ; contrôles (a) et (b) atteints ; `popularity.bin` et cas du fold-in régénérés, parité Python / TypeScript verte). **Arrêt** : avec la nouvelle popularité, les films estimés font tomber NDCG@20 à ∞ à 95 % (critère 97 %) ; un facteur 0,8 sur la norme cible passe tous les critères (question en section 5, R3d). Rien de codé dans le site.
+Spec `docs/etape-8-films-recents.md` v0.5. Fait : collecte TMDB, faux départ à froid, contenu seul, norme par tranche de popularité × 0,8, ρ = 0, ω = 1, **nouvelle popularité à partir de 2019** (rang des votes dans l'année, catalogue compris), **site branché** : 3 358 films estimés (559 recommandables), `catalog.json` v3, cartes « ★ x,x · TMDB (estimé) » ; parité, Vitest, Playwright, axe, temps verts. **Arrêt** : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases, emplacements prêts). Restent à la clôture : textes, test une seule fois, vrai téléphone.
 
 ## Fait : tags des cartes (après l'étape 6c)
 

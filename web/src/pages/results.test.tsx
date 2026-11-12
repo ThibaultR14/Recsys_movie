@@ -259,6 +259,7 @@ describe('pages (step 6b, D2)', () => {
       'percentiles',
       'equilibre',
       'curseur',
+      'recents',
       'tampons',
       'donnees',
       'on-garde-rien',

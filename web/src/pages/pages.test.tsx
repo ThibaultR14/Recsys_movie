@@ -268,7 +268,7 @@ function inProcessClient(): RecoApi {
 describe.skipIf(!ready)('App on the real files, example export', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('example -> analysis (Milk, Dr. Strangelove, after 2023) -> results', async () => {
+  it('example -> analysis (Milk, Dr. Strangelove; after 2023 = estimated films) -> results', async () => {
     vi.stubGlobal('fetch', async (url: string) => {
       expect(url).toBe('/exemple/letterboxd-exemple.zip');
       return new Response(readFileSync(EXAMPLE));
@@ -276,16 +276,14 @@ describe.skipIf(!ready)('App on the real files, example export', () => {
     render(<App client={inProcessClient()} />);
     await userEvent.click(screen.getByRole('link', { name: 'montre-moi un exemple →' }));
     const h1 = await screen.findByText(/on a lu tes 66 films/, {}, { timeout: 10000 });
-    expect(h1).toHaveTextContent('on en a reconnu 61.');
+    expect(h1).toHaveTextContent('on en a reconnu 63.'); // + Anora, The Substance (step 8)
     expect(
       screen.getByRole('group', { name: 'dans ton fichier : « Milk » (2008)' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('group', { name: 'dans ton fichier : « Dr. Strangelove » (1964)' }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText('2 films sont sortis après 2023 : trop récents pour nous, désolé.'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/trop récent/)).not.toBeInTheDocument();
     expect(
       screen.getByText("1 film qu'on connaît pas (séries, films très peu vus…)"),
     ).toBeInTheDocument();
@@ -304,8 +302,8 @@ describe.skipIf(!ready)('App on the real files, example export', () => {
       screen.getByLabelText(/glisse ton fichier ici/),
       new File([csv], 'ratings.csv', { type: 'text/csv' }),
     );
-    const h1 = await screen.findByText(/on a lu tes 68 films/, {}, { timeout: 10000 });
-    expect(h1).toHaveTextContent('on en a reconnu 63.');
+    const h1 = await screen.findByText(/on a lu tes 69 films/, {}, { timeout: 10000 });
+    expect(h1).toHaveTextContent('on en a reconnu 65.'); // + Anora, The Substance (step 8)
     const verify = screen.getByRole('region', { name: 'à vérifier' });
     const groups = within(verify).getAllByRole('group');
     expect(groups).toHaveLength(1);
@@ -316,9 +314,7 @@ describe.skipIf(!ready)('App on the real files, example export', () => {
     expect(
       screen.getByText('3 séries, épisodes ou jeux : on fait que les films.'),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText('1 film est sorti après 2023 : trop récent pour nous, désolé.'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/trop récent/)).not.toBeInTheDocument();
     expect(screen.queryByText(/qu'on connaît pas/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'voir mes films' }));

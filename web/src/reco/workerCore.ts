@@ -52,6 +52,10 @@ export interface FilmCard {
   publicRating?: { mean10: number; count: number };
   /** « ça divise » tag candidate (step 6c, Q6); absent when false. */
   divisive?: true;
+  /** Estimated film (step 8): vector estimated from TMDB, not learned from MovieLens. */
+  estimated?: true;
+  /** TMDB rating of an estimated film (out of 5 x 10), « ★ 3,4 · TMDB »; null when unknown. */
+  tmdbRating?: { mean10: number | null };
 }
 
 export interface Unrecognized {
@@ -130,7 +134,22 @@ export function filmCard(engine: Engine, item: number): FilmCard {
     genres: (c.genres[item] ?? []).map((g) => c.genre_names[g] ?? ''),
     ...publicRating(c, item),
     ...(engine.divisive.has(item) ? { divisive: true as const } : {}),
+    ...estimatedFields(c, item),
   };
+}
+
+/** Step 8: estimated films come after the trained ones (catalog.json v3). */
+export function isEstimated(c: Engine['catalog'], item: number): boolean {
+  return c.n_trained !== undefined && item >= c.n_trained;
+}
+
+function estimatedFields(
+  c: Engine['catalog'],
+  item: number,
+): Pick<FilmCard, 'estimated' | 'tmdbRating'> {
+  if (!isEstimated(c, item)) return {};
+  const mean10 = c.tmdb_mean?.[item - (c.n_trained ?? 0)] ?? null;
+  return { estimated: true, tmdbRating: { mean10 } };
 }
 
 function publicRating(c: Engine['catalog'], item: number): Pick<FilmCard, 'publicRating'> {

@@ -78,7 +78,7 @@ describe.skipIf(!ready)('worker protocol on the real files', () => {
     await expect(client.recommend()).rejects.toThrow('modèle pas encore chargé');
 
     const init = await client.init();
-    expect(init.nItems).toBe(23019);
+    expect(init.nItems).toBeGreaterThan(23019); // + the estimated films of step 8
     expect(init.positions).toEqual([null, 20000, 10000, 5000, 2000, 1000, 500, 200]);
     await expect(client.recommend()).rejects.toThrow('aucun historique importé');
 
@@ -105,7 +105,12 @@ describe.skipIf(!ready)('worker protocol on the real files', () => {
           reco.positions[0]!.films[0]!.relativeScore! / reco.positions[0]!.films[0]!.score,
           9,
         );
-        // public rating (step 6b, D5): present, and never above the notch ceiling
+        // public rating (step 6b, D5): present, and never above the notch ceiling; an estimated
+        // film (step 8) shows its TMDB rating instead
+        if (f.estimated) {
+          expect(f.tmdbRating).toBeDefined();
+          continue;
+        }
         expect(f.publicRating).toBeDefined();
         expect(f.publicRating!.count).toBeLessThanOrEqual(f.popularity);
         expect(f.publicRating!.mean10).toBeGreaterThanOrEqual(5);

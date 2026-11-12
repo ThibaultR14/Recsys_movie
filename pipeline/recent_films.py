@@ -6,6 +6,7 @@ R1 — collection (TMDB only, never an IMDb dataset):
     uv run python recent_films.py table     # data/processed/tmdb_films.parquet + genre agreement
     uv run python recent_films.py popularity   # D7 slider popularity of the missing films
     uv run python recent_films.py popularity-check   # R3d: controls (a) (b) (c) + figure
+    uv run python recent_films.py estimate   # R4: vectors of the missing films (final model)
 
 - `/discover/movie` by month (>= 50 votes): vote counts of every TMDB film since 2018 (reference
   of the slider popularity, D7) and the list of films missing from the catalogue (D0).
@@ -642,6 +643,95 @@ def cmd_popularity_check(_args) -> int:
     return 0 if ok_a and ok_b else 1
 
 
+# --- R4: the estimated films of the site (v0.5) ---------------------------------------------------
+
+ESTIMATED_PARQUET = PROCESSED / "estimated_films.parquet"
+ESTIMATED_VECTORS = PROCESSED / "estimated_vectors.npy"
+CONTENT_LAMBDA = 100.0  # R3: 3-fold cross-validation on the catalogue (0.569)
+NORM_FACTOR = 0.8  # R3d (v0.5): shrinkage of an uncertain estimate, tuned on the validation
+FINAL_FACTORS = PROCESSED / "models" / "als_final_f64_r0.05_a1_b1_i30_item_factors.npy"
+FINAL_MOVIE_IDS = PROCESSED / "models" / "als_final_movie_ids.npy"
+
+
+def content_weight(ml_counts) -> np.ndarray:
+    """Trust in a trained vector (as in recent_eval.py): few MovieLens ratings, noisy vector."""
+    return np.minimum(1.0, np.asarray(ml_counts, dtype=np.float64) / 200.0)
+
+
+def estimate_films(
+    films: pl.DataFrame,
+    cat: pl.DataFrame,
+    Y: np.ndarray,  # noqa: N803
+    popularity_cat: np.ndarray,
+    disc: pl.DataFrame,
+    r_ref: float,
+) -> tuple[pl.DataFrame, np.ndarray, dict]:
+    """Vectors, slider popularity and flags of the missing films (D0, D2, D1c, D3, D7)."""
+    in_cat = films.filter("in_catalog").sort("item_idx")
+    train_rows = in_cat.to_dicts()
+    items = np.array([r["item_idx"] for r in train_rows])
+    mu = Y.astype(np.float64).mean(0)
+    counts = cat["ml_rating_count"].to_numpy()
+    model = cs.fit_content(
+        train_rows,
+        Y[items].astype(np.float64) - mu,
+        content_weight(counts[items]),
+        CONTENT_LAMBDA,
+    )
+    missing = films.filter(~pl.col("in_catalog") & (pl.col("vote_count") >= MIN_VOTES))
+    missing = missing.sort(["release_date", "tmdb_id"])
+    pred, telling = model.predict(missing.to_dicts())
+    placed = telling >= cs.MIN_CONTENT_TOKENS
+    tmdb = cat["tmdb_id"].to_list()
+    pop_of = {int(t): int(p) for t, p in zip(tmdb, popularity_cat.tolist(), strict=True) if t}
+    pop = estimated_popularity(missing, disc, pop_of, r_ref)
+    table = cs.norm_table(popularity_cat, np.linalg.norm(Y, axis=1), edges=cs.POPULARITY_BIN_EDGES)
+    target = NORM_FACTOR * cs.target_norms(pop, table, cs.POPULARITY_BIN_EDGES)
+    vec = mu + pred
+    vec = vec * (target / np.linalg.norm(vec, axis=1))[:, None]
+    out = missing.with_columns(
+        popularity=pl.Series(pop),
+        telling=pl.Series(telling),
+        placed=pl.Series(placed),
+        recommendable=pl.Series(
+            placed & (missing["vote_count"].to_numpy() >= MIN_VOTES_RECOMMENDABLE_V03)
+        ),
+        ml_genres=pl.Series([ml_genres_of(g) for g in missing["genres"].to_list()]),
+    ).filter("placed")
+    info = {
+        "content_lambda": CONTENT_LAMBDA,
+        "content_features": len(model.vocab),
+        "norm_factor": NORM_FACTOR,
+        "norm_table": [round(float(v), 6) for v in table],
+        "norm_bin_edges": list(cs.POPULARITY_BIN_EDGES),
+        "n_missing": missing.height,
+        "n_placed": int(placed.sum()),
+        "n_recommendable": int(out["recommendable"].sum()),
+    }
+    return out, vec[placed].astype(np.float32), info
+
+
+def cmd_estimate(_args) -> int:
+    Y = np.load(FINAL_FACTORS)  # noqa: N806
+    cat = catalog_frame().sort("item_idx")
+    saved = np.load(FINAL_MOVIE_IDS)
+    assert np.array_equal(saved, cat["movie_id"].to_numpy()), "catalogue order != trained order"
+    pop_cat, pinfo = popm.production_popularity_v8(CATALOG_PARQUET, DISCOVER_PARQUET)
+    films = pl.read_parquet(FILMS_PARQUET)
+    disc = popm.discover_frame(DISCOVER_PARQUET)
+    out, vec, info = estimate_films(films, cat, Y, pop_cat, disc, pinfo["r_ref"])
+    out.write_parquet(ESTIMATED_PARQUET)
+    np.save(ESTIMATED_VECTORS, vec)
+    rec = out.filter("recommendable")
+    print(json.dumps(info, indent=1))
+    print(
+        f"films estimés : {out.height} placés ({rec.height} recommandables) ; normes "
+        f"médianes : estimés {np.median(np.linalg.norm(vec, axis=1)):.4f}, catalogue "
+        f"{np.median(np.linalg.norm(Y, axis=1)):.4f}"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
@@ -653,6 +743,7 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--rule", choices=("percentile", "rank"), default="percentile")
     pp.set_defaults(fn=cmd_popularity)
     sub.add_parser("popularity-check").set_defaults(fn=cmd_popularity_check)
+    sub.add_parser("estimate").set_defaults(fn=cmd_estimate)
     args = p.parse_args(argv)
     return args.fn(args)
 

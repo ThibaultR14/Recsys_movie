@@ -91,7 +91,7 @@ describe.skipIf(!ready)('choices on the example export (real files)', () => {
     expect(summary.counts).toMatchObject({
       ambiguous: 1,
       probable_fuzzy: 1,
-      not_found: 3,
+      not_found: 1, // Chernobyl; Anora and The Substance are estimated films (step 8)
       confirmed: 0,
     });
 

@@ -1,3 +1,5 @@
+import { pending } from './pending';
+
 // « comment ça marche », detailed (D2). One entry per paragraph or list item. Texts: Claude Web
 // (R7). `{en:…}` marks English words (rendered with lang="en", see RichText).
 export const COMMENT_CA_MARCHE = {
@@ -37,7 +39,20 @@ export const COMMENT_CA_MARCHE = {
       "sans rien faire, un modèle de reco propose surtout les films que tout le monde a vus : ils sont proches de beaucoup de gens. c'est ce qu'on appelle le biais de popularité.",
       "le curseur pose un plafond. à chaque cran, on ne garde que les films vus moins d'un certain nombre de fois (20 000, 10 000… jusqu'à 200), toujours classés selon tes goûts. tout à gauche, pas de plafond.",
       'pour savoir combien de gens ont vu un film, on combine les notes MovieLens et les votes TMDB, parce que MovieLens sous-compte les films récents.',
+      // step 8 (R3d): from 2019 on, rank of the TMDB votes within the release year
+      pending('curseur.recents'),
       "le tampon « ✱ pépite » signale le film le moins connu d'une rangée, quand il l'est nettement plus que les autres.",
+    ],
+  },
+  // step 8: recent films (TMDB films missing from MovieLens, vector estimated from their
+  // content; « ★ 3,4 · TMDB (estimé) » on their cards). Texts: Claude Web, at the visual stop.
+  recents: {
+    titre: pending('recents.titre'),
+    paragraphes: [
+      pending('recents.pourquoi'),
+      pending('recents.comment'),
+      pending('recents.carte'),
+      pending('recents.limites'),
     ],
   },
   // step 6c, Q6: card tags
@@ -58,6 +73,8 @@ export const COMMENT_CA_MARCHE = {
       'les goûts viennent de MovieLens, un jeu de données publié pour la recherche par GroupLens (université du minnesota) : environ 32 millions de notes. on garde les 23 019 films notés au moins 20 fois.',
       'les titres, les réalisateurs et les affiches viennent de TMDB, une base de films collaborative.',
       "la note sous chaque carte, c'est la moyenne MovieLens sur 5, avec le nombre de notes.",
+      // step 8: estimated films show the TMDB rating instead
+      pending('donnees.noteTmdb'),
       "les données d'imdb servent seulement à vérifier les correspondances entre films, avant de construire le site. rien d'imdb n'est dans le site.",
     ],
   },
@@ -74,7 +91,8 @@ export const COMMENT_CA_MARCHE = {
   limites: {
     titre: "ce qu'on sait pas faire",
     liste: [
-      "les films sortis après 2023 : nos données s'arrêtent là",
+      // step 8: replaces « les films sortis après 2023 : nos données s'arrêtent là »
+      pending('limites.recents'),
       'les séries',
       'les films très peu vus (moins de 20 notes dans nos données)',
       "les titres qu'on reconnaît mal : on te les montre dans « à vérifier », à toi de trancher",
