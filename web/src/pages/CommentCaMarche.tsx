@@ -14,6 +14,9 @@ export function CommentCaMarche() {
       <PageSection id="percentiles" title={T.percentiles.titre}>
         <Paragraphs items={T.percentiles.paragraphes} />
       </PageSection>
+      <PageSection id="equilibre" title={T.equilibre.titre}>
+        <Paragraphs items={T.equilibre.paragraphes} />
+      </PageSection>
       <PageSection id="curseur" title={T.curseur.titre}>
         <Paragraphs items={T.curseur.paragraphes} />
       </PageSection>

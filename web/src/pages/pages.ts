@@ -14,6 +14,7 @@ export const PAGE_HASH: Record<Page, string> = {
 const SECTION_PAGE: Record<string, Page> = {
   '#modele': 'comment-ca-marche',
   '#percentiles': 'comment-ca-marche',
+  '#equilibre': 'comment-ca-marche',
   '#curseur': 'comment-ca-marche',
   '#donnees': 'comment-ca-marche',
   '#on-garde-rien': 'comment-ca-marche',

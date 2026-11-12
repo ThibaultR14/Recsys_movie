@@ -257,6 +257,7 @@ describe('pages (step 6b, D2)', () => {
     expect(screen.getAllByRole('region').map((r) => r.id)).toEqual([
       'modele',
       'percentiles',
+      'equilibre',
       'curseur',
       'donnees',
       'on-garde-rien',
@@ -271,6 +272,7 @@ describe('pages (step 6b, D2)', () => {
     expect(pageOfHash('#a-propos')).toBe('a-propos');
     expect(pageOfHash('#comment-ca-marche')).toBe('comment-ca-marche');
     expect(pageOfHash('#on-garde-rien')).toBe('comment-ca-marche');
+    expect(pageOfHash('#equilibre')).toBe('comment-ca-marche');
     expect(pageOfHash('#mentions')).toBe('a-propos');
     expect(pageOfHash('')).toBeNull();
     expect(pageOfHash('#nimporte')).toBeNull();

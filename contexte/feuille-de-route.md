@@ -1,14 +1,14 @@
 # Feuille de route
 
-> Mise à jour le 9 novembre 2026, pendant l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
+> Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c (en relecture). Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
 ## En cours : étape 6c, qualité des résultats
 
-Spec `docs/etape-6c-qualite.md` v0.4. Q1-Q4 faits (versions, films mal notés hors du fold-in, calibration des genres dans le navigateur). **À faire, dans l'ordre** :
+Spec `docs/etape-6c-qualite.md` v0.5. Q1-Q5 faits (versions, films mal notés hors du fold-in, calibration des genres dans le navigateur, pénalité D1b écartée, test évalué une fois). **À faire, dans l'ordre** :
 
-1. **Q4b** — pénalité de proximité aux films mal notés (D1b) : **mesurée, arrêt** pour le choix (option a recommandée, ou μ = 1 / 0,5 aux crans 5 000 à 200 ; résultats en section 5 de la spec) ; si un μ est retenu : branchement dans `engine.ts`, `model-meta.json`, fixture, parité, `reco-bench`, Playwright.
-2. **Q5** — clôture : test évalué **une seule fois** (jamais fait pour 6c), section 5, `CLAUDE.md`, `docs/stack-technique.md`, `contexte/`, emplacements de texte « comment ça marche » (Claude Web), arrêt pour relecture.
+1. **Relecture de Q5** (Thibault, Claude Web) : résultats du test, critère `C_KL` à ∞ à confirmer ; **essai sur un vrai téléphone** (versions 6b et 6c, deux thèmes).
+2. **Textes « comment ça marche »** (Claude Web) : `commentCaMarche.percentiles.malNotes`, section `equilibre` (titre + paragraphe), et la phrase « on ne regarde ni les genres… » à reprendre ; puis `BLOCKING = true` dans `content.test.ts`.
 3. **Tags des cartes** (section 8 de la spec 6c) : réalisateur, « ça divise », « vieux trésor » ; mesure des fréquences par cran et arrêt pour les seuils et les couleurs.
 
 ## Ensuite : étape 7, mise en ligne et volontaires
@@ -56,7 +56,7 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 
 ### Étape 7 (mise en ligne, volontaires)
 
-- **λ des crans bas** (0,9) et, si adoptée, **μ** de D1b : à recaler avec la question des volontaires, vraie mesure aux crans bas (`é6c` §6).
+- **λ des crans bas** (0,9) et **μ** de D1b (option a en Q4b : pénalité non branchée, référence prête) : à recaler avec la question des volontaires, vraie mesure aux crans bas (`é6c` §6).
 - **Seuil de retrait du fold-in** (percentile 0,3) : à recaler avec les volontaires (`é6c` §6).
 
 - **Essai sur un vrai téléphone** de la version 6b (deux thèmes, mise en page élargie, annotation « loin de tes goûts » par rangée) : non confirmé à la clôture (`é6b` §6).

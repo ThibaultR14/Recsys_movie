@@ -150,13 +150,13 @@ Détail complet, chiffres et figures : `docs/etape-2-modele.md` (décisions D1-D
 | `embeddings.bin` | en-tête `PEPE` (version, `n_items`, `dims`), vecteurs int8 23 019 × 64 (ordre = `item_idx`), une échelle float32 par film | 1,57 Mo (1,46 Mo) |
 | `yty.bin` | `YᵀY` 64 × 64 en float32, calculé sur les vecteurs déquantifiés (fold-in) | 16 Ko (12 Ko) |
 | `popularity.bin` | popularité hybride (uint32 par film) : le plafond du curseur porte sur elle | 92 Ko (42 Ko) |
-| `model-meta.json` | hyperparamètres, formules (signal, confiance, fold-in, popularité), positions du curseur, `movie_id` par `item_idx`, films non recommandables, versions des données | 140 Ko (58 Ko) |
-| `catalog.json` | en colonnes, ordre = `item_idx` : titre affiché, titre original (s'il diffère), `year`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, réalisateurs, `poster_path`, genres MovieLens | 2,5 Mo (1,12 Mo) |
+| `model-meta.json` | hyperparamètres, formules (signal, confiance, fold-in, popularité), positions du curseur, `movie_id` par `item_idx`, films non recommandables, versions des données ; étape 6c : règle du fold-in (`foldin_drop_below` 0,3, `foldin_min_kept` 5) et table `calibration` (mode, vivier, α, λ par cran) | 140 Ko (58 Ko) |
+| `catalog.json` | en colonnes, ordre = `item_idx` : titre affiché, titre original (s'il diffère), `year`, `tmdb_id`, `imdb_id`, `imdb_id_aliases`, réalisateurs, `poster_path`, genres MovieLens ; v2 (6b) : `ml_mean`, `ml_count` ; 6c : `version_of` (paires d'`item_idx`) | 2,5 Mo (1,12 Mo) |
 | `title-index.json` | clés de titre normalisées → `4 × item_idx + source` (titre TMDB, titre MovieLens, titre original, titre alternatif ML) ; `ml_year` quand il diffère | 1,07 Mo (0,37 Mo) |
 
-Total mesuré : **3,06 Mo** gzip (5,4 Mo bruts), sous la cible de 5 Mo.
+Total mesuré : **3,06 Mo** gzip (5,4 Mo bruts) à l'étape 3, **3,12 Mo** gzip depuis l'étape 6c (note du public, `version_of`), sous la cible de 5 Mo.
 
-Les **cas de test du fold-in** (`foldin_cases.json`, 22 historiques, vecteur et top 10 attendus aux positions ∞, 2 000 et 500) contiennent des notes MovieLens brutes : ils sont écrits dans `web/test-data/` (ignoré par git, hors de `web/public/`, donc jamais servi) et ne sont **jamais versionnés**.
+Les **cas de test du fold-in** (`foldin_cases.json`, 25 cas depuis l'étape 6c : vecteur et top 10 attendus aux positions ∞, 2 000 et 500, et listes calibrées de 48 aux 8 crans) contiennent des notes MovieLens brutes : ils sont écrits dans `web/test-data/` (ignoré par git, hors de `web/public/`, donc jamais servi) et ne sont **jamais versionnés**.
 
 ---
 
@@ -184,12 +184,13 @@ Les **cas de test du fold-in** (`foldin_cases.json`, 22 historiques, vecteur et 
 | Qualité du code | **ESLint** + **Prettier** | Standard |
 
 ### Comment on calcule une recommandation (ALS)
-1. Signal : pour chaque film vu, `r = 1 + β·p`, `p` = percentile de sa note dans l'historique de l'utilisateur (0,5 sans note).
+1. Signal : pour chaque film vu, `r = 1 + β·p`, `p` = percentile de sa note dans l'historique de l'utilisateur (0,5 sans note). Étape 6c (D2) : les films notés de percentile < 0,3 sont retirés du fold-in (ils restent « vus ») ; rien n'est retiré sans note, ni si moins de 5 films resteraient.
 2. Vecteur de goût de l'utilisateur (« fold-in ») : résolution d'un système 64 × 64, `(YᵀY + reg·I + Σ (C − 1) y yᵀ) x = Σ C y` avec `C = alpha·r`, `YᵀY` lu dans `yty.bin`. Quelques millisecondes dans le navigateur.
 3. Score de chaque film = produit scalaire entre ce vecteur et le vecteur du film (déquantifié).
-4. On retire les films déjà vus, les films non recommandables (`model-meta.json`), et par prudence les candidats des correspondances ambiguës et le candidat principal d'une correspondance floue (films peut-être vus, jamais utilisés pour le fold-in).
+4. On retire les films déjà vus, les films non recommandables (`model-meta.json`), et par prudence les candidats des correspondances ambiguës et le candidat principal d'une correspondance floue (films peut-être vus, jamais utilisés pour le fold-in) ; étape 6c (D3) : les autres versions d'un film vu (`version_of`).
 5. **Curseur** : on ne garde que les films dont la popularité (`popularity.bin`) est au plus le plafond de la position choisie (∞ = pas de filtre), classés par score.
-6. On affiche les 50 meilleurs.
+6. Étape 6c (D1) : **calibration des genres** à chaque cran, une seule fois après l'analyse : 48 films choisis un à un dans un vivier des 150 meilleurs, en équilibrant le score et l'écart entre la part de films de chaque genre (MovieLens) de la liste et celle de l'historique gardé (Steck 2018, variante « part de films ») ; λ = 0,1 de ∞ à 10 000, 0,9 de 5 000 à 200 (`calibrate.ts`, 3-7,5 ms pour les 8 crans).
+7. On affiche 8 films, puis 8 par 8 (48 au plus) ; le curseur n'est plus qu'un affichage.
 
 Mise en œuvre (étape 4, `docs/etape-4-navigateur.md`) :
 - `web/src/reco/` : `modelFiles.ts` (lecture et contrôles), `foldIn.ts` (Cholesky 64 × 64 en float64), `recommend.ts` (scores, curseur), `engine.ts` (moteur commun) ;
@@ -252,6 +253,7 @@ projet/
 │   ├── slider.py, sweep_slider.py, slider_variants.py  # curseur
 │   ├── popularity.py         # popularité hybride MovieLens + TMDB
 │   ├── export.py             # modèle final, int8 → web/public/data, cas de test du fold-in
+│   ├── quality_diagnostics.py, calibration.py  # étape 6c : films mal notés, versions, calibration des genres (référence du TypeScript), test
 │   ├── notebooks/            # 01_explore.py (seuils), ease_colab.ipynb (EASE sur Colab)
 │   ├── tests/                # un fichier de tests par module
 │   └── data/                 # raw/, processed/, cache/tmdb/ : contenu ignoré par git
@@ -259,18 +261,18 @@ projet/
 │   ├── src/
 │   │   ├── adapters/         # types.ts (format commun), letterboxd.ts, imdb.ts, detect.ts (source d'un CSV), normalizeRatings.ts (percentiles)
 │   │   ├── matching/         # normalize.ts, titleIndex.ts, match.ts, imdbIds.ts, history.ts (matchEntry)
-│   │   ├── reco/             # modelFiles, foldIn, recommend, engine, workerCore, worker, client
+│   │   ├── reco/             # modelFiles, foldIn, recommend, calibrate (6c), explain, engine, workerCore, worker, client
 │   │   ├── components/       # Layout, DropZone, FilmCard, FilmGrid, Slider, HandNote… + cardRules.ts
 │   │   ├── pages/            # Accueil, Analyse, Resultats, APropos (+ textes et règles testés à part)
 │   │   └── styles/           # index.css : polices, Tailwind, jetons de la direction C
 │   ├── e2e/                  # tests Playwright (parcours, téléphone, réseau, stockage, axe, temps)
 │   ├── public/data/          # fichiers produits par le pipeline (non versionnés)
 │   ├── public/exemple/       # exports d'exemple synthétiques, Letterboxd (ZIP) et IMDb (CSV, types en français) (versionnés)
-│   ├── scripts/              # match-report, reco-report, reco-bench, make-example, spectacles (terminal seulement)
+│   ├── scripts/              # match-report, reco-report, reco-bench, quality-report, make-example, spectacles (terminal seulement)
 │   └── test-data/            # ignoré par git, jamais servi : cas de test du fold-in, titres du catalogue, exports réels, rapports
 ├── shared/fixtures/          # cas de normalisation des titres partagés Python / TypeScript (versionnés)
 ├── .github/workflows/        # mise à jour mensuelle TMDB (à venir)
-├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md à etape-6-imdb.md, maquette, figures/
+├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md à etape-6c-qualite.md, maquette, figures/
 └── CLAUDE.md                 # instructions pour Claude Code
 ```
 
@@ -300,6 +302,12 @@ uv run python export.py catalog [--out web]       # catalog.json + title-index.j
 uv run python export.py catalog-verify [--out web]
 uv run python title_fixtures.py catalog-keys       # titres du catalogue pour le test TypeScript exhaustif
 uv run python match_diagnostics.py ../web/test-data/reports/<nom>.json  # films non reconnus
+
+# étape 6c (qualité ; résultats dans data/processed/results/quality/, ignoré)
+uv run python quality_diagnostics.py foldin | versions
+uv run python calibration.py sweep --mode share --lambdas 0.1,0.9   # validation
+uv run python calibration.py penalty-sweep --mus 0,0.5,1            # pénalité D1b (non retenue)
+uv run python calibration.py test                                    # test, une seule fois (fait)
 ```
 
 ### Commandes du site (depuis `web/`)
@@ -313,6 +321,7 @@ npm run build
 npm run match-report -- test-data/exports/<export> --name <nom>  # mesure sur un export réel
 npm run reco-report -- test-data/exports/<export>  # top 20 à ∞ / 2 000 / 500 (terminal)
 npm run reco-bench -- [--export <export>]          # temps du moteur
+npx tsx scripts/quality-report.ts <export> [--lambdas … --share] [--mus …]  # genres, voisins mal notés (comptes seulement)
 npm run make-example        # export d'exemple synthétique → public/exemple/
 npm run spectacles          # heuristique « spectacle » → docs/figures/etape-5-spectacles.md
 npx playwright install chromium && npm run e2e   # tests dans un vrai navigateur
@@ -334,12 +343,13 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 5. ✅ **Interface** (fait, `docs/etape-5-interface.md`) : accueil et dépôt, analyse du fichier (à vérifier, trop récents, hors catalogue), résultats avec le curseur à 8 crans, page « à propos » ; aucune requête hors du site sauf les affiches TMDB, rien de stocké ; modèle prêt en moins d'1 s, changement de cran ≤ 40 ms ; validé sur un vrai téléphone. La fiche film passe à l'étape 8.
 6. ✅ **Adaptateur IMDb** (fait, `docs/etape-6-imdb.md`) : CSV des notes détecté par l'en-tête, rapprochement par `imdb_id` (+ alias), repli par titre seulement proposé dans « à vérifier », séries/épisodes/jeux comptés à part (`Title Type` traduit : liste de non-films en anglais et en français, tout type inconnu = film) ; watchlist refusée avec un message ; sur un export fabriqué de Thibault, 35 films trouvés par id ; 3 000 lignes en 22 ms. Mesure sur un vrai historique IMDb reportée à l'étape 7.
 6b. ✅ **Retouches de l'interface** (`docs/etape-6b-retouches.md`), **close le 8 novembre 2026** (essai sur un vrai téléphone non confirmé, à refaire au début de l'étape 7). Fait : thème sombre par défaut (clair au choix, seule clé `localStorage` `pepite-theme`), pages « comment ça marche », « à propos » (« je ») et « contact » par ancre, contact par `mailto:` sans service tiers, aide des exports en carrousel (7 schémas SVG), note du public MovieLens sur les cartes (`catalog.json` v2, +55 Ko gzip), « (parce que t'as aimé X et Y) » (cosinus, percentile ≥ 0,7, 2 cartes au plus par film cité et par rangée de 8 ; 3,5 ms sur un export réel, 38 ms pour 3 000 films), textes de Claude Web ; axe 0 dans les deux thèmes, réseau inchangé.
+6c. **Qualité des résultats** (`docs/etape-6c-qualite.md`, en relecture) : autres versions jamais recommandées (`version_of`), films mal notés hors du fold-in (+8,2 % de NDCG@20 à ∞), calibration des genres (λ 0,1 / 0,9 par cran) ; pénalité de proximité aux films mal notés écartée (option a). Test : NDCG@20 à ∞ 0,1601 (étape 2 : 0,1521) ; aux crans bas, −28 % par rapport à D2 seul, écart de calibration −84 à −87 % ; export de Thibault : animation 19-31 % à tous les crans (avant : 69-100 % aux crans bas).
 7. Mise en ligne, tests avec 10-20 cinéphiles.
 8. Ensuite seulement : fiche film, dispo en France, liste faite main, scraping (explications avancées à l'étape 6b).
 
 ---
 
-## 9. Décisions prises (6-8 novembre 2026, étapes 1-6b)
+## 9. Décisions prises (6-12 novembre 2026, étapes 1-6c)
 
 | Sujet | Décision |
 |---|---|
@@ -360,6 +370,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 | Calcul des recos | Moteur TypeScript unique (Web Worker + scripts), identique au Python ; exclus : vus, non recommandables, candidats ambigus, candidat flou principal |
 | IA pour les listes faites main | **Pas d'IA au MVP** (Fuse.js) ; API + Cloudflare Worker plus tard |
 | Interface | Machine à états, rien de stocké sauf le choix du thème clair (`pepite-theme`, étape 6b) ; thème sombre par défaut ; pages par ancre (« comment ça marche », « à propos », « contact ») ; contact par `mailto:` ; note du public MovieLens et « parce que t'as aimé X et Y » sur les cartes (2 cartes au plus par film cité et par rangée) ; « loin de tes goûts » par rangée (moitié d'une rangée sous 0,04 : annotation au-dessus de la grille, explications gardées) ; polices auto-hébergées ; flou jamais coché par défaut (statut `confirmed` si l'utilisateur choisit) ; un seul calcul pour les 8 crans, départ à 2 000 ; « loin de tes goûts » < 0,04 ; tampon « ✱ pépite » relatif à la rangée de 8 ; carte = lien `letterboxd.com/tmdb/<id>/` ; mention « spectacle » non affichée |
+| Qualité (étape 6c) | Films notés de percentile < 0,3 hors du fold-in (vus, jamais recommandés ; sans note jamais retirés ; repli sous 5 films) ; calibration des genres MovieLens (Steck, « part de films », vivier 150, λ 0,1 de ∞ à 10 000 et 0,9 de 5 000 à 200, table dans `model-meta.json`) ; `version_of` (deux sens) ; pénalité de proximité aux films mal notés écartée au MVP (référence gardée, non branchée) |
 | Titres affichés | Action `title` de `manual_overrides.csv`, appliquée par `site_catalog.py` seulement (5 titres) |
 | Licences | **Contact direct** avec GroupLens et TMDB |
 

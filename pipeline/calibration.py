@@ -25,6 +25,7 @@ is in units of the pool's best score, because raw scores shrink ~15× from cap 5
 
     uv run python calibration.py sweep [--mode share]   # validation: λ grid x caps (∞, 2 000, 500)
     uv run python calibration.py penalty-sweep [--mus 0,0.5,1] [--tag _a]   # Q4b, validation
+    uv run python calibration.py test   # Q5: the single evaluation of step 6c on the test split
 """
 
 from __future__ import annotations
@@ -452,6 +453,100 @@ def cmd_penalty_sweep(mus: tuple[float, ...] = PENALTY_MUS, tag: str = "") -> di
     return out
 
 
+TEST_OUT = RESULTS_DIR / "quality" / "test_6c.json"
+
+
+def cmd_test() -> dict:
+    """Q5: the single evaluation of step 6c on the **test** split, retained configuration D2 + D1
+    (share, λ of PRODUCTION per cap), next to the step 2 reference (A, no D2) and D2 alone; caps on
+    training-user counts, as on the validation. Run once; nothing is tuned on it."""
+    from export import SLIDER_POSITIONS
+
+    lam_of = dict(zip(SLIDER_POSITIONS, PRODUCTION["lambda_by_position"], strict=True))
+    catalog = ev.load_catalog()
+    counts = ev.train_counts(catalog)
+    eval_set = ev.load_eval_set("test", catalog)
+    model = sw.adapter("A", catalog)
+    unit = unit_rows(model.Y)
+    Gs = {k: genre_matrix(mode=k)[0] for k in MODES}  # noqa: N806
+    configs = ("A (étape 2)", "A + D2", "A + D2 + D1")
+    lists = {(c, cap): [] for c in configs for cap in CAPS}
+    profiles = {k: [] for k in MODES}
+    foldins, disliked = [], []
+    for start in range(0, len(eval_set.user_ids), ev.BATCH_SIZE):
+        batch = eval_set.foldin[start : start + ev.BATCH_SIZE]
+        scores, Ps = user_inputs(model, batch, Gs)  # noqa: N806  (D2 fold-in)
+        p_all = als.percentile_values(batch)
+        full = p_all.copy()
+        full.data = (1.0 + model.beta * p_all.data).astype(np.float32)
+        x = als.fold_in(
+            model.Y, full, regularization=model.regularization, alpha=model.alpha, yty=model.yty
+        )
+        scores_ref = (x.astype(np.float32) @ model.Y.T).astype(np.float64)  # step 2 (no D2)
+        for k in MODES:
+            profiles[k].append(Ps[k])
+        for u in range(batch.shape[0]):
+            lo, hi = batch.indptr[u], batch.indptr[u + 1]
+            keep = als.kept_for_foldin(p_all.data[lo:hi], None, **FOLDIN_RULE)
+            foldins.append(batch.indices[lo:hi].astype(np.int64))
+            disliked.append(batch.indices[lo:hi][~keep].astype(np.int64))
+        for cap in CAPS:
+            cand = catalog.recommendable & (counts <= cap)
+            lists[(configs[0], cap)].append(ev.top_k(scores_ref.copy(), batch, cand, N_LIST))
+            pools = ev.top_k(scores.copy(), batch, cand, POOL)
+            pool_scores = np.take_along_axis(scores, pools, axis=1)
+            pools = np.where(np.isfinite(pool_scores), pools, -1)
+            lists[(configs[1], cap)].append(pools[:, :N_LIST])
+            lam = lam_of[None if math.isinf(cap) else cap]
+            lists[(configs[2], cap)].append(
+                calibrate_batch(pools, pool_scores, Ps["share"], Gs["share"], lam, N_LIST, "share")
+            )
+        print(f"  {start + batch.shape[0]} utilisateurs", flush=True)
+    P_mass, P_share = np.vstack(profiles["mass"]), np.vstack(profiles["share"])  # noqa: N806
+    rows = []
+    for c in configs:
+        for cap in CAPS:
+            L = np.vstack(lists[(c, cap)])  # noqa: N806
+            ranked = np.where(L[:, :TOP_K] >= 0, L[:, :TOP_K], 0)
+            met = ev.compute_metrics(ranked, eval_set, counts, catalog.recommendable)
+            rows.append(
+                {
+                    "config": c,
+                    "cap": None if math.isinf(cap) else cap,
+                    "lambda": lam_of[None if math.isinf(cap) else cap] if c == configs[2] else 0,
+                    "ndcg@20": met["ndcg@20"],
+                    "recall@20": met["recall@20"],
+                    "recall_all@20": met["recall_all@20"],
+                    "c_kl@20": m.mean_ci(list_kl(L, P_mass, Gs["mass"], TOP_K).tolist()),
+                    "overshoot_row8": m.mean_ci(row_overshoot(L, P_share, Gs["share"]).tolist()),
+                    "disliked_near2_of16": m.mean_ci(
+                        disliked_near(L, foldins, disliked, unit).tolist()
+                    ),
+                }
+            )
+    out = {
+        "split": "test",
+        "configs": list(configs),
+        "calibration": PRODUCTION,
+        "foldin_rule": FOLDIN_RULE,
+        "caps": "training-user ml_rating_count",
+        "rows": rows,
+    }
+    TEST_OUT.parent.mkdir(parents=True, exist_ok=True)
+    TEST_OUT.write_text(json.dumps(out, indent=2) + "\n")  # written before any print
+    for r in rows:
+        print(
+            f"{r['config']:<12} · cran {r['cap']!s:>5} · NDCG@20 {r['ndcg@20']['mean']:.4f} "
+            f"± {r['ndcg@20']['ci95']:.4f} · Recall@20 {r['recall@20']['mean']:.4f} · "
+            f"Recall_all@20 {r['recall_all@20']['mean']:.4f} · "
+            f"C_KL@20 {r['c_kl@20']['mean']:.3f} · excès {r['overshoot_row8']['mean']:.3f} · "
+            f"voisins mal notés {r['disliked_near2_of16']['mean']:.2f}/16",
+            flush=True,
+        )
+    print("->", TEST_OUT)
+    return out
+
+
 def cmd_sweep(mode: str, lambdas: tuple[float, ...] = LAMBDAS, tag: str = "") -> dict:
     catalog = ev.load_catalog()
     counts = ev.train_counts(catalog)
@@ -523,7 +618,7 @@ def cmd_sweep(mode: str, lambdas: tuple[float, ...] = LAMBDAS, tag: str = "") ->
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("cmd", choices=["sweep", "penalty-sweep"])
+    parser.add_argument("cmd", choices=["sweep", "penalty-sweep", "test"])
     parser.add_argument("--mode", choices=MODES, default="mass")
     parser.add_argument("--lambdas", help="comma-separated λ (default: the main grid)")
     parser.add_argument("--mus", help="comma-separated μ of penalty-sweep (default: PENALTY_MUS)")
@@ -531,6 +626,9 @@ def main() -> int:
     args = parser.parse_args()
     # λ and μ in the output: a redirected stdout is cp1252 on Windows
     sys.stdout.reconfigure(encoding="utf-8")
+    if args.cmd == "test":
+        cmd_test()
+        return 0
     if args.cmd == "penalty-sweep":
         mus = tuple(float(x) for x in args.mus.split(",")) if args.mus else PENALTY_MUS
         cmd_penalty_sweep(mus, args.tag)

@@ -1,5 +1,7 @@
 // « comment ça marche », detailed (D2). One entry per paragraph or list item. Texts: Claude Web
 // (R7). `{en:…}` marks English words (rendered with lang="en", see RichText).
+import { pending } from './pending';
+
 export const COMMENT_CA_MARCHE = {
   titre: 'comment ça marche.',
   modele: {
@@ -17,7 +19,14 @@ export const COMMENT_CA_MARCHE = {
       "un 3★ ne veut pas dire la même chose pour tout le monde : chez certains c'est une bonne note, chez d'autres une déception.",
       'alors on ne lit pas tes notes telles quelles. on regarde où chaque film se place parmi tous les tiens : ton 3★ est bon si tu mets surtout des 2★, et moyen si tu mets surtout des 4★. un film vu sans note compte quand même, à mi-chemin.',
       "c'est pour ça que les notes sur 5 de letterboxd et les notes sur 10 d'imdb marchent pareil.",
+      // step 6c, D2: the disliked films (percentile < 0.3) are left out of the fold-in
+      pending('commentCaMarche.percentiles.malNotes'),
     ],
+  },
+  // step 6c, D1: genre calibration (share of films, stronger at the low notches)
+  equilibre: {
+    titre: pending('commentCaMarche.equilibre.titre'),
+    paragraphes: [pending('commentCaMarche.equilibre.paragraphes')],
   },
   curseur: {
     titre: 'le curseur',
