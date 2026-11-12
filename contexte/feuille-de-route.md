@@ -3,9 +3,9 @@
 > Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : films récents (étape 8, arrêt de R3c)
+## En cours : films récents (étape 8, arrêt de R3d)
 
-Spec `docs/etape-8-films-recents.md` v0.3 (décisions de Thibault à l'arrêt de R3 : contenu seul, norme par tranche de popularité, ≥ 500 votes pour recommander, ω = 1, référence de popularité 2019-2022). R3b : ρ = 0 (règle appliquée, aucun effet mesuré). **R3c : arrêt, le contrôle « aucun des 10 films les plus votés de chaque année sous 10 000 » échoue** ; seule la règle « rang absolu dans l'année, référence 2010-2018 » le passe pour 2024-2026 ; 2022-2023 échouent à cause des films du catalogue (`year_all`). Questions en section 5 (R3c). Rien de codé dans le site.
+Spec `docs/etape-8-films-recents.md` v0.4. Fait : collecte TMDB, placement par le contenu, faux départ à froid, ρ = 0, **nouvelle popularité à partir de 2019** (rang des votes dans l'année, référence 2010-2018, catalogue compris ; contrôles (a) et (b) atteints ; `popularity.bin` et cas du fold-in régénérés, parité Python / TypeScript verte). **Arrêt** : avec la nouvelle popularité, les films estimés font tomber NDCG@20 à ∞ à 95 % (critère 97 %) ; un facteur 0,8 sur la norme cible passe tous les critères (question en section 5, R3d). Rien de codé dans le site.
 
 ## Fait : tags des cartes (après l'étape 6c)
 

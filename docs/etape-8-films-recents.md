@@ -1,6 +1,7 @@
 # Étape 8 — Films récents
 
-> **⏸ Arrêt de R3c (12 novembre 2026)** : le contrôle de popularité v0.3 échoue (section 5, R3c) ; ρ = 0 décidé selon la règle (R3b).
+> **⏸ Arrêt de R3d (12 novembre 2026)** : nouvelle popularité faite et contrôlée ((a), (b) ✅ ; `popularity.bin` et cas du fold-in régénérés, parité verte) ; NDCG@20 à ∞ à 95 % avec la norme D1c, 97,7 % avec un facteur 0,8 (question en section 5, R3d).
+> Version 0.4 (12 novembre 2026) : décisions de Thibault à l'arrêt de R3c : popularité par **rang absolu dans l'année, référence 2010-2018**, pour les films estimés et pour les films du catalogue sortis à partir de 2019 (`year_all` ✗ à partir de 2019) ; contrôles (a), (b), (c) ; ρ = 0 (R3b).
 > Version 0.3 (12 novembre 2026) : **décisions de Thibault à l'arrêt de R3** : contenu seul (voisins TMDB et mélange ✗) ; norme cible par tranche de **popularité du curseur** (tranche de votes ✗) ; < 500 votes non recommandables, comptent dans le profil ; popularité référence 2019-2022, contrôle « aucun des 10 films les plus votés de chaque année sous 10 000 » ; ω = 1 ; ρ tranché par une mesure de plus (règle en D4) ; test de clôture contre la vraie direction recalée (D5).
 > Version 0.2 (12 novembre 2026) : **validée par Thibault** avec ses réponses à la section 7 (périmètre 2022 → aujourd'hui, placés à ≥ 50 votes, recommandables à ≥ 100 ; `similar` écarté ; norme cible par tranche de votes TMDB ; fiches des 23 019 films ; seuil de D5 par tranche de votes, tranche < 500 non recommandable si elle échoue ; popularité calée sur les films 2019-2022 du catalogue ; ω mesuré sur la validation ; étape avant la mise en ligne). Version 0.1 (12 novembre 2026) : diagnostic R0 (section 2), décisions proposées.
 > Point de départ : les pistes retenues avec Claude Web (D1-D8) et le trou accepté au MVP (« films sortis après 2023 : trop récents pour nous »). Étape insérée après l'étape 6c, avant la mise en ligne (étape 7) ; le nom du fichier suit la demande de Thibault.
@@ -200,7 +201,7 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
 
 ### D7. Site
 
-- **Popularité du curseur** des films estimés : **pas `0,285 × votes` tel quel** (2.4 : 89 % sous le plafond 200). **Correspondance par rang dans l'année** (v0.2) : un film au centile c des votes TMDB parmi les films TMDB de son année de sortie (≥ 50 votes) reçoit la popularité au centile c de la **distribution de référence des films 2019-2022** (même univers : films TMDB ≥ 50 votes de ces années ; popularité `popularity.bin` pour ceux du catalogue, `0,285 × votes` pour les autres) ; jamais moins que `0,285 × votes`. **Contrôle (v0.3)** : **aucun des 10 films les plus votés de chaque année sous 10 000** (un succès doit disparaître au cran 10 000, pas forcément à 20 000 ; ✗ contrôle v0.2 « au-dessus de 20 000 », intenable avec cette référence). S'il échoue : arrêt. Table dans `model-meta.json`. Dans le faux départ à froid, la référence est 2018-2021 (sans la base).
+- **Popularité du curseur** des films estimés : **pas `0,285 × votes` tel quel** (2.4 : 89 % sous le plafond 200). **v0.4 : rang absolu dans l'année, référence 2010-2018, à partir de 2019, catalogue compris** (`popularity.py`, `rank_corrected` ; détails en section 5, R3d ; ✗ centile v0.2-v0.3 ci-après). Ancienne règle : **correspondance par rang dans l'année** (v0.2) : un film au centile c des votes TMDB parmi les films TMDB de son année de sortie (≥ 50 votes) reçoit la popularité au centile c de la **distribution de référence des films 2019-2022** (même univers : films TMDB ≥ 50 votes de ces années ; popularité `popularity.bin` pour ceux du catalogue, `0,285 × votes` pour les autres) ; jamais moins que `0,285 × votes`. **Contrôle (v0.3)** : **aucun des 10 films les plus votés de chaque année sous 10 000** (un succès doit disparaître au cran 10 000, pas forcément à 20 000 ; ✗ contrôle v0.2 « au-dessus de 20 000 », intenable avec cette référence). S'il échoue : arrêt. Table dans `model-meta.json`. Dans le faux départ à froid, la référence est 2018-2021 (sans la base).
 - **Carte** : « ★ x,x · TMDB » (note TMDB ramenée sur 5, une décimale, au lieu de la moyenne MovieLens) et **« (estimé) »** ; lien Letterboxd par `tmdb_id` (inchangé) ; tag « encore un <réalisateur> » (réalisateurs TMDB, même calcul) et tampon « ✱ pépite » (popularité D7) **s'appliquent** ; **pas** « ça divise » (pas de notes individuelles) ; « vieux trésor » sans objet (récents par définition) ; « parce que t'as aimé X et Y » permis (cosinus des vecteurs estimés), à vérifier en R6.
 - **Rangée « sorties récentes »** : non (v0.3) : le contenu passe le seuil de D5, les films estimés sont mêlés aux autres.
 - **Calibration des genres** : genres TMDB des films estimés traduits en genres MovieLens (Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Fantasy, Horror, Mystery, Romance, Thriller, War, Western : même nom ; Science Fiction → Sci-Fi ; Family → Children ; Music → Musical ; History et TV Movie → aucun). Correspondance vérifiée en R1 sur les films du catalogue (accord par genre, rapporté).
@@ -389,6 +390,59 @@ Contrôle de Thibault (v0.3, D7) : **aucun des 10 films les plus votés de chaqu
 1. **Règle de popularité des films estimés** : garder le centile 2019-2022 (contrôle en échec, 52 % des recommandables sous 500), ou passer au **rang absolu dans l'année, référence 2010-2018** (contrôle atteint pour 2024-2026, 15 % sous 500) ?
 2. **Portée du contrôle** : 2022 et 2023 échouent à cause des films **du catalogue** (popularité `year_all` de l'étape 4, hors de l'étape 8). Limiter le contrôle aux films absents (ou aux années 2024 et suivantes) ? Ou rouvrir `year_all` pour 2022-2023, ce qui changerait `popularity.bin` et les cas du fold-in ?
 3. **Cohérence** : avec le rang absolu 2010-2018, un succès de 2024 (~23 000) passerait pour plus connu qu'un succès de 2022 du catalogue (~4 000-10 000). D'accord ?
+
+
+### R3d — Nouvelle popularité (rang absolu dans l'année, à partir de 2019) — ⏸ arrêt : NDCG@20 à ∞ sous 97 % avec la norme D1c
+
+Décisions de Thibault à l'arrêt de R3c : rang absolu dans l'année, référence 2010-2018, pour les films estimés **et** pour les films du catalogue des années sous-comptées ; une seule source de votes ; contrôles (a), (b), (c) ; mesures de R3 refaites aux crans.
+
+**Année de départ.** Mesure avec `year_all` (films TMDB de chaque année triés par votes) : même les années mûres ont des succès sous 10 000 (2018 : 6 sur 10), donc le contrôle littéral ne donne pas d'année. Règle fixée avant le calcul : **première année où le 10ᵉ film le plus voté passe sous le minimum des années de référence** (7 225 en 2018 ; les autres entre 7 842 et 21 335). Résultat : **2019** (5 158), puis 2 129 à 4 562 de 2020 à 2023. `year_all` reste inchangé avant 2019.
+
+**Règle** (`popularity.py`, `rank_corrected` ; `RANK_FIRST_YEAR = 2019`, `RANK_REFERENCE_YEARS = (2010, 2018)`) : à partir de 2019, le film classé r par votes TMDB dans son année (films `/discover` ≥ 50 votes, votes de `/discover` seulement ; un film absent de `/discover` est placé par ses votes) reçoit la **médiane, sur 2010-2018, de la r-ième plus haute popularité de l'année** (décroissante par construction) ; jamais moins que `year_all` ni que `0,285 × votes`. Même règle pour les films estimés (base `0,285 × votes`). Table : 27 145, 23 152, 17 742, 16 281, 15 466, 14 327, 13 852, 13 103, 12 136, 11 982 pour les 10 premiers rangs. **1 278 films du catalogue relevés, aucun baissé.**
+- Une première version prenait la médiane par rang de **votes** puis la rendait décroissante par minimum cumulé : (a) échouait (8 480 aux rangs 9-10, tirés par un creux de la médiane). Ce n'était pas la règle validée en R3c ; revenu à celle-ci.
+
+**Contrôles** (`recent_films.py popularity-check`, figure `docs/figures/etape8-popularite-rangs.png`)
+- **(a) ✅** : de 2019 à 2026, aucun des 10 films les plus votés sous 10 000 (le 10ᵉ à 11 982).
+- **(b) ✅** : popularité médiane autour des rangs 1 (1-3), 10 (9-11) et 100 (95-105). Saut 2018 → 2019 : ×1,51, ×1,66 et ×1,55, pour des plus grands sauts d'une année à l'autre en 2010-2018 de ×2,20, ×2,57 et **×1,56** (rang 100 : de justesse). À partir de 2019, les valeurs sont plates (23 152, 11 982, ~1 020) et un peu au-dessus de la moyenne des années de référence. La règle prend la r-ième plus haute popularité, alors que le profil des années de référence suit l'ordre des votes, qui est plus bruité.
+
+| Année | rang 1 avant → après | rang 10 | rang 100 |
+|---|---|---|---|
+| 2018 | 15 290 → 15 290 | 7 225 → 7 225 | 664 → 664 |
+| 2019 | 19 659 → 23 152 | 5 158 → 11 982 | 681 → 1 026 |
+| 2020 | 7 844 → 23 152 | 2 129 → 11 982 | 357 → 1 018 |
+| 2022 | 8 342 → 23 152 | 2 254 → 11 982 | 624 → 1 018 |
+| 2023 | 4 034 → 23 152 | 1 603 → 11 982 | 682 → 1 018 |
+| 2024 | 10 410 → 23 152 | 3 467 → 11 982 | 414 → 1 018 |
+| 2026 | 7 015 → 23 152 | 2 088 → 11 982 | 142 → 1 018 |
+
+- **(c)** Part des films recommandables sous 2 000 / 500 / 200, avant → après :
+  - catalogue entier (22 968) : 86,8 / 70,9 / 55,3 % → 86,1 / 70,0 / 54,5 % ;
+  - catalogue sorti à partir de 2019 (1 924) : 93,7 / 74,1 / 51,4 % → 85,5 / 63,7 / 42,6 % ;
+  - films estimés recommandables (≥ 500 votes, 563) : 89,0 / 51,9 / 5,9 % (centile v0.3) → 64,8 / 15,3 / 0,0 %.
+
+**Exports** : `popularity.bin` régénéré (`export.py export`, `--out web` ; `model-meta.json` : `popularity.rank_rule`), `foldin_cases.json` régénéré hors du dépôt ; `export.py verify` (les deux dossiers) : 200 listes calibrées identiques, écart des vecteurs 0 ; **Vitest 276/276** (parité Python / TypeScript : vecteurs et listes du fold-in) ; pytest 273/273. `catalog.json` ne dépend pas de la popularité.
+
+**Validation avec la nouvelle popularité** (`recent_eval.py run --pop rank|old`, fold-in de l'étape 6c, sans calibration)
+- Films du catalogue seuls (vrai vecteur), NDCG@20 : ∞ 0,1635 → 0,1635 ; 2 000 : 0,0252 → 0,0251 ± 0,0013 ; 500 : 0,0070 → 0,0070 ± 0,0007. Inchangé dans les IC.
+- Faux départ à froid avec la nouvelle popularité (les films de la base suivent la même règle) :
+
+| Variante | Recall@20 base | NDCG@20 ∞ / 2 000 / 500 | part de la base dans le top 20 ∞ / 2 000 / 500 |
+|---|---|---|---|
+| vrai vecteur | 0,0008 | 0,1635 / 0,0251 / 0,0070 | 0,0 / 0,0 / 0,0 % |
+| vraie direction, norme popularité (plafond) | 0,1204 ± 0,028 | 0,1635 / 0,0252 / 0,0070 | 0,8 / 2,0 / 2,8 % |
+| popularité, norme popularité (plancher) | 0,0512 ± 0,017 | 0,1603 / 0,0251 / 0,0068 | 1,1 / 0,3 / 2,3 % |
+| **contenu, norme popularité (décision v0.3)** | 0,2178 ± 0,033 | **0,1553 (95,0 %)** / 0,0242 / 0,0068 | **5,3** / 14,0 / 10,4 % |
+| contenu ×1,5 / ×2 / ×3 (écart à μ amplifié) | 0,218 / 0,215 / 0,212 | 0,1554 / 0,1555 / 0,1556 | 5,3 % à ∞ |
+| **contenu, norme popularité × 0,8** | **0,1414 ± 0,026** | **0,1598 (97,7 %)** / 0,0248 / 0,0069 | **2,7 / 7,4 / 5,6 %** |
+| contenu, norme popularité × 0,6 | 0,0650 ± 0,017 | 0,1626 / 0,0251 / 0,0069 | 0,9 / 2,6 / 2,1 % |
+
+**Lecture**
+- Avec la nouvelle popularité, la norme cible des films estimés monte avec leur tranche de popularité. Le contenu reste proche de la direction moyenne (celle qui plaît à tout le monde) : il prend **5,3 % des top 20 à ∞** pour 2 % du catalogue, et NDCG@20 à ∞ tombe à **95,0 %**, sous le critère des 97 %. La vraie direction, à la même norme, n'en prend que 0,8 %.
+- Amplifier l'écart à μ ne change rien. **Réduire la norme cible de 20 %** passe tous les critères : NDCG@20 à ∞ 97,7 % ; Recall@20 base 0,141 = **117 % de la vraie direction recalée** (seuil 70 %), meilleur que la popularité (0,051) ; films estimés dans le top 20 : 7,4 % au cran 2 000 et 5,6 % à 500 (seuil 20 %). À × 0,6, le rappel tombe à 54 % du plafond.
+
+**Critères** (état à l'arrêt) : (a) ✅, (b) ✅ (rang 100 de justesse) ; NDCG@20 de validation à 2 000 et 500 inchangé pour le catalogue ✅ ; films du catalogue, NDCG@20 à ∞ ≥ 97 % avec les films estimés ❌ avec la norme D1c (95,0 %), ✅ avec × 0,8 (97,7 %).
+
+**Question pour Thibault (arrêt de R3d)** : ajouter à D1c un **facteur 0,8 sur la norme cible** (réglé sur la validation, dans `model-meta.json`), qui passe tous les critères ? Sinon : garder la norme D1c et accepter 95 % à ∞, ou une autre forme (par exemple la norme de la tranche de popularité inférieure).
 
 ---
 

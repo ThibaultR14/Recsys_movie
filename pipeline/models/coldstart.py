@@ -175,6 +175,8 @@ class Params:
     use_content: bool = True
     chronological: bool = True
     rescale: bool = True
+    content_scale: float = 1.0  # R3d: multiplies the content offset (ridge shrinks it towards 0)
+    norm_scale: float = 1.0  # R3d: multiplies the D1c target norm
 
 
 @dataclass
@@ -233,10 +235,11 @@ def place(
         else:
             alpha = n / (n + params.kappa)
         c = content.get(key)
-        mix = alpha * offset + (1.0 - alpha) * (np.zeros_like(mu) if c is None else c)
+        c = np.zeros_like(mu) if c is None else params.content_scale * c
+        mix = alpha * offset + (1.0 - alpha) * c
         v = mu + mix
         if params.rescale:
-            v = v * (f["target_norm"] / max(np.linalg.norm(v), 1e-12))
+            v = v * (params.norm_scale * f["target_norm"] / max(np.linalg.norm(v), 1e-12))
         out.vectors[key] = v
         out.info[key] = {
             "placed": True,

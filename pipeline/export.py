@@ -56,6 +56,7 @@ from config import (  # noqa: E402
     WEB_DATA,
 )
 from models import als  # noqa: E402
+from recent_films import DISCOVER_PARQUET  # noqa: E402
 
 FINAL_CONFIG = {"factors": 64, "regularization": 0.05, "alpha": 1.0, "beta": 1.0, "iterations": 30}
 # Fold-in of the site's user (step 6c, D2): rated films with percentile < 0.3 left out, unless
@@ -493,7 +494,7 @@ def cmd_export(out_dir: Path) -> None:
         print("writing to web/public/data/ (explicit request)")
     catalog = ev.load_catalog()
     movie_ids = trained_movie_ids(catalog)
-    year_pop, pop_info = popm.production_popularity(ev.CATALOG_PARQUET)
+    year_pop, pop_info = popm.production_popularity_v8(ev.CATALOG_PARQUET, DISCOVER_PARQUET)
     assert year_pop.max() < 2**32
     popularity = year_pop.astype(np.uint32)
     Y = np.load(FINAL_FACTORS)
@@ -543,6 +544,16 @@ def cmd_export(out_dir: Path) -> None:
             f"the release year; fewer than {popm.MIN_FILMS_PER_YEAR} movies -> previous year",
             "year_factors": pop_info["factors"],
             "year_factors_note": "release years not listed: f = 1",
+            "rank_rule": {
+                "first_year": pop_info["rank_first_year"],
+                "reference_years": pop_info["rank_reference_years"],
+                "rule": "step 8 (R3d): for movies released from first_year on, MovieLens "
+                "under-counts even the hits; the movie ranked r by TMDB votes within its "
+                "release year (TMDB /discover, >= 50 votes) gets the median over the reference "
+                "years of the r-th highest popularity of the year; never below the formula above",
+                "table_head": pop_info["rank_table_head"],
+                "table_len": pop_info["rank_table_len"],
+            },
             "why": "MovieLens stops in 2023 and its users rate mostly the movies of their time: "
             "recent movies have few ratings because they are recent. f >= 1 and the max only "
             "ever raise popularity",
@@ -618,10 +629,11 @@ def cmd_verify(out_dir: Path) -> dict:
     assert np.array_equal(yty, expected), "yty.bin != YᵀY of the dequantised vectors"
     pop = read_popularity(out_dir / "popularity.bin")
     assert len(pop) == meta["n_items"] == len(meta["movie_ids"]) == len(Y)
-    expected_pop, pop_info = popm.production_popularity(ev.CATALOG_PARQUET)
+    expected_pop, pop_info = popm.production_popularity_v8(ev.CATALOG_PARQUET, DISCOVER_PARQUET)
     assert np.array_equal(pop, expected_pop.astype(np.uint32)), "popularity.bin != formula"
     assert meta["popularity"]["r"] == pop_info["r_ref"]
     assert meta["popularity"]["year_factors"] == pop_info["factors"]
+    assert meta["popularity"]["rank_rule"]["first_year"] == pop_info["rank_first_year"]
     fixture = json.loads(fixture_path(out_dir).read_text())
     assert fixture["embeddings_sha256"] == sha256_file(out_dir / "embeddings.bin"), "stale fixture"
     rec = np.ones(meta["n_items"], dtype=bool)

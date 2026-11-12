@@ -50,7 +50,10 @@
 - **Norme du vecteur estimé = norme médiane des films du catalogue de la même tranche de popularité du curseur** — sans recalage, les films estimés sont invisibles ou envahissants — `é8` D1c.
 - ✗ **Norme par tranche de votes TMDB** : 40-55 % des top 20 aux crans 2 000 et 500 pour 2 % du catalogue — `é8` D1c, R3.
 - **ω = 1** (films estimés comptés comme les autres dans le fold-in) ; **`YᵀY` limité aux films entraînés** — aucune différence mesurable pour ω ; `YᵀY` avec les estimés moins bon — `é8` D6, R3.
-- **Popularité des films estimés : rang des votes TMDB dans l'année, calé sur les films 2019-2022** ; contrôle : aucun des 10 films les plus votés de chaque année sous 10 000 (✗ « au-dessus de 20 000 », intenable) — `é8` D7.
+- **Popularité à partir de 2019 (catalogue et films estimés) : rang absolu des votes TMDB dans l'année** : le r-ième film le plus voté reçoit la médiane, sur 2010-2018, de la r-ième plus haute popularité de l'année ; jamais moins qu'avant — MovieLens sous-compte même les succès à partir de 2019 (10ᵉ film le plus voté de 2019 : 5 158, sous toutes les années 2010-2018) ; contrôles : aucun des 10 films les plus votés de chaque année sous 10 000, pas de saut en 2019 — `é8` D7, R3d.
+- ✗ **`year_all` à partir de 2019** (gardé avant) : il laissait les succès de 2019-2023 entre 1 600 et 10 000 (10ᵉ film le plus voté de 2023 : 1 603), donc pris pour des pépites aux crans 2 000 à 10 000 — `é8` R3d.
+- ✗ **Centile des votes dans l'année, référence 2019-2022** (popularité des films estimés v0.2-v0.3) : aucun gros succès récent au-dessus de 10 000, 52 % des films recommandables sous le cran 500 ; la référence 2019-2022 hérite du sous-comptage de MovieLens — `é8` R3c.
+- **ρ = 0** (pas de pénalité de qualité TMDB) : à ρ = 0,05 et 0,1, aucun film vu et mal noté retiré du top 20 ; la note TMDB est affichée sur la carte — `é8` D4, R3b.
 - ✗ **« ≥ 70 % du vrai vecteur »** comme seuil : dégénéré (vrai vecteur des films 2022-2023 presque jamais recommandé) ; remplacé par la vraie direction avec norme recalée — `é8` D5.
 
 ## Curseur et popularité
@@ -60,7 +63,7 @@
 - ✗ **V1** (`score − λ × log(popularité)`, prévu au départ) : effet nul puis brutal, moitié basse identique pour tous — `é2` D5.
 - ✗ **V2** (reclassement du top K) : plancher fixé par K, listes mixtes, régularité 3 à 10 fois moins bonne — `é2` D5.
 - ✗ Transition douce près du plafond : pas au MVP — simplicité — `é2` D5.
-- **Popularité hybride** : `max(arrondi(ml × f_année), arrondi(0,285 × tmdb_vote_count))` — MovieLens s'arrête en 2023 et sous-compte les films récents — `é2` D5, `é4` §6.
+- **Popularité hybride** : `max(arrondi(ml × f_année), arrondi(0,285 × tmdb_vote_count))` — MovieLens s'arrête en 2023 et sous-compte les films récents — `é2` D5, `é4` §6. À partir de 2019 : rang des votes dans l'année (étape 8, voir « Films récents »).
 - Correction **`year_all`** (`f_année = max(1, 0,285 / r_année)` pour toutes les années) — le rapport MovieLens/TMDB baisse en continu depuis 2000 ; elle ne rend jamais un film plus confidentiel qu'avant — `é4` §6.
 - ✗ `year_2019` et `tmdb_recent` (autres corrections) : corrigent moins bien les films récents — `é4` §6.
 - ✗ **Popularité TMDB seule** : fait passer des films de fans et des curiosités pour des pépites — `é2` C4, C5.

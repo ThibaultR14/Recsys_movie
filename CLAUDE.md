@@ -25,7 +25,7 @@ Documentation de référence dans `docs/` — **la lire avant toute décision st
 
 - Modèle en production : **ALS** (`implicit`), 64 facteurs, `regularization` 0,05, `alpha` 1, β 1, 30 itérations, réentraîné sur tous les utilisateurs, vecteurs en int8. EASE uniquement pour comparer hors ligne.
 - Catalogue : films avec **≥ 20 notes** MovieLens, ~20 000–25 000 films, ~5 Mo de données au total.
-- Curseur : **plafond de popularité**. À chaque position, seuls les films avec une popularité ≤ plafond sont candidats, classés par le score du modèle ; positions ∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200 (∞ = ordre du modèle). Popularité = `max(arrondi(ml_rating_count × f_année), arrondi(0,285 × tmdb_vote_count))`, `f_année = max(1, 0,285 / r_année)` (rapport médian MovieLens / TMDB de l'année de sortie ; correction des films récents, `pipeline/popularity.py`), jamais plus confidentielle qu'avant. Le re-classement `score − λ × log(popularité)` a été testé et écarté (`docs/etape-2-modele.md`, D5).
+- Curseur : **plafond de popularité**. À chaque position, seuls les films avec une popularité ≤ plafond sont candidats, classés par le score du modèle ; positions ∞ → 20 000 → 10 000 → 5 000 → 2 000 → 1 000 → 500 → 200 (∞ = ordre du modèle). Popularité = `max(arrondi(ml_rating_count × f_année), arrondi(0,285 × tmdb_vote_count))`, `f_année = max(1, 0,285 / r_année)` (rapport médian MovieLens / TMDB de l'année de sortie ; correction des films récents, `pipeline/popularity.py`), jamais plus confidentielle qu'avant. **À partir de 2019** (étape 8, R3d) : rang des votes TMDB dans l'année (`/discover`), le r-ième film le plus voté reçoit la médiane 2010-2018 de la r-ième plus haute popularité de l'année, jamais moins qu'avant (`rank_corrected`, `model-meta.json` `popularity.rank_rule`) ; `popularity.bin` dépend donc de `tmdb_discover.parquet` (`recent_films.py collect`). Le re-classement `score − λ × log(popularité)` a été testé et écarté (`docs/etape-2-modele.md`, D5).
 - Films récents (après 2023) : **trou accepté au MVP**, à signaler honnêtement dans l'interface.
 - Import : architecture d'**adaptateurs** (un par source) qui produisent tous le même format interne `{ titre, annee, imdbId?, tmdbId?, noteNormalisee, date? }`. Notes normalisées en percentiles par utilisateur.
 - Pas d'IA au MVP pour les listes faites main : correspondance floue (Fuse.js).
@@ -175,9 +175,10 @@ npx tsx scripts/tags-report.ts <export | csv IMDb>
 ```sh
 uv run python recent_films.py collect      # /discover 2010 -> aujourd'hui + fiches TMDB (catalogue + films absents depuis 2022), ~20 min sans cache
 uv run python recent_films.py table        # data/processed/tmdb_films.parquet + accord des genres TMDB / MovieLens
-uv run python recent_films.py popularity [--rule percentile|rank] [--ref 2019-2022]   # popularité D7 des films absents + contrôle v0.3
+uv run python recent_films.py popularity [--rule percentile|rank] [--ref 2019-2022]   # popularité D7 des films absents + contrôle v0.3 (comparaisons R3c)
+uv run python recent_films.py popularity-check   # règle retenue (R3d) : contrôles (a) (b) (c) + docs/figures/etape8-popularite-rangs.png
 uv run python recent_eval.py retrain       # ALS sans les films 2022-2023 (~3 min)
-uv run python recent_eval.py run [--only "contenu;popularité"] [--tag T]   # faux départ à froid, validation (~8 min)
+uv run python recent_eval.py run [--only "contenu;popularité"] [--tag T] [--pop rank|old]   # faux départ à froid, validation (~8 min)
 ```
 
 Diagnostic popularité (pipeline) : `uv run python recency_diagnostics.py years | validation | user <rapport>` (titres dans le terminal seulement ; ne modifie pas `popularity.bin`).

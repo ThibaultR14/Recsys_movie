@@ -68,3 +68,43 @@ def test_catalogue_never_less_popular_than_before():
     before = popm.hybrid(c["ml_rating_count"], c["tmdb_vote_count"], info["r_ref"])
     assert (pop >= before).all()
     assert info["r_ref"] == pytest.approx(0.2846, abs=1e-4)
+
+
+def test_votes_rank_table_is_median_of_sorted_years():
+    t = popm.votes_rank_table([[10, 30, 20], [40, 5], [25, 35, 15]])
+    assert t.tolist() == [35.0, 20.0, 12.5]  # 3rd rank: years with 3 films only (10, 15)
+    assert (np.diff(t) <= 0).all()
+
+
+def test_ranks_in_year_single_vote_source():
+    ids, votes = [7, 9, 4], np.array([500.0, 100.0, 100.0])
+    # film 7 in the list keeps its place (rank 1) even if its own vote count differs
+    r = popm.ranks_in_year([7, 8, 4], np.array([999.0, 300.0, 100.0]), ids, votes)
+    assert r.tolist() == [0, 1, 1]  # 8 (not listed, 300 votes) after 500; 4 before 9 (tie, id)
+
+
+def test_rank_corrected_only_from_first_year_and_never_lower():
+    import polars as pl
+
+    disc = pl.DataFrame(
+        {
+            "id": [1, 2, 3, 4, 5, 6],
+            "year": [2010, 2010, 2011, 2011, 2020, 2020],
+            "vote_count": [100, 50, 100, 50, 100, 50],
+        }
+    )
+    base = np.array([1000, 100, 2000, 300, 10, 500])
+    pop, info = popm.rank_corrected(
+        base,
+        [1, 2, 3, 4, 5, 6],
+        np.array([2010, 2010, 2011, 2011, 2020, 2020], dtype=float),
+        np.array([100, 50, 100, 50, 100, 50], dtype=float),
+        disc,
+        r_ref=0.3,
+        first_year=2020,
+        ref_years=(2010, 2011),
+    )
+    # reference table: rank 0 = median(1000, 2000) = 1500, rank 1 = median(100, 300) = 200
+    assert pop[:4].tolist() == base[:4].tolist()  # before the first year: unchanged
+    assert pop[4] == 1500 and pop[5] == 500  # 6 keeps its higher year_all popularity
+    assert info["rank_table_head"] == [1500, 200]

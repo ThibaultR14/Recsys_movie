@@ -5,6 +5,7 @@ R1 — collection (TMDB only, never an IMDb dataset):
     uv run python recent_films.py collect   # /discover 2018 -> today, then one /movie call per film
     uv run python recent_films.py table     # data/processed/tmdb_films.parquet + genre agreement
     uv run python recent_films.py popularity   # D7 slider popularity of the missing films
+    uv run python recent_films.py popularity-check   # R3d: controls (a) (b) (c) + figure
 
 - `/discover/movie` by month (>= 50 votes): vote counts of every TMDB film since 2018 (reference
   of the slider popularity, D7) and the list of films missing from the catalogue (D0).
@@ -24,6 +25,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
+from pathlib import Path
 
 import numpy as np
 import polars as pl
@@ -496,6 +498,150 @@ def cmd_popularity(args) -> int:
     return 0
 
 
+# --- R3d: popularity rule of step 8 (catalogue from 2019 + estimated films) -----------------------
+
+RANK_WINDOWS = {1: (1, 3), 10: (9, 11), 100: (95, 105)}  # "popularity at rank r" = window median
+FIGURE = Path(__file__).resolve().parent.parent / "docs" / "figures" / "etape8-popularite-rangs.png"
+
+
+def estimated_popularity(
+    missing: pl.DataFrame, disc: pl.DataFrame, pop_of_tmdb: dict[int, int], r_ref: float
+) -> np.ndarray:
+    """D7 (v0.4): the rank rule of popularity.py; base = r_ref x votes (no MovieLens count)."""
+    votes = missing["vote_count"].to_numpy().astype(np.float64)
+    pop, _ = popm.rank_corrected(
+        np.rint(r_ref * votes).astype(np.int64),
+        missing["tmdb_id"].to_list(),
+        missing["year"].cast(pl.Float64).fill_null(np.nan).to_numpy(),
+        votes,
+        disc,
+        r_ref,
+        first_year=FIRST_YEAR,  # every estimated film (released since 2022)
+        pop_of_tmdb=pop_of_tmdb,
+    )
+    return pop
+
+
+def year_profile(disc: pl.DataFrame, pop_of: dict[int, int], year: int) -> list[int | None]:
+    d = disc.filter(pl.col("year") == year).sort(["vote_count", "id"], descending=[True, False])
+    return [pop_of.get(t) for t in d["id"].to_list()]
+
+
+def window_median(profile: list[int | None], lo: int, hi: int) -> float | None:
+    vals = [p for p in profile[lo - 1 : hi] if p is not None]
+    return float(np.median(vals)) if vals else None
+
+
+def cmd_popularity_check(_args) -> int:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    new_cat, info = popm.production_popularity_v8(CATALOG_PARQUET, DISCOVER_PARQUET)
+    old_cat = info["year_all"]
+    r_ref = info["r_ref"]
+    cat = catalog_frame()
+    disc = popm.discover_frame(DISCOVER_PARQUET)
+    tmdb = cat["tmdb_id"].to_list()
+    films = pl.read_parquet(FILMS_PARQUET)
+    missing = films.filter(~pl.col("in_catalog") & (pl.col("vote_count") >= MIN_VOTES))
+    ref_pop = {int(t): int(p) for t, p in zip(tmdb, new_cat.tolist(), strict=True) if t is not None}
+    est_new = estimated_popularity(missing, disc, ref_pop, r_ref)
+    old_ref = {int(t): int(p) for t, p in zip(tmdb, old_cat.tolist(), strict=True) if t is not None}
+    est_old, _ = recent_popularity(pl.read_parquet(DISCOVER_PARQUET), missing, REFERENCE_YEARS)
+    mids = missing["tmdb_id"].to_list()
+    pop_new = {**ref_pop, **dict(zip(mids, est_new.tolist(), strict=True))}
+    pop_old = {**old_ref, **dict(zip(mids, est_old.tolist(), strict=True))}
+    print(
+        f"règle : rang des votes dans l'année à partir de {info['rank_first_year']}, référence "
+        f"{info['rank_reference_years']} ; 10 premiers rangs : {info['rank_table_head']}"
+    )
+    changed = int((new_cat != old_cat).sum())
+    print(
+        f"catalogue : {changed} films relevés (aucun baissé : {bool((new_cat >= old_cat).all())})"
+    )
+
+    # (a)
+    print("\n(a) 10 films les plus votés de chaque année ≥ 2019 : aucun sous 10 000")
+    ok_a = True
+    for y in range(info["rank_first_year"], date.today().year + 1):
+        top = year_profile(disc, pop_new, y)[:10]
+        under = sum(p is not None and p < 10_000 for p in top)
+        ok_a &= under == 0
+        print(f"  {y} : {under}/10 sous 10 000 ; {top}")
+    print("  (a) " + ("atteint" if ok_a else "échoue"))
+
+    # (b)
+    years = list(range(2010, date.today().year + 1))
+    rows = {"avant": {}, "après": {}}
+    for label, pop_of in (("avant", pop_old), ("après", pop_new)):
+        for y in years:
+            prof = year_profile(disc, pop_of, y)
+            rows[label][y] = {r: window_median(prof, *w) for r, w in RANK_WINDOWS.items()}
+    print("\n(b) popularité médiane aux rangs 1 (1-3), 10 (9-11), 100 (95-105), avant → après")
+    print("| année | rang 1 | rang 10 | rang 100 |")
+    print("|---|---|---|---|")
+
+    def fmt(x):
+        return "—" if x is None else f"{x:,.0f}".replace(",", " ")
+
+    for y in years:
+        cells = [f"{fmt(rows['avant'][y][r])} → {fmt(rows['après'][y][r])}" for r in RANK_WINDOWS]
+        print(f"| {y} | " + " | ".join(cells) + " |")
+    ok_b = True
+    lo, hi = popm.RANK_REFERENCE_YEARS
+    y0 = info["rank_first_year"]
+    for r in RANK_WINDOWS:
+        steps = [abs(np.log(rows["après"][y + 1][r] / rows["après"][y][r])) for y in range(lo, hi)]
+        jump = abs(np.log(rows["après"][y0][r] / rows["après"][y0 - 1][r]))
+        ok = jump <= max(steps)
+        ok_b &= ok
+        print(
+            f"  rang {r} : saut {y0 - 1} → {y0} = ×{np.exp(jump):.2f} ; plus grand saut "
+            f"{lo}-{hi} = ×{np.exp(max(steps)):.2f} → {'ok' if ok else 'saut'}"
+        )
+    print("  (b) " + ("atteint" if ok_b else "échoue"))
+
+    # (c)
+    print("\n(c) part des films recommandables sous 2 000 / 500 / 200, avant → après")
+    rec = cat["recommendable"].to_numpy()
+
+    def shares(p):
+        return " / ".join(f"{100 * (p <= c).mean():.1f} %" for c in (2_000, 500, 200))
+
+    print(f"  catalogue ({int(rec.sum())}) : {shares(old_cat[rec])} → {shares(new_cat[rec])}")
+    recent = cat["year"].fill_null(0).to_numpy() >= y0
+    print(
+        f"  catalogue ≥ {y0} ({int((rec & recent).sum())}) : {shares(old_cat[rec & recent])} → "
+        f"{shares(new_cat[rec & recent])}"
+    )
+    r500 = missing["vote_count"].to_numpy() >= MIN_VOTES_RECOMMENDABLE_V03
+    print(
+        f"  estimés ≥ 500 votes ({int(r500.sum())}) : {shares(est_old[r500])} → "
+        f"{shares(est_new[r500])}"
+    )
+
+    # figure
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    colors = {1: "#2f4bd8", 10: "#1f8a5b", 100: "#b0306a"}
+    for r, c in colors.items():
+        for label, style in (("avant", "--"), ("après", "-")):
+            ys = [rows[label][y][r] for y in years]
+            ax.plot(years, ys, style, color=c, label=f"rang {r}, {label}", linewidth=1.6)
+    ax.axvline(y0 - 0.5, color="#888", linewidth=0.8)
+    ax.axhline(10_000, color="#888", linewidth=0.8, linestyle=":")
+    ax.set_yscale("log")
+    ax.set_xlabel("année de sortie")
+    ax.set_ylabel("popularité du curseur (médiane autour du rang)")
+    ax.set_title("Popularité des films classés 1, 10 et 100 par votes TMDB dans leur année")
+    ax.legend(fontsize=8, ncol=3)
+    fig.tight_layout()
+    fig.savefig(FIGURE, dpi=120)
+    print(f"\nfigure : {FIGURE.relative_to(FIGURE.parent.parent.parent)}")
+    return 0 if ok_a and ok_b else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
@@ -506,6 +652,7 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--ref", default=f"{REFERENCE_YEARS[0]}-{REFERENCE_YEARS[1]}")
     pp.add_argument("--rule", choices=("percentile", "rank"), default="percentile")
     pp.set_defaults(fn=cmd_popularity)
+    sub.add_parser("popularity-check").set_defaults(fn=cmd_popularity_check)
     args = p.parse_args(argv)
     return args.fn(args)
 

@@ -76,9 +76,10 @@ class Data:
     counts: np.ndarray  # training-user counts
     pop: np.ndarray  # year_all popularity on training counts (caps)
     r_ref: float
+    pop_rule: str = "rank"  # "rank": step 8 rule from 2019 (R3d); "old": year_all only
 
 
-def load_data() -> Data:
+def load_data(pop_rule: str = "rank") -> Data:
     catalog = ev.load_catalog()
     cat = pl.read_parquet(
         ev.CATALOG_PARQUET,
@@ -94,7 +95,18 @@ def load_data() -> Data:
     years = cat["year"].cast(pl.Float64).fill_null(np.nan).to_numpy()
     votes = cat["tmdb_vote_count"].cast(pl.Float64).fill_null(np.nan).to_numpy()
     pop, info = popm.year_corrected(counts, votes, years)
-    return Data(catalog, cat, base, films, tmdb_to_item, counts, pop, info["r_ref"])
+    if pop_rule == "rank" and DISCOVER_PARQUET.exists():
+        # R3d: rank of the TMDB votes within the year from 2019 (reference 2010-2018), as on the
+        # site, on training-user counts; the base films (2022-2023) get it too.
+        pop, _ = popm.rank_corrected(
+            pop,
+            cat["tmdb_id"].to_list(),
+            years,
+            votes,
+            popm.discover_frame(DISCOVER_PARQUET),
+            info["r_ref"],
+        )
+    return Data(catalog, cat, base, films, tmdb_to_item, counts, pop, info["r_ref"], pop_rule)
 
 
 def cmd_retrain() -> int:
@@ -213,6 +225,8 @@ class Placer:
 
     def base_pop(self, ref_years: tuple[int, int]) -> np.ndarray:
         """D7 popularity of the base films (rank of the votes within the year, reference years)."""
+        if self.data.pop_rule == "rank":
+            return self.data.pop[self.base_items]  # same rank rule as the catalogue (R3d)
         if ref_years in self._base_pop:
             return self._base_pop[ref_years]
         d = self.data
@@ -478,6 +492,23 @@ def variants() -> list[Variant]:
         Variant("contenu, norme popularité, réf. 2010-2017", params=ct, norm_by=pp, ref_years=old),
         Variant("mélange κ = 10, norme popularité", params=replace(mix, kappa=10.0), norm_by=pp),
     ]
+    for cs_ in (1.5, 2.0, 3.0):
+        out.append(
+            Variant(
+                f"contenu ×{cs_:g}, norme pop.", params=replace(ct, content_scale=cs_), norm_by=pp
+            )
+        )
+    for ns in (0.8, 0.6):
+        out.append(
+            Variant(f"contenu, norme pop. ×{ns:g}", params=replace(ct, norm_scale=ns), norm_by=pp)
+        )
+    out.append(
+        Variant(
+            "contenu ×2, norme pop. ×0.8",
+            params=replace(ct, content_scale=2.0, norm_scale=0.8),
+            norm_by=pp,
+        )
+    )
     for om in (0.0, 0.5):
         out.append(Variant(f"contenu, ω = {om:g}", params=ct, omega=om))
         out.append(Variant(f"contenu, norme pop., ω = {om:g}", params=ct, omega=om, norm_by=pp))
@@ -529,8 +560,9 @@ def print_details(results: list[dict]) -> None:
         )
 
 
-def cmd_run(only: list[str] | None, tag: str) -> int:
-    data = load_data()
+def cmd_run(only: list[str] | None, tag: str, pop_rule: str = "rank") -> int:
+    data = load_data(pop_rule)
+    print(f"popularité des crans : {pop_rule}", flush=True)
     catalog = data.catalog
     es = ev.load_eval_set("val", catalog)
     Y_true = sw.load_factors(sw.CONFIGS["A"], catalog)  # noqa: N806
@@ -571,10 +603,12 @@ def main() -> int:
     r = sub.add_parser("run")
     r.add_argument("--only", default="")
     r.add_argument("--tag", default="")
+    r.add_argument("--pop", choices=("rank", "old"), default="rank")
     args = p.parse_args()
     if args.cmd == "retrain":
         return cmd_retrain()
-    return cmd_run([s.strip() for s in args.only.split(";") if s.strip()] or None, args.tag)
+    only = [s.strip() for s in args.only.split(";") if s.strip()] or None
+    return cmd_run(only, args.tag, args.pop)
 
 
 if __name__ == "__main__":
