@@ -382,6 +382,66 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 
 **Étape 6c close le 12 novembre 2026.**
 
+### Q6 — Tags des cartes : mesure (12 novembre 2026) — ⏸ arrêt : seuils, plafond par rangée, libellés
+
+**Règles rappelées par Thibault** :
+- un seul tag par carte, « ✱ pépite » compris ;
+- même emplacement (en haut à droite de l'affiche) et même style pour tous, **pas de couleur par tag** (le paragraphe « Couleurs » de la section 8 est remplacé) ;
+- hiérarchie **✱ pépite > réalisateur que j'aime > ça divise > vieux trésor** ;
+- les annotations (explication, série, loin de tes goûts, documentaire) ne sont pas des tags.
+
+**Code de mesure** (rien n'est branché sur le site, `catalog.json` inchangé) :
+- `pipeline/tag_diagnostics.py stats` calcule l'écart-type des notes MovieLens de chaque film (tous les utilisateurs, ids fusionnés ; l'union des fichiers du découpage donne exactement les 31 662 542 notes du catalogue) et sa distribution ; il croise ancienneté et popularité (`popularity.bin`). Il écrit `web/test-data/tag_stats.json` (ignoré, jamais servi : écart-type et année par `item_idx`).
+- `web/scripts/tags-report.ts <export>` mesure sur les vraies listes du moteur (calibrées, 48 par cran, rangées de 8) : fréquence brute de chaque tag, puis après la hiérarchie, et tags par rangée avec et sans plafond. Le tampon vient de `pepiteStamps` ; le réalisateur, de `profileDirectors`, le même calcul que la phrase de profil. Le script n'affiche que des comptes.
+
+**« ça divise » : écart-type des notes MovieLens** (23 019 films, ≥ 20 notes) : médiane 0,98, quantiles 90 % **1,19** et 95 % 1,27 (sur une échelle de 0,5 à 5).
+- **L'écart-type brut dépend du nombre de notes** : parmi les 10 % les plus dispersés, on trouve 17,8 % des films à 20-50 notes, contre 4,1 % à 200-1 000 notes et 0,6 % au-delà de 10 000. Sur 20 notes, l'écart-type est bruité ; et comme les crans bas sont faits de films peu notés, le tag s'y concentrerait par hasard : 14,6 % des films sous la popularité 200, contre 10,4 % sous 10 000.
+- **Variante « rétrécie »** (proposée) : la variance est tirée vers la moyenne du catalogue avec k = 50 notes fictives, `√((n·v + 50·v̄)/(n + 50))`. Quantiles 90 % **1,12**, 95 % 1,16, 85 % 1,09. La part de films dans les 10 % les plus dispersés devient presque indépendante de la popularité : 10,2-10,5 % sous tous les plafonds, de 200 à 10 000 ; par nombre de notes, 8,8 / 12,6 / 10,3 / 8,6 / 3,5 %.
+- **Taille si on embarque la valeur** : +24 Ko gzip (écart-type × 100) ou +11 Ko (× 10, trop grossier : les seuils 1,09 / 1,12 / 1,16 donnent 11 / 11 / 12). Autre possibilité : la liste des `item_idx` au-dessus du seuil, calculée dans le pipeline, comme `version_of` (~2 300 films, quelques Ko).
+
+**« vieux trésor »** : films recommandables sortis avant 1960 : 1 849 (8 % ; 1 639 de popularité ≤ 1 000) ; avant 1970 : 2 906 (13 % ; 2 561 ≤ 1 000) ; avant 1980 : 4 162 (18 %). Aux crans ≤ 1 000, tout film est « peu vu » : le seuil de popularité n'agit qu'aux crans au-dessus ; en dessous, le tag revient à « ancien ».
+
+**Fréquence brute** (avant la hiérarchie), cartes sur 48, de ∞ à 200 :
+
+| Tag | Export Letterboxd de Thibault (188 films) | Export IMDb de Thibault (35 films) | Exemple (61 films) |
+|---|---|---|---|
+| ✱ pépite | 3, 3, 5, 2, 0, 2, 0, 0 | 3, 0, 2, 1, 3, 3, 0, 0 | 6, 3, 3, 3, 2, 1, 0, 0 |
+| réalisateur (3, 2 et 3 réalisateurs dans la phrase de profil) | 5, 2, 2, 1, 1, 0, 0, 0 | 4, 3, 1, 1, 0, 0, 0, 0 | 0, 0, 2, 3, 4, 5, 2, 1 |
+| ça divise, brut 10 % | 0, 1, 0, 0, 2, 0, 2, 5 | 0, 0, 0, 1, 1, 1, 1, 3 | 0, 0, 0, 0, 0, 0, 1, 6 |
+| ça divise, rétréci 5 % | 0, 1, 0, 0, 2, 0, 2, 4 | 0, 0, 0, 1, 2, 2, 2, 3 | 0, 0, 0, 0, 0, 0, 1, 6 |
+| **ça divise, rétréci 10 %** | 0, 2, 0, 0, 2, 2, 3, 6 | 0, 0, 2, 3, 7, 3, 3, 4 | 0, 2, 1, 1, 0, 0, 1, 6 |
+| ça divise, rétréci 15 % | 0, 2, 0, 0, 2, 4, 6, 11 | 0, 0, 2, 5, 7, 5, 5, 5 | 0, 2, 1, 1, 2, 3, 3, 11 |
+| **vieux, < 1960, ≤ 1 000** | 0, 0, 0, 0, 0, 1, 5, 7 | 0, 0, 0, 0, 0, 6, 10, 16 | 0, 0, 0, 0, 1, 7, 19, 9 |
+| vieux, < 1970, ≤ 1 000 | 0, 0, 0, 0, 0, 2, 5, 10 | 0, 0, 0, 0, 0, 6, 10, 20 | 0, 0, 0, 0, 5, **26, 30**, 22 |
+| vieux, < 1970, ≤ 2 000 | 0, 0, 0, 0, 5, 2, 5, 10 | 0, 0, 0, 0, 4, 6, 10, 20 | 0, 0, 2, 10, 23, 26, 30, 22 |
+| vieux, < 1970, ≤ 5 000 | 0, 0, 0, 0, 5, 2, 5, 10 | 0, 0, 0, 3, 4, 6, 10, 20 | 0, 4, 7, 17, 23, 26, 30, 22 |
+| vieux, < 1980, ≤ 1 000 | 0, 0, 0, 0, 0, 3, 6, 10 | 0, 0, 0, 0, 0, 6, 10, 21 | 0, 0, 0, 0, 6, 32, 34, 35 |
+
+**Après la hiérarchie** : variante B = la proposition (ça divise rétréci 10 %, vieux < 1960, ≤ 1 000) ; variante A pour comparer (rétréci 10 %, vieux < 1970, ≤ 1 000). Tags par rangée de 8, en « moyenne · maximum » sur les 6 rangées, de ∞ à 200 :
+
+| | Letterboxd de Thibault | IMDb de Thibault | Exemple |
+|---|---|---|---|
+| B : pépite · réalisateur · divise · vieux (cartes, 8 crans) | 15 · 8 · 14 · 13 | 12 · 9 · 20 · 32 | 18 · 14 · 11 · 36 |
+| B, sans plafond | 1,2·3 · 1,0·2 · 1,2·2 · 0,3·1 · 0,5·2 · 0,7·1 · 1,3·2 · 2,2·3 | 1,2·2 · 0,5·2 · 0,8·2 · 0,8·2 · 1,5·2 · 1,8·3 · 2,2·4 · 3,3·7 | 1,0·1 · 0,8·2 · 0,8·2 · 0,8·2 · 1,2·2 · 2,2·4 · 3,7·6 · 2,7·4 |
+| A, sans plafond | 1,2·3 · 1,0·2 · 1,2·2 · 0,3·1 · 0,5·2 · 0,8·2 · 1,3·2 · 2,7·4 | 1,2·2 · 0,5·2 · 0,8·2 · 0,8·2 · 1,5·2 · 1,8·3 · 2,2·4 · 4,0·7 | 1,0·1 · 0,8·2 · 0,8·2 · 0,8·2 · 1,5·3 · 5,0·7 · 5,5·8 · 4,7·5 |
+| B, plafond 3 | max 3 ; moyenne 0,3-2,2 | 0,5-2,5 | 0,8-2,8 |
+| **B, plafond 2** | **max 2 ; moyenne 0,3-1,8** | **0,5-1,8** | **0,8-2,0** |
+| B, 1re rangée, plafond 2 | 2, 1, 2, 1, 2, 1, 2, 2 | 1, 0, 0, 1, 2, 2, 2, 1 | 1, 0, 0, 1, 2, 2, 2, 2 |
+
+**Lecture** :
+1. **Pépite et réalisateur sont rares** (0 à 6 cartes sur 48 par cran) et vivent plutôt aux crans hauts ; le tampon disparaît à 500 et 200 (déjà noté à l'étape 5) ; le réalisateur dépend du profil (exemple : surtout de 2 000 à 1 000).
+2. **« ça divise »** rétréci 10 % : 0 à 7 cartes sur 48 par cran, plus fréquent aux crans bas, sans y exploser. La variante brute concentrerait le tag sur les films à peu de notes, sans vrai désaccord derrière.
+3. **« vieux trésor » domine les crans bas** pour un profil amateur de classiques. Sur l'exemple, avant 1970, c'est 26 à 30 cartes sur 48 de 1 000 à 500 : le tag ne distingue plus rien. Avant 1960, c'est 7 à 19 cartes. Aux crans ≤ 1 000, le seuil de popularité n'agit plus.
+4. **Sans plafond**, une rangée peut porter 3 à 7 tags aux crans bas avec la proposition (8 avec « avant 1970 ») : il faut un plafond. Avec 3, les crans bas restent à 2-3 tags en moyenne par rangée ; avec 2, une carte sur quatre au plus porte un tag.
+
+**Propositions (arrêt)** :
+- **ça divise** : écart-type **rétréci** (k = 50), **10 % les plus dispersés** (seuil 1,12), calculé dans le pipeline ; embarquer de préférence la **liste des `item_idx`** au-dessus du seuil (quelques Ko, comme `version_of`) plutôt que la valeur (+24 Ko gzip).
+- **vieux trésor** : **sorti avant 1960, popularité ≤ 1 000** (1 639 films) ; 1970 rend le tag trop fréquent pour les profils classiques.
+- **plafond : 2 tags par rangée de 8**. On les garde dans l'ordre de la hiérarchie, puis de la liste : un « ✱ pépite » n'est jamais retiré, puisqu'il y en a au plus un par rangée. Avec ce plafond, la première rangée a 0 à 2 tags sur les trois exports, et 2 au plus partout.
+- **libellés définitifs** : Claude Web (« encore un <réalisateur> que t'as pas vu », « ça divise », « vieux trésor », à confirmer).
+- **à confirmer** : le tag s'ajoute aux annotations sous la carte (explication, série…), il ne les remplace pas (rien de prévu d'autre).
+
+
 ---
 
 ## 6. À reporter
@@ -406,6 +466,8 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 ---
 
 ## 8. Ensuite : tags des cartes (après Q5, nouvelle sous-étape Q6)
+
+> 12 novembre 2026 : mesure faite (section 5, Q6), **arrêt** pour les seuils, le plafond et les libellés. Règles revues par Thibault : un seul tag par carte, même emplacement et même style pour tous, **pas de couleur par tag** (le paragraphe « Couleurs » ci-dessous est caduc).
 
 À coder **seulement après les corrections de qualité** (Q1-Q5), dans une sous-étape Q6 qui commence par une mesure et un **arrêt** pour fixer les seuils.
 

@@ -1,6 +1,6 @@
 # État du projet
 
-> Mis à jour le 12 novembre 2026, à la clôture de l'étape 6c (qualité des résultats, **close**). Prochaine étape : tags des cartes (Q6, section 8 de la spec 6c), puis étape 7. Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
+> Mis à jour le 12 novembre 2026 : étape 6c close ; **Q6 (tags des cartes) mesurée, arrêt** pour les seuils, le plafond par rangée et les libellés (`docs/etape-6c-qualite.md`, section 5, Q6). Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
 > Dépôt : https://github.com/ThibaultR14/Recsys_movie
 
 ## Le projet en 5 lignes
