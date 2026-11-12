@@ -1,6 +1,6 @@
 # Étape 6c — Qualité des résultats
 
-> Version 0.5 (12 novembre 2026) : décision de Q4b, **option a** (D1 seul, pas de pénalité ; la forme mesurée reste la référence, code non branché, μ à réévaluer avec les volontaires) ; Q5 (clôture). Version 0.4 (9 novembre 2026) : décision après Q4 (piste b en version douce : pénalité de proximité aux films mal notés avant la calibration, sous-étape **Q4b**, pas encore codée). Version 0.3 (9 novembre 2026) : décision de Q3 (option B, mode « part de films », λ par cran : 0,1 de ∞ à 10 000, 0,9 de 5 000 à 200, table dans `model-meta.json`). Version 0.2 (8 novembre 2026). Mini-étape insérée entre l'étape 6b (retouches de l'interface) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026** avec ses réponses à la section 7 : genres MovieLens, films sans genre hors des distributions (D1) ; `version_of` dans les deux sens (D3) ; seuil 0,3, films sans note jamais retirés, égalités au bord vérifiées, repli sous 5 films, phrase dans « comment ça marche » (D2) ; Steck sur un vivier de 150 par cran, reclassement une seule fois après l'analyse (D1) ; λ choisi en Q3 (au plus −3 % de NDCG@20 à ∞) ; test une seule fois à la clôture ; ordre Q1 → Q5. Section 8 ajoutée : tags des cartes, **après** Q5.
+> **Étape close le 12 novembre 2026** (version 0.6 : relecture de Q5 par Thibault, critère `C_KL` reformulé, textes de « comment ça marche » posés ; essai sur un vrai téléphone à faire de son côté, suivi dans la feuille de route). Version 0.5 (12 novembre 2026) : décision de Q4b, **option a** (D1 seul, pas de pénalité ; la forme mesurée reste la référence, code non branché, μ à réévaluer avec les volontaires) ; Q5 (clôture). Version 0.4 (9 novembre 2026) : décision après Q4 (piste b en version douce : pénalité de proximité aux films mal notés avant la calibration, sous-étape **Q4b**, pas encore codée). Version 0.3 (9 novembre 2026) : décision de Q3 (option B, mode « part de films », λ par cran : 0,1 de ∞ à 10 000, 0,9 de 5 000 à 200, table dans `model-meta.json`). Version 0.2 (8 novembre 2026). Mini-étape insérée entre l'étape 6b (retouches de l'interface) et l'étape 7 (mise en ligne). **Validée par Thibault le 8 novembre 2026** avec ses réponses à la section 7 : genres MovieLens, films sans genre hors des distributions (D1) ; `version_of` dans les deux sens (D3) ; seuil 0,3, films sans note jamais retirés, égalités au bord vérifiées, repli sous 5 films, phrase dans « comment ça marche » (D2) ; Steck sur un vivier de 150 par cran, reclassement une seule fois après l'analyse (D1) ; λ choisi en Q3 (au plus −3 % de NDCG@20 à ∞) ; test une seule fois à la clôture ; ordre Q1 → Q5. Section 8 ajoutée : tags des cartes, **après** Q5.
 > Point de départ : l'essai de Thibault (trop d'animation aux crans bas, films proches de films qu'il a mal notés, une autre version d'un film déjà vu). Le diagnostic (Q0) est fait : chiffres en section 2, détails en section 5.
 
 ---
@@ -161,7 +161,7 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 - Si un μ convient : `model-meta.json`, `calibrate.ts` / `engine.ts`, fixture régénérée hors du dépôt et parité Python / TypeScript (listes identiques), `reco-bench`, Playwright. **Arrêt** pour le choix de μ.
 - Si **aucun μ ne convient** : option **a** (D1 seul), à juger avec les volontaires ; noter en §6.
 
-### Q5 — Clôture — fait, **arrêt** pour relecture (section 5)
+### Q5 — Clôture — fait (section 5), étape close le 12 novembre 2026
 
 - Test **une seule fois** sur la configuration retenue (D2 + D1 au λ choisi), comme à l'étape 2 (C5), si Thibault le valide (Q5) ; section 5 ; `CLAUDE.md`, `docs/stack-technique.md`, `contexte/` ; essai sur un vrai téléphone ; **arrêt** pour relecture.
 
@@ -170,7 +170,7 @@ Configuration A, 10 000 utilisateurs de validation, crans sur les comptes d'entr
 | Critère | Seuil |
 |---|---|
 | Qualité hors ligne (validation) | D2 : NDCG@20 à ∞ ≥ actuel (mesuré : +8,2 %) ; D1 : NDCG@20 à ∞ ≥ 97 % de la valeur sans calibration (règle de Q3) |
-| Calibration | sur l'export de Thibault, aux crans 2 000 à 200 : part d'animation dans les 16 premières ≤ **2 × sa part dans l'historique + 10 points** (aujourd'hui 69-81 % pour 11 %) ; `C_KL` moyen de la validation réduit d'au moins 30 % |
+| Calibration | sur l'export de Thibault, aux crans 2 000 à 200 : part d'animation dans les 16 premières ≤ **2 × sa part dans l'historique + 10 points** (aujourd'hui 69-81 % pour 11 %) ; `C_KL` moyen de la validation réduit d'au moins 30 % **aux crans où λ = 0,9** (v0.6 ; à ∞, λ = 0,1 par choix, option B et règle des −3 % de NDCG@20 : la baisse y est notée pour information) |
 | Films mal notés | voisins mal notés (2 plus proches) : moins de recos concernées qu'aujourd'hui, à chaque cran de l'export de Thibault |
 | Versions | les 2 cas exclus quand l'autre version est vue (tests) |
 | Moteur | `foldin_cases.json` régénéré hors du dépôt et rejoué : listes identiques (y compris calibrées), vecteurs à 10⁻¹⁵ près (écart maximal mesuré et noté) |
@@ -334,7 +334,7 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 
 **Décision de Thibault (12 novembre 2026)** : **option a** (D1 seul, pas de pénalité). Raison : à λ = 0,9 la pénalité agit peu ; μ ≥ 1 fait remonter l'animation et coûte 14-16 % de NDCG@20 aux crans bas ; sur la validation, D2 + D1 est déjà sous le hasard (6,7 et 7,4 /16), l'écart vu sur l'export de Thibault lui est en partie propre. La forme mesurée est validée comme référence ; le code reste, non branché ; μ à réévaluer avec les volontaires (§6). Le critère « films mal notés » de la section 4 (moins de recos concernées qu'avant 6c, à chaque cran) est donc **accepté en échec** : configuration retenue 1, 2, 3, 10, 9, 8, 8, 7 /16 de ∞ à 200 sur l'export de Thibault, contre 0, 2, 5, 5, 4, 3, 5, 8 avant 6c (mieux à 10 000 et 200, égal à 20 000, moins bien ailleurs).
 
-### Q5 — Clôture (12 novembre 2026) — ⏸ arrêt : relecture et essai sur un vrai téléphone
+### Q5 — Clôture (12 novembre 2026) — étape close
 
 **Test, évalué une seule fois** (`calibration.py test`, 10 000 utilisateurs de test, une seule passe, rien n'y est réglé ; configuration retenue **D2 + D1**, λ de production : 0,1 à ∞, 0,9 à 2 000 et 500 ; à côté, la référence de l'étape 2 et D2 seul, pour situer ; crans sur les comptes d'entraînement, comme sur la validation). Résultats : `pipeline/data/processed/results/quality/test_6c.json` (ignoré).
 
@@ -360,7 +360,7 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 | Critère | Résultat |
 |---|---|
 | Qualité hors ligne | ✅ D2 : +8,2 % à ∞ (validation et test) ; D1 : 97,3 % de D2 à ∞ sur le test (97,7 % sur la validation) |
-| Calibration | ✅ export de Thibault : animation 31, 31, 31, 25 % aux crans 2 000 à 200 (seuil 2 × 11 % + 10 = 32 %) ; ⚠️ `C_KL` : −84 à −87 % aux crans bas, mais **−17 % à ∞** (seuil −30 %) : le critère date d'avant l'option B, qui garde une calibration légère à ∞ par choix (règle des −3 %) ; **à confirmer à la relecture** |
+| Calibration | ✅ export de Thibault : animation 31, 31, 31, 25 % aux crans 2 000 à 200 (seuil 2 × 11 % + 10 = 32 %) ; ✅ `C_KL` aux crans où λ = 0,9 : −84 à −87 % (seuil −30 %, critère reformulé à la relecture) ; à ∞ (λ = 0,1 par choix, option B), −17 %, pour information |
 | Films mal notés | ⚠️ accepté en échec sur l'export de Thibault à ∞ et de 5 000 à 500 (décision de Q4b, option a) ; sur le test, sous l'étape 2 à chaque cran |
 | Versions | ✅ (Q1) |
 | Moteur | ✅ `export.py verify --out web` : 25 cas, 75 listes du modèle et 200 listes calibrées identiques, écart des vecteurs 0 en Python ; TypeScript 2,0·10⁻¹⁵ (Q4, moteur inchangé depuis) |
@@ -369,13 +369,18 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 | Qualité du code | ✅ `pytest` 250, `ruff`, Vitest 269, `typecheck`, `lint`, `format:check`, `build`, `e2e` 11/11 (12 novembre 2026) |
 | Confidentialité | ✅ comptes et parts seulement ; aucun titre ni pseudo d'un export dans les fichiers versionnés |
 
-**« comment ça marche »** : emplacements prêts pour **Claude Web** (`web/src/content/commentCaMarche.ts`, rendus « [texte à venir : …] ») :
+**« comment ça marche »** : emplacements préparés pour **Claude Web** (`web/src/content/commentCaMarche.ts`), textes posés à la clôture (voir plus bas) :
 - `commentCaMarche.percentiles.malNotes` : dernier paragraphe de « tes notes » : les films mal notés (percentile < 0,3, c'est-à-dire en gros le tiers le moins bien noté de ton historique) ne servent plus à te placer sur la carte des goûts ; ils restent « vus », jamais proposés ; rien ne change sans note ou pour un tout petit historique (moins de 5 films gardés) ;
 - `commentCaMarche.equilibre` (titre + paragraphe) : nouvelle section entre « tes notes » et « le curseur » (ancre `#equilibre`) : l'équilibre des genres : les listes gardent à peu près la part de chaque genre de ton historique (genres MovieLens, part de films), légèrement de ∞ à 10 000 et fortement de 5 000 à 200, là où le modèle dérive (exemple : un petit groupe de films d'animation très liés entre eux) ;
 - **phrase devenue inexacte**, à reprendre par Claude Web : « on ne regarde ni les genres, ni les acteurs, ni les résumés. on regarde qui a aimé quoi. » (premier paragraphe du « principe ») : les genres servent maintenant à l'équilibre des listes (pas au score du modèle).
-- `content.test.ts` : `BLOCKING` repassé à `false` le temps des textes (il les liste) ; **à remettre à `true`** quand ils arrivent, avant toute mise en ligne.
+- `content.test.ts` : `BLOCKING` repassé à `false` le temps des textes, **remis à `true`** à la clôture (plus aucun texte en attente).
 
-**Reste avant de clore** : relecture de Thibault ; **essai sur un vrai téléphone** (versions 6b et 6c, deux thèmes ; celui de 6b n'avait pas été confirmé) ; textes de Claude Web.
+**Relecture de Thibault (12 novembre 2026)** :
+- critère `C_KL` **accepté**, reformulé : −30 % aux crans où λ = 0,9 (atteint : −84 à −87 %) ; à ∞, λ = 0,1 par choix (option B, règle −3 % de NDCG), −17 % noté pour information ; pas un échec ;
+- **textes de Claude Web posés** : premier paragraphe du « principe » remplacé (les genres ne servent qu'après, à l'équilibre de la liste) ; paragraphe sur les films les moins aimés à la fin de « tes notes » ; section « l'équilibre des genres » (ancre `#equilibre`, 4 paragraphes) ; référence Steck 2018 dans « inspirations » (titre en `lang="en"`) ; `BLOCKING = true` ;
+- **essai sur un vrai téléphone** (versions 6b et 6c, deux thèmes) : à faire par Thibault, **non confirmé à la clôture** ; suivi dans `contexte/feuille-de-route.md`.
+
+**Étape 6c close le 12 novembre 2026.**
 
 ---
 

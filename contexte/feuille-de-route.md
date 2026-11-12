@@ -1,15 +1,13 @@
 # Feuille de route
 
-> Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c (en relecture). Ordre des étapes : `docs/stack-technique.md` §8.
+> Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : étape 6c, qualité des résultats
+## En cours : tags des cartes (après l'étape 6c)
 
-Spec `docs/etape-6c-qualite.md` v0.5. Q1-Q5 faits (versions, films mal notés hors du fold-in, calibration des genres dans le navigateur, pénalité D1b écartée, test évalué une fois). **À faire, dans l'ordre** :
+L'étape 6c (qualité des résultats) est close le 12 novembre 2026 (`é6c` v0.6) : versions, films mal notés hors du fold-in, calibration des genres (λ par cran), pénalité D1b écartée, test évalué une fois, textes de « comment ça marche ».
 
-1. **Relecture de Q5** (Thibault, Claude Web) : résultats du test, critère `C_KL` à ∞ à confirmer ; **essai sur un vrai téléphone** (versions 6b et 6c, deux thèmes).
-2. **Textes « comment ça marche »** (Claude Web) : `commentCaMarche.percentiles.malNotes`, section `equilibre` (titre + paragraphe), et la phrase « on ne regarde ni les genres… » à reprendre ; puis `BLOCKING = true` dans `content.test.ts`.
-3. **Tags des cartes** (section 8 de la spec 6c) : réalisateur, « ça divise », « vieux trésor » ; mesure des fréquences par cran et arrêt pour les seuils et les couleurs.
+1. **Tags des cartes** (Q6, section 8 de la spec 6c) : réalisateur, « ça divise », « vieux trésor » ; mesure des fréquences par cran et arrêt pour les seuils et les couleurs.
 
 ## Ensuite : étape 7, mise en ligne et volontaires
 
@@ -49,6 +47,11 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 - **Autres imports** : SensCritique, Trakt, Criticker, un adaptateur chacun.
 
 ## Points « à reporter » des specs, par étape cible
+
+### Suivi de l'étape 6c
+
+- **Essai sur un vrai téléphone** (versions 6b et 6c, deux thèmes, section « l'équilibre des genres ») : à faire par Thibault, **non confirmé** à la clôture (12 novembre 2026).
+- **μ de D1b** et **λ des crans bas** : à recaler avec les volontaires (voir « Étape 7 »).
 
 ### Suivi de l'étape 6
 

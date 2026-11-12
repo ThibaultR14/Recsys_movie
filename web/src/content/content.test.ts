@@ -8,10 +8,9 @@ import * as nav from './nav';
 import { isPending, pending } from './pending';
 import * as theme from './theme';
 
-/** True since R7 (docs/etape-6b-retouches.md, D8): no placeholder may remain. False again during
- * the closing of step 6c (Q5): « comment ça marche » waits for two texts of Claude Web (D1, D2);
- * back to true when they arrive, before any release. */
-const BLOCKING = false;
+/** True since R7 (docs/etape-6b-retouches.md, D8): no placeholder may remain (texts of step 6c
+ * posted at its closing). */
+const BLOCKING = true;
 
 function strings(value: unknown): string[] {
   if (typeof value === 'string') return [value];

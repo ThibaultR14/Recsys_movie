@@ -126,6 +126,7 @@ describe('richText links (R9)', () => {
       'https://www.criticker.com',
       'https://doi.org/10.1109/ICDM.2008.22',
       'https://doi.org/10.1145/3109859.3109912',
+      'https://doi.org/10.1145/3240323.3240372',
       'https://doi.org/10.1145/2827872',
     ]);
   });
@@ -134,7 +135,7 @@ describe('richText links (R9)', () => {
     render(<CommentCaMarche />);
     const region = screen.getByRole('region', { name: 'inspirations' });
     const links = within(region).getAllByRole('link');
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     for (const a of links) {
       expect(a).toHaveAttribute('target', '_blank');
       expect(a).toHaveAttribute('rel', 'noopener noreferrer');
@@ -142,7 +143,9 @@ describe('richText links (R9)', () => {
     }
     const hu = within(region).getByRole('link', { name: /Collaborative Filtering/ });
     expect(hu).toHaveAttribute('lang', 'en');
+    const steck = within(region).getByRole('link', { name: /Calibrated Recommendations/ });
+    expect(steck).toHaveAttribute('lang', 'en');
     expect(within(region).getByRole('link', { name: /^criticker/ })).not.toHaveAttribute('lang');
-    expect(within(region).getAllByRole('listitem')).toHaveLength(6);
+    expect(within(region).getAllByRole('listitem')).toHaveLength(7);
   });
 });
