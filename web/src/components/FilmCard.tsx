@@ -38,6 +38,14 @@ const CARD_CLASS =
   'relative flex flex-col gap-3 bg-surface px-3 pt-3 pb-[18px] text-ink no-underline shadow-photo';
 
 /** « Taped photo » card (design system §5). The whole card links to the film on Letterboxd. */
+/** One colour per tag (step 6c, Q6), same shape and place for all; AA in both themes. */
+const TAG_COLORS: Record<CardTag['kind'], string> = {
+  pepite: 'bg-surface text-pen',
+  realisateur: 'bg-surface text-tag-director',
+  divise: 'bg-surface text-tag-divise',
+  vieux: 'bg-tag-old text-tag-old-ink',
+};
+
 export function FilmCard({ film, tag, seriesOf, because }: FilmCardProps) {
   const label = tag ? tagLabel(tag) : undefined;
   const content = (
@@ -88,7 +96,7 @@ export function FilmCard({ film, tag, seriesOf, because }: FilmCardProps) {
         <span
           data-testid="card-tag"
           data-tag={tag.kind}
-          className="absolute top-5 right-[-8px] max-w-[calc(100%-4px)] rounded-[3px] bg-surface px-1.5 font-hand text-[24px] leading-tight font-bold text-balance text-pen shadow-photo"
+          className={`absolute top-5 right-[-8px] max-w-[calc(100%-4px)] rounded-[3px] px-1.5 font-hand text-[24px] leading-tight font-bold text-balance shadow-photo ${TAG_COLORS[tag.kind]}`}
           style={{ transform: 'rotate(-12deg)' }}
         >
           {label.visible === label.full ? (

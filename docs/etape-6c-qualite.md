@@ -386,7 +386,7 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 
 **Règles rappelées par Thibault** :
 - un seul tag par carte, « ✱ pépite » compris ;
-- même emplacement (en haut à droite de l'affiche) et même style pour tous, **pas de couleur par tag** (le paragraphe « Couleurs » de la section 8 est remplacé) ;
+- même emplacement (en haut à droite de l'affiche) et même forme pour tous ; **une couleur par tag** depuis l'essai à l'écran (voir plus bas ; un temps « pas de couleur par tag ») ;
 - hiérarchie **✱ pépite > réalisateur que j'aime > ça divise > vieux trésor** ;
 - les annotations (explication, série, loin de tes goûts, documentaire) ne sont pas des tags.
 
@@ -474,7 +474,9 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 
 **Fréquences attendues** (mesure de Q6, variante B = la décision, plafond 2) : 0,3 à 2,0 tags par rangée de 8 en moyenne selon le cran et l'export ; première rangée : 0 à 2.
 
-**Reste** : essai à l'écran par Thibault (et sur un vrai téléphone, versions 6c : équilibre des genres, tampons).
+**Essai à l'écran (Thibault, 12 novembre 2026)** : tags validés, avec **une couleur par tag** (palette de la section 8) : ✱ pépite au stylo bleu (inchangé), « encore un … » en vert, « ça divise » en rose foncé, « vieux trésor » en pastille jaune (texte encre foncée). Jetons `tag-director`, `tag-divise`, `tag-old`, `tag-old-ink` dans les deux thèmes (`index.css`), tous AA sur leur étiquette (6,5 à 11:1), jaune assez franc pour ne pas tirer vers l'orange (teinte 53°) ; `contrast.test.ts` les vérifie ; palette ajoutée à `docs/design-system.md` (§ 2c). Vitest 276, Playwright 13/13 (axe 0 dans les deux thèmes), changement de cran 33 ms en médiane.
+
+**Reste** : essai sur un vrai téléphone de la version 6c (équilibre des genres, tags).
 
 
 ---
@@ -502,7 +504,7 @@ Score moyen (modèle) des 16 premières, rapporté à μ = 0 : 0,84-1,00 à μ =
 
 ## 8. Ensuite : tags des cartes (après Q5, nouvelle sous-étape Q6)
 
-> 12 novembre 2026 : mesure faite puis **seuils décidés et tags branchés sur le site** (section 5, Q6) ; arrêt pour l'essai à l'écran. Règles revues par Thibault : un seul tag par carte, même emplacement et même style pour tous, **pas de couleur par tag** (le paragraphe « Couleurs » ci-dessous est caduc).
+> 12 novembre 2026 : mesure faite, **seuils décidés, tags branchés sur le site et validés à l'écran** (section 5, Q6). Un seul tag par carte, même emplacement et même forme pour tous, **une couleur par tag** (vert, rose foncé, jaune ; pépite au stylo bleu), palette au contraste AA dans les deux thèmes (`docs/design-system.md` § 2c).
 
 À coder **seulement après les corrections de qualité** (Q1-Q5), dans une sous-étape Q6 qui commence par une mesure et un **arrêt** pour fixer les seuils.
 

@@ -18,6 +18,11 @@
   --color-muted: #555049;
   --color-rule: #b9b4aa;
   --color-pen: #2546b8;
+  /* card tags (step 6c, Q6): one colour per tag, AA on the card surface in both themes */
+  --color-tag-director: #1e6b3c;
+  --color-tag-divise: #a3175a;
+  --color-tag-old: #eedc4c;
+  --color-tag-old-ink: #1b1b1b;
   --color-tape: rgba(214, 208, 196, 0.75);
   --color-transparent: transparent;
   --color-current: currentColor;
@@ -36,6 +41,10 @@
   --color-muted: #ada79c;
   --color-rule: #5a574f;
   --color-pen: #8ea6ff;
+  --color-tag-director: #7ccf98;
+  --color-tag-divise: #f08abd;
+  --color-tag-old: #e3d24c;
+  --color-tag-old-ink: #1b1b1b;
   --color-tape: rgba(214, 208, 196, 0.35);
   --shadow-photo: 0 0 0 1px #5a574f;
   color-scheme: dark;

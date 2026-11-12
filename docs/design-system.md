@@ -36,6 +36,7 @@ Ce qu'on refuse :
 
 Règles :
 - **Un seul accent** : le stylo bleu. Il ne sert qu'à ce qui est « écrit à la main » et à ce qui est une pépite.
+- **Exception : les tags des cartes** (étape 6c, Q6, voir « 2c »), une couleur par tag, seulement sur l'étiquette du tag.
 - Les **affiches** sont la seule autre source de couleur.
 - Variantes de stylo possibles plus tard : rouge `#B8322A` ou noir. Le bleu reste la valeur par défaut.
 
@@ -61,6 +62,19 @@ Règles :
 - toute bordure de composant est en `ink` (≥ 3:1) ; `rule` ne sert qu'aux séparations décoratives ;
 - `color-scheme: dark` pour les contrôles natifs ;
 - vérifié par `web/src/styles/contrast.test.ts` (AA pour chaque couple texte / fond, dans les deux thèmes).
+
+### 2c. Couleurs des tags des cartes (étape 6c, Q6)
+
+Un tag par carte, sur la même étiquette inclinée que « ✱ pépite » (même forme, même police, même place) ; seule la couleur change. Contraste mesuré sur l'étiquette (texte / fond de l'étiquette).
+
+| Tag | Jeton | Clair | Sombre | Contraste clair / sombre |
+|---|---|---|---|---|
+| ✱ pépite | `pen` sur `surface` | `#2546B8` | `#8EA6FF` | 7,9 / 6,7 |
+| encore un <réalisateur> (vert) | `tag-director` sur `surface` | `#1E6B3C` | `#7CCF98` | 6,5 / 8,3 |
+| ça divise (rose foncé) | `tag-divise` sur `surface` | `#A3175A` | `#F08ABD` | 7,4 / 6,7 |
+| vieux trésor (jaune) | `tag-old-ink` sur `tag-old` | `#1B1B1B` sur `#EEDC4C` | `#1B1B1B` sur `#E3D24C` | ≥ 10 |
+
+Règles : le jaune est une **pastille** (fond jaune, texte encre foncée), jamais du texte jaune ; teinte ≥ 51°, pour ne jamais tirer vers l'orange (`isOrange` de `contrast.test.ts`) ; tous vérifiés AA dans les deux thèmes par ce même test.
 
 ---
 
@@ -134,6 +148,7 @@ Mentions obligatoires (ne pas reformuler) :
 - Dessous : titre en gras 16 px, puis « réalisateur, année » en encre pâle 13 px, puis la note du public « ★ 3,9 · 1 240 notes » (encre pâle 13 px ; étape 6b).
 - Annotation Caveat « (parce que t'as aimé « X » et « Y ») » (étape 6b), ou « (même série que « X », que t'as vu) » qui la remplace ; titres de plus de 32 caractères coupés avec « … ».
 - Si c'est une pépite : « ✱ pépite » en Caveat gras, stylo bleu, incliné à −12°, **en haut à droite de l'affiche**, sur une petite étiquette couleur surface, qui déborde un peu du bord droit (étape 6b, R9 : il ne chevauche plus l'explication).
+- **Tags** (étape 6c, Q6) : au plus un par carte, sur cette même étiquette (« ✱ pépite », « encore un <réalisateur> », « ça divise », « vieux trésor »), une couleur par tag (§ 2c) ; un libellé long passe sur deux lignes, dans la largeur de la carte ; 2 tags au plus par rangée de 8.
 - Toute la carte est un lien vers la fiche du film.
 
 ### Grille de résultats

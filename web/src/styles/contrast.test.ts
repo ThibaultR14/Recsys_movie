@@ -10,7 +10,7 @@ function block(selector: string): Record<string, string> {
   if (start < 0) throw new Error(`${selector} missing`);
   const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start));
   return Object.fromEntries(
-    [...body.matchAll(/--color-([a-z]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1]!, m[2]!]),
+    [...body.matchAll(/--color-([a-z-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1]!, m[2]!]),
   );
 }
 
@@ -49,6 +49,13 @@ describe.each([
     }
   });
 
+  it('card tags (step 6c, Q6): text AA on their label (≥ 4.5:1)', () => {
+    for (const fg of ['pen', 'tag-director', 'tag-divise']) {
+      expect(contrast(t[fg]!, t.surface!), `${fg} sur surface`).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast(t['tag-old-ink']!, t['tag-old']!), 'vieux trésor').toBeGreaterThanOrEqual(4.5);
+  });
+
   it('component borders (ink) ≥ 3:1', () => {
     expect(contrast(t.ink!, t.paper!)).toBeGreaterThanOrEqual(3);
   });
@@ -61,6 +68,17 @@ describe.each([
 
 it('the dark theme redefines every colour token', () => {
   expect(Object.keys(block(":root[data-theme='dark']")).sort()).toEqual(
-    ['ink', 'muted', 'paper', 'pen', 'rule', 'surface'].sort(),
+    [
+      'ink',
+      'muted',
+      'paper',
+      'pen',
+      'rule',
+      'surface',
+      'tag-director',
+      'tag-divise',
+      'tag-old',
+      'tag-old-ink',
+    ].sort(),
   );
 });

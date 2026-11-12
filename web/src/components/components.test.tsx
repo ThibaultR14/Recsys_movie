@@ -265,14 +265,20 @@ describe('FilmCard', () => {
     expect(screen.queryByText('✱ pépite')).not.toBeInTheDocument();
   });
 
-  it('tags (Q6): same place and style as the stamp; a long director name is cut, full for screen readers', () => {
+  it('tags (Q6): same place and shape as the stamp, one colour each; a long director name is cut, full for screen readers', () => {
     const { rerender } = render(<FilmCard film={film()} tag={{ kind: 'vieux' }} />);
     const tag = screen.getByTestId('card-tag');
     expect(tag).toHaveTextContent('vieux trésor');
     expect(tag).toHaveAttribute('data-tag', 'vieux');
-    const style = tag.className;
+    // same shape and place as the stamp, one colour per tag
+    const shape = ['absolute', 'top-5', 'font-hand', 'text-[24px]', 'shadow-photo'];
+    expect(tag).toHaveClass(...shape, 'bg-tag-old', 'text-tag-old-ink');
     rerender(<FilmCard film={film()} tag={{ kind: 'pepite' }} />);
-    expect(screen.getByTestId('card-tag').className).toBe(style);
+    expect(screen.getByTestId('card-tag')).toHaveClass(...shape, 'bg-surface', 'text-pen');
+    rerender(<FilmCard film={film()} tag={{ kind: 'divise' }} />);
+    expect(screen.getByTestId('card-tag')).toHaveClass(...shape, 'text-tag-divise');
+    rerender(<FilmCard film={film()} tag={{ kind: 'realisateur', director: 'Ozu' }} />);
+    expect(screen.getByTestId('card-tag')).toHaveClass(...shape, 'text-tag-director');
     rerender(
       <FilmCard
         film={film()}
