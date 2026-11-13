@@ -7,6 +7,7 @@ import {
   exclusions,
   loadEngine,
   calibratePositions,
+  qualityPools,
   recommend,
   versionExclusions,
   versionPartners,
@@ -270,7 +271,7 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
     expect(worst).toBeLessThanOrEqual(1e-14);
   });
 
-  it('216 calibrated lists identical to Python (step 6c, D1: share mode, λ per position)', () => {
+  it('216 calibrated lists identical to Python (6c D1: share mode, λ per position; 8 R6b: quality)', () => {
     const model = engine!.model;
     const cal = model.meta.calibration!;
     expect(cal.lambda_by_position).toEqual([0.1, 0.1, 0.1, 0.9, 0.9, 0.9, 0.9, 0.9]);
@@ -286,7 +287,14 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
         model.recommendable,
         new Set([...c.item_idx, ...c.excluded_versions]),
       );
-      const pools = topByPosition(ranked, scores, model.popularity, cal.positions, cal.pool);
+      const pools = qualityPools(
+        topByPosition(ranked, scores, model.popularity, cal.positions, cal.pool),
+        ranked,
+        scores,
+        model,
+        engine!.catalog.quality,
+        cal.pool,
+      ); // step 8 (R6b): quality term before the calibration
       const profile = shareProfile(
         engine!.catalog.genres,
         engine!.catalog.genre_names.length,

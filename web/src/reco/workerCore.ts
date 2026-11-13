@@ -200,10 +200,12 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
   const distinct = [...new Set(res.positions.flatMap((p) => p.items))];
   const series = seriesOf(distinct, res.history, engine.catalog);
   const t0 = performance.now();
+  // step 8: an estimated film is never cited (its vector, close to the mean direction, is
+  // « close » to everything); it stays in the profile
   const why = explain(
     engine.model.vectors,
     engine.model.dims,
-    res.history,
+    res.history.filter((h) => !isEstimated(engine.catalog, h.item)),
     distinct.filter((item) => !series.has(item)),
     { maxCited: CANDIDATES },
   );

@@ -9,6 +9,8 @@ import { basename, join } from 'node:path';
 import { detectCsv } from '../src/adapters/detect';
 import { decodeCsvBytes } from '../src/adapters/imdb';
 import { importExport, loadEngine, recommend } from '../src/reco/engine';
+import { CANDIDATES, explain } from '../src/reco/explain';
+import { citationPicks } from '../src/components/cardRules';
 import type { ExportInput } from '../src/reco/engine';
 import { WEB_ROOT } from './local';
 
@@ -50,9 +52,35 @@ async function main() {
     const est48 = p.items.filter((i) => i >= n).length;
     return { cap: p.cap ?? '∞', first8: est8, of48: est48 };
   });
+  // explanations (step 8): an estimated film is never cited; before = every history film citable
+  const citations = (history: typeof res.history) => {
+    const targets = [...new Set(res.positions.flatMap((p) => p.items))];
+    const why = explain(engine.model.vectors, engine.model.dims, history, targets, {
+      maxCited: CANDIDATES,
+    });
+    let cards = 0;
+    let citingEstimated = 0;
+    let without = 0;
+    for (const p of res.positions) {
+      const cands = p.items.map((i) => why.get(i)?.items);
+      const picks = citationPicks(cands);
+      p.items.forEach((_, k) => {
+        cards++;
+        const shown = picks[k]!.map((j) => cands[k]![j]!);
+        if (shown.length === 0) without++;
+        if (shown.some((i) => i >= n)) citingEstimated++;
+      });
+    }
+    return { cards, citingEstimated, withoutExplanation: without };
+  };
+  const explanations = {
+    before: citations(res.history),
+    after: citations(res.history.filter((h) => h.item < n)),
+  };
   console.log(
     JSON.stringify(
       {
+        explanations,
         entries: summary.nEntries,
         historyFilms: summary.nHistoryFilms,
         estimatedInHistory: estimatedSeen,

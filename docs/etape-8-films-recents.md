@@ -1,6 +1,7 @@
 # Étape 8 — Films récents
 
-> **⏸ Arrêt de R6b (13 novembre 2026) : choix de γ** (terme de qualité avant la calibration, mesuré hors ligne ; section 5, R6b). Le site branché à R6 attend aussi les textes de « comment ça marche » et l'essai à l'écran.
+> **⏸ Retour à l'arrêt visuel (R6, 13 novembre 2026)** : terme de qualité branché (γ = 0,1, K = 50, q TMDB pour les films estimés), films estimés jamais cités dans « parce que t'as aimé » (section 5, R6c) ; restent l'essai à l'écran et les textes de « comment ça marche ».
+> Version 0.6 (13 novembre 2026) : **terme de qualité** `score / s_max + γ q` avant le vivier et la calibration, γ = 0,1, K = 50 (D4 ; ρ ✗ remplacé) ; films estimés : q déduit de la note TMDB ; **un film estimé n'est jamais cité** dans les explications (D7).
 > Version 0.5 (12 novembre 2026) : **facteur 0,8 sur la norme cible** (D1c ; rétrécissement d'une estimation incertaine) ; nouvelle popularité validée par Thibault.
 > Version 0.4 (12 novembre 2026) : décisions de Thibault à l'arrêt de R3c : popularité par **rang absolu dans l'année, référence 2010-2018**, pour les films estimés et pour les films du catalogue sortis à partir de 2019 (`year_all` ✗ à partir de 2019) ; contrôles (a), (b), (c) ; ρ = 0 (R3b).
 > Version 0.3 (12 novembre 2026) : **décisions de Thibault à l'arrêt de R3** : contenu seul (voisins TMDB et mélange ✗) ; norme cible par tranche de **popularité du curseur** (tranche de votes ✗) ; < 500 votes non recommandables, comptent dans le profil ; popularité référence 2019-2022, contrôle « aucun des 10 films les plus votés de chaque année sous 10 000 » ; ω = 1 ; ρ tranché par une mesure de plus (règle en D4) ; test de clôture contre la vraie direction recalée (D5).
@@ -172,6 +173,14 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
 
 ### D4. Qualité
 
+**v0.6 (décision de Thibault après R6b) : terme de qualité γ·q, la pénalité ρ ci-dessous est ✗ (remplacée).**
+- À chaque cran, avant le vivier de 150 et la calibration : **`score' = score / s_max + γ × q`** ; `s_max` = meilleur score parmi les candidats du cran (1 s'il est ≤ 0) ; la calibration travaille sur `score'`, les scores affichés et « loin de tes goûts » restent ceux du modèle.
+- **q** = moyenne MovieLens bayésienne centrée, `(n m + K C) / (n + K) − C`, K = 50 notes fictives, C = moyenne de toutes les notes (comptes complets) ; **films estimés** : `q = a × t + b`, t = note TMDB bayésienne (200 votes fictifs à la note TMDB moyenne du catalogue), droite ajustée sur les films du catalogue (≥ 50 votes TMDB, ≥ 20 notes MovieLens ; corrélation 0,77) : même centrage, rétrécie selon les votes TMDB ; un film récent mal reçu a un q bas (**remplace ρ**).
+- **γ = 0,1**. Raison : le held-out mesure « ce qu'on regarde », pas « ce qu'on aime », donc il favorise γ = 0 par construction ; on prend la valeur la plus forte **sans perte mesurable sur les films bien notés** (R6b). À 0,2, la calibration fait des sauts (*12 Angry Men* 31ᵉ → 1ᵉʳ sur l'export A) : signe de scores trop resserrés. γ à recaler avec les volontaires (§6).
+- q dans `catalog.json` (`quality`, arrondi au millième × 1000), réglages dans `model-meta.json` (`quality`), référence Python (`pipeline/quality.py`, `export.quality_pool`), parité TypeScript (`qualityPool`, `qualityPools`).
+
+Décision d'origine (v0.2-v0.3, ✗ en v0.6) :
+
 - Note TMDB en **moyenne bayésienne** : `R̃ = (v × R + m × C) / (v + m)`, `C` = note moyenne des films placés, `m` = 200 votes (à régler).
 - **Pénalité douce, jamais un filtre** : pour les films estimés seulement, `score' = score − ρ × max(0, C − R̃) × s_ref` (`s_ref` = meilleur score du vivier du cran, comme la forme mesurée de D1b à l'étape 6c). La note TMDB est celle du grand public, pas des critiques : ρ petit, réglé en R3 ; ρ = 0 si la mesure ne montre rien.
 - **Règle de décision (v0.3, Thibault)** : mesure de plus sur la validation (contenu, norme D1c, ω = 1) : part du top 20 occupée par des **films de la base que l'utilisateur a vus et mal notés** (held-out, note sous la médiane de son fold-in), à ρ = 0 / 0,05 / 0,1. Si ρ la fait baisser **nettement (hors IC)** sans perte de Recall@20 (films bien notés) au-delà de l'IC → **ρ = 0,05** ; sinon **ρ = 0** (la note TMDB affichée sur la carte suffit). Décision prise par Claude Code selon cette règle (section 5, R3b).
@@ -203,7 +212,7 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
 ### D7. Site
 
 - **Popularité du curseur** des films estimés : **pas `0,285 × votes` tel quel** (2.4 : 89 % sous le plafond 200). **v0.4 : rang absolu dans l'année, référence 2010-2018, à partir de 2019, catalogue compris** (`popularity.py`, `rank_corrected` ; détails en section 5, R3d ; ✗ centile v0.2-v0.3 ci-après). Ancienne règle : **correspondance par rang dans l'année** (v0.2) : un film au centile c des votes TMDB parmi les films TMDB de son année de sortie (≥ 50 votes) reçoit la popularité au centile c de la **distribution de référence des films 2019-2022** (même univers : films TMDB ≥ 50 votes de ces années ; popularité `popularity.bin` pour ceux du catalogue, `0,285 × votes` pour les autres) ; jamais moins que `0,285 × votes`. **Contrôle (v0.3)** : **aucun des 10 films les plus votés de chaque année sous 10 000** (un succès doit disparaître au cran 10 000, pas forcément à 20 000 ; ✗ contrôle v0.2 « au-dessus de 20 000 », intenable avec cette référence). S'il échoue : arrêt. Table dans `model-meta.json`. Dans le faux départ à froid, la référence est 2018-2021 (sans la base).
-- **Carte** : « ★ x,x · TMDB » (note TMDB ramenée sur 5, une décimale, au lieu de la moyenne MovieLens) et **« (estimé) »** ; lien Letterboxd par `tmdb_id` (inchangé) ; tag « encore un <réalisateur> » (réalisateurs TMDB, même calcul) et tampon « ✱ pépite » (popularité D7) **s'appliquent** ; **pas** « ça divise » (pas de notes individuelles) ; « vieux trésor » sans objet (récents par définition) ; « parce que t'as aimé X et Y » permis (cosinus des vecteurs estimés), à vérifier en R6.
+- **Carte** : « ★ x,x · TMDB » (note TMDB ramenée sur 5, une décimale, au lieu de la moyenne MovieLens) et **« (estimé) »** ; lien Letterboxd par `tmdb_id` (inchangé) ; tag « encore un <réalisateur> » (réalisateurs TMDB, même calcul) et tampon « ✱ pépite » (popularité D7) **s'appliquent** ; **pas** « ça divise » (pas de notes individuelles) ; « vieux trésor » sans objet (récents par définition) ; « parce que t'as aimé X et Y » permis (cosinus des vecteurs estimés), à vérifier en R6. **v0.6 : un film estimé n'est jamais cité** dans « parce que t'as aimé » (il reste dans le profil) : ses vecteurs, proches de la direction moyenne, sont « proches » de tout (avant : 14-19 % des cartes de deux exports réels en citaient un).
 - **Rangée « sorties récentes »** : non (v0.3) : le contenu passe le seuil de D5, les films estimés sont mêlés aux autres.
 - **Calibration des genres** : genres TMDB des films estimés traduits en genres MovieLens (Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Fantasy, Horror, Mystery, Romance, Thriller, War, Western : même nom ; Science Fiction → Sci-Fi ; Family → Children ; Music → Musical ; History et TV Movie → aucun). Correspondance vérifiée en R1 sur les films du catalogue (accord par genre, rapporté).
 - **Écran d'analyse** : les films placés sont reconnus (statut `exact`) ; « trop récents » ne garde que les films non placés (et la phrase dit pourquoi : « trop récents ou trop peu vus pour nous ») ; texte de Claude Web.
@@ -587,9 +596,35 @@ La calibration (λ = 0,1 à ∞) peut faire sauter un film du vivier très haut 
 
 **Question pour Thibault** : quel γ ? Proposition : **γ = 0,1, K = 50**, et q TMDB par la droite pour les films estimés. C'est le plus fort qui ne coûte rien de mesurable sur les films bien notés, et il fait entrer *12 Angry Men* dans les 48 à ∞ sur l'export A. Branchement : référence Python, parité TypeScript, cas du fold-in, `model-meta.json` (γ, K, droite TMDB), comme la calibration.
 
+
+### R6c — Terme de qualité et explications sur le site (13 novembre 2026)
+
+Décisions de Thibault après R6b : γ = 0,1, K = 50 ; q des films estimés tiré de la note TMDB (remplace ρ) ; un film estimé n'est jamais cité.
+
+- **Pipeline** : `pipeline/quality.py`.
+  - q de chaque film : C = 3,5445 ; droite TMDB `q = 0,5258 × t − 3,6374`, corrélation 0,768 sur 20 371 films, note TMDB a priori 6,48 ; q de −2,295 à +0,931.
+  - `catalog.json` `quality` (+45 Ko gzip ; total **3,63 Mo gzip**) ; `model-meta.json` `quality`.
+  - `export.quality_pool` (référence Python : tri complet).
+  - `foldin_cases.json` régénéré hors du dépôt ; `export.py verify` : **216 listes calibrées identiques**, écart des vecteurs 0.
+  - pytest 277 (dont `test_quality.py` : centrage, droite TMDB, vivier identique à un tri complet).
+- **Moteur** :
+  - `qualityPool` : sélection exacte avec arrêt anticipé, le classement suivant le score décroissant ; `qualityPools` est appelé par `recommend` et par le test de parité. **Parité Python / TypeScript : 216/216 listes calibrées identiques.**
+  - `quality.test.ts` : vivier identique à un tri complet, réglages lus, film estimé jamais cité.
+- **Explications** : `workerCore` ne passe à `explain` que les films entraînés de l'historique. Exports réels (`recent-report`, 8 crans × 48 cartes, choix des citations de l'interface) :
+
+| Export | cartes citant un film estimé, avant → après | cartes sans explication, avant → après |
+|---|---|---|
+| Letterboxd A | 74 / 384 (19,3 %) → 0 | 0 → 0 |
+| Letterboxd B | 54 / 384 (14,1 %) → 0 | 0 → 0 |
+
+- ***12 Angry Men*** (export A, `why-film`) : 56ᵉ au score du modèle, **42ᵉ avec la qualité, affiché 42ᵉ sur 48 à ∞** (avant : absent).
+- **Temps** (`reco-bench`, médiane de 7) : export A 28,1 ms ; 3 000 films 109,5 ms (avant : 113,7 ms). Playwright 13/13, **changement de cran : médiane 33 ms** (max 35), modèle prêt 956 ms. Vitest 284/284 ; `tsc`, ESLint, Prettier verts.
+
 ---
 
 ## 6. À reporter
+
+- **γ du terme de qualité** (0,1, v0.6) : à recaler avec les volontaires (la question « combien de ces films as-tu envie de voir ? » mesure ce que le held-out ne voit pas).
 
 - **Embedding du résumé** (D2) : seulement si le contenu sans résumé reste sous le seuil.
 - **Pages 2 et plus de `recommendations`** : non mesurées (k = 5 suffit d'après 2.3).

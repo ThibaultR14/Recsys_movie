@@ -18,6 +18,8 @@ export interface ModelMeta {
   foldin_min_kept?: number;
   /** Step 6c (D1): genre calibration (share mode, λ per slider position). */
   calibration?: CalibrationMeta;
+  /** Step 8 (R6b): quality term, score' = score / s_max + gamma * q before the pool. */
+  quality?: { gamma: number; scale: number };
   slider: { variant: string; positions: (number | null)[] };
   movie_ids: number[];
   non_recommendable_item_idx: number[];

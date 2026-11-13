@@ -47,6 +47,47 @@ export function rankCandidates(
   return Int32Array.from(items);
 }
 
+/**
+ * Step 8 (R6b): the `k` candidates under the cap with the best score' = score / s_max + gamma q
+ * (ties: item_idx), q = quality[i] / scale, s_max = best score under the cap (1 if <= 0); same
+ * operations as `quality_pool` (pipeline/export.py). `ranked` is sorted by score, so the walk stops
+ * once score / s_max + gamma * q_max cannot beat the k-th score' any more (exact).
+ */
+export function qualityPool(
+  ranked: Int32Array,
+  scores: Float64Array,
+  popularity: Uint32Array,
+  cap: number | null,
+  quality: readonly number[],
+  gamma: number,
+  scale: number,
+  k: number,
+  qMax: number,
+): { items: number[]; scores: number[] } {
+  const items: number[] = [];
+  const adj: number[] = [];
+  let d = 0;
+  for (let r = 0; r < ranked.length; r++) {
+    const i = ranked[r]!;
+    if (cap !== null && popularity[i]! > cap) continue;
+    const s = scores[i]!;
+    if (d === 0) d = s > 0 ? s : 1;
+    if (items.length === k && s / d + gamma * qMax < adj[k - 1]!) break;
+    const a = s / d + gamma * (quality[i]! / scale);
+    if (items.length === k) {
+      const lastA = adj[k - 1]!;
+      if (!(a > lastA || (a === lastA && i < items[k - 1]!))) continue;
+      items.pop();
+      adj.pop();
+    }
+    let j = items.length;
+    while (j > 0 && (adj[j - 1]! < a || (adj[j - 1]! === a && items[j - 1]! > i))) j--;
+    items.splice(j, 0, i);
+    adj.splice(j, 0, a);
+  }
+  return { items, scores: adj };
+}
+
 /** First `n` ranked films under each cap, and the relative score of each position. */
 export function topByPosition(
   ranked: Int32Array,

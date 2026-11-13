@@ -12,6 +12,8 @@ export interface NotchDiagnosis {
   rankBefore: number | null;
   /** in the pool given to the calibration (the first `pool` candidates under the cap). */
   inPool: boolean;
+  /** 1-based place in that pool, i.e. with the quality term (step 8, R6b); null beyond it. */
+  rankPool: number | null;
   /** 1-based place in the shown list (after calibration), null when not in it. */
   rankAfter: number | null;
   /** size of the shown list. */
@@ -94,6 +96,7 @@ export function whyFilm(
       visible,
       rankBefore,
       inPool: rec.pools[k]!.items.includes(item),
+      rankPool: rec.pools[k]!.items.includes(item) ? rec.pools[k]!.items.indexOf(item) + 1 : null,
       rankAfter: after >= 0 ? after + 1 : null,
       shown: shownPos.items.length,
     };

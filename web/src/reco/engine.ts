@@ -16,7 +16,13 @@ import { TitleIndex, type TitleIndexFile } from '../matching/titleIndex';
 import { calibrateShare, lambdaOf, shareProfile } from './calibrate';
 import { foldIn, keptForFoldIn, signal } from './foldIn';
 import { buildModelFiles, fetchModelFiles, type FetchFn, type ModelFiles } from './modelFiles';
-import { rankCandidates, scoreAll, topByPosition, type PositionResult } from './recommend';
+import {
+  qualityPool,
+  rankCandidates,
+  scoreAll,
+  topByPosition,
+  type PositionResult,
+} from './recommend';
 
 export interface CatalogFile {
   v: number;
@@ -40,6 +46,8 @@ export interface CatalogFile {
   divisive?: number[];
   /** v3 (step 8): items >= n_trained are estimated films (TMDB films missing from MovieLens). */
   n_trained?: number;
+  /** Step 8 (R6b): round(scale * q) per item, the quality term (model-meta `quality`). */
+  quality?: number[];
   /** v3 (step 8): TMDB rating out of 5 x 10 (34 = 3,4) and votes, one per estimated film. */
   tmdb_mean?: (number | null)[];
   tmdb_count?: number[];
@@ -241,6 +249,39 @@ export function calibratePositions(
   });
 }
 
+/**
+ * Step 8 (R6b): pools on score' = score / s_max + gamma q (`qualityPool`) when model-meta has a
+ * `quality` term and catalog.json its values; otherwise the pools by score. The positions keep
+ * their relative scores (« loin de tes goûts », model order).
+ */
+export function qualityPools(
+  raw: readonly PositionResult[],
+  ranked: Int32Array,
+  scores: Float64Array,
+  model: ModelFiles,
+  q: readonly number[] | undefined,
+  k: number,
+): PositionResult[] {
+  const quality = model.meta.quality;
+  if (!quality || !q || q.length !== model.nItems) return [...raw];
+  let qMax = -Infinity;
+  for (const v of q) if (v > qMax) qMax = v;
+  return raw.map((pos) => {
+    const p = qualityPool(
+      ranked,
+      scores,
+      model.popularity,
+      pos.cap,
+      q,
+      quality.gamma,
+      quality.scale,
+      k,
+      qMax / quality.scale,
+    );
+    return { ...pos, items: p.items, scores: p.scores };
+  });
+}
+
 export interface Recommendations {
   /** Time of the genre calibration (8 positions), for reco-bench. */
   calibrationMs: number;
@@ -292,11 +333,21 @@ export function recommend(
     caps,
     calibration ? Math.max(n, calibration.pool) : n,
   );
+  // step 8 (R6b): quality term, pools on score' = score / s_max + gamma q (raw kept for the
+  // relative scores « loin de tes goûts »)
+  const pools = qualityPools(
+    raw,
+    ranked,
+    scores,
+    model,
+    engine.catalog.quality,
+    calibration ? Math.max(n, calibration.pool) : n,
+  );
   // step 6c (D1): genre calibration of each position, once, on its pool (the fold-in films' genres)
   const t0 = performance.now();
   const positions = calibration
     ? calibratePositions(
-        raw,
+        pools,
         scores,
         shareProfile(
           engine.catalog.genres,
@@ -308,7 +359,11 @@ export function recommend(
         calibration,
         n,
       )
-    : raw;
+    : pools.map((p) => ({
+        ...p,
+        items: p.items.slice(0, n),
+        scores: p.items.slice(0, n).map((i) => scores[i]!),
+      }));
   const calibrationMs = performance.now() - t0;
   return {
     calibrationMs,
@@ -317,7 +372,7 @@ export function recommend(
     nExcluded: excluded.size,
     scores,
     ranked,
-    pools: raw,
+    pools,
     excluded,
     foldInItems: foldInFilms.map((h) => h.item),
   };

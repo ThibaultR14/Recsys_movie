@@ -133,7 +133,7 @@ async function main() {
     `  score ${w.score.toExponential(3)} ; rang parmi tous les candidats : ` +
       `${w.rankAll === null ? '—' : `${fr.format(w.rankAll)} / ${fr.format(w.nCandidates)}`}`,
   );
-  console.log('  cran       visible  rang avant calibration  dans le vivier  place affichée');
+  console.log('  cran       visible  rang (score du modèle)  rang avec la qualité  place affichée');
   for (const n of w.notches) {
     const cap = (n.cap === null ? '∞' : fr.format(n.cap)).padEnd(9);
     const before = n.rankBefore === null ? '—' : fr.format(n.rankBefore);
@@ -141,7 +141,7 @@ async function main() {
       n.rankAfter === null ? `absent (${n.shown} montrés)` : `${n.rankAfter} / ${n.shown}`;
     console.log(
       `  ${cap}  ${(n.visible ? 'oui' : 'non').padEnd(7)}  ${before.padEnd(22)}  ` +
-        `${(n.visible ? (n.inPool ? 'oui' : 'non') : '—').padEnd(14)}  ${n.visible ? after : '—'}`,
+        `${(n.visible ? (n.rankPool === null ? 'hors vivier' : String(n.rankPool)) : '—').padEnd(20)}  ${n.visible ? after : '—'}`,
     );
   }
   const gammas = arg('--gammas');

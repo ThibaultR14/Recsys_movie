@@ -3,9 +3,9 @@
 > Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : films récents (étape 8, arrêt de R6b : choix de γ)
+## En cours : films récents (étape 8, arrêt visuel)
 
-Spec `docs/etape-8-films-recents.md` v0.5. Fait : collecte TMDB, faux départ à froid, contenu seul, norme par tranche de popularité × 0,8, ρ = 0, ω = 1, **nouvelle popularité à partir de 2019** (rang des votes dans l'année, catalogue compris), **site branché** : 3 358 films estimés (559 recommandables), `catalog.json` v3, cartes « ★ x,x · TMDB (estimé) » ; parité, Vitest, Playwright, axe, temps verts. Arrêt visuel (R6) : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases, emplacements prêts). **R6b** : script `why-film` (« pourquoi pas ce film ? ») et mesure hors ligne d'un terme de qualité (`score/s_max + γ q`, moyenne MovieLens bayésienne) : jusqu'à γ = 0,1, rien de mesurable perdu sur les films bien notés ; **arrêt pour le choix de γ** (proposition 0,1). Restent à la clôture : textes, test une seule fois, vrai téléphone.
+Spec `docs/etape-8-films-recents.md` v0.6. Fait : collecte TMDB, faux départ à froid, contenu seul, norme × 0,8, nouvelle popularité à partir de 2019, site branché (3 358 films estimés, 559 recommandables, cartes « ★ x,x · TMDB (estimé) »), script `why-film`, **terme de qualité γ = 0,1** (q MovieLens bayésien, note TMDB pour les estimés ; *12 Angry Men* affiché à ∞ sur l'export A), **films estimés jamais cités** dans « parce que t'as aimé ». Parité, Vitest, Playwright, axe, temps verts. **Arrêt visuel** : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases ; paragraphe sur le coup de pouce à la qualité posé). Restent à la clôture : textes, test une seule fois (norme 0,8 et γ compris), vrai téléphone.
 
 ## Fait : tags des cartes (après l'étape 6c)
 
@@ -66,6 +66,7 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 
 - **λ des crans bas** (0,9) et **μ** de D1b (option a en Q4b : pénalité non branchée, référence prête) : à recaler avec la question des volontaires, vraie mesure aux crans bas (`é6c` §6).
 - **Seuil de retrait du fold-in** (percentile 0,3) : à recaler avec les volontaires (`é6c` §6).
+- **γ du terme de qualité** (0,1) et **facteur de norme des films estimés** (0,8) : à recaler avec les volontaires (`é8` §6).
 
 - **Essai sur un vrai téléphone** de la version 6b (deux thèmes, mise en page élargie, annotation « loin de tes goûts » par rangée) : non confirmé à la clôture (`é6b` §6).
 - **Seuil « loin de tes goûts » par rangée** (0,04, moitié d'une rangée de 8) : à recaler avec les volontaires (`é6b` R10).

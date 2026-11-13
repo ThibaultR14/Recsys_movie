@@ -23,6 +23,7 @@ trained ones, from item_idx `n_trained` on; their `ml_mean` / `ml_count` are nul
 `tmdb_mean` / `tmdb_count` (TMDB rating out of 5 x 10, number of TMDB votes; one value per
 estimated film, in item order) give the « ★ 3,4 · TMDB » line. Their genres are TMDB genres
 translated to MovieLens genres (`recent_films.TMDB_TO_ML_GENRE`).
+`quality` (step 8, R6b): round(1000 q) per item, the quality term of `quality.py`.
 """
 
 from __future__ import annotations
@@ -169,6 +170,7 @@ def build_catalog_json(
     divisive: list[int] | None = None,
     n_trained: int | None = None,
     estimated: pl.DataFrame | None = None,
+    quality: list[int] | None = None,
 ) -> dict:
     manual = manual_titles or {}
     rows = cat.to_dicts()
@@ -209,6 +211,8 @@ def build_catalog_json(
         if estimated is None
         else [tmdb_mean_x10(v) for v in estimated["vote_average"].to_list()],
         "tmdb_count": [] if estimated is None else estimated["vote_count"].to_list(),
+        # Quality term (step 8, R6b): round(1000 q) per item, see quality.py
+        "quality": quality or [],
     }
 
 

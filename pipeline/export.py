@@ -45,6 +45,7 @@ import scipy.sparse as sp  # noqa: E402
 
 import evaluate as ev  # noqa: E402
 import popularity as popm  # noqa: E402
+import quality as qual  # noqa: E402
 from config import (  # noqa: E402
     FORBIDDEN_WEB_PREFIXES,
     PROCESSED,
@@ -60,6 +61,7 @@ from recent_films import (  # noqa: E402
     DISCOVER_PARQUET,
     ESTIMATED_PARQUET,
     ESTIMATED_VECTORS,
+    FILMS_PARQUET,
 )
 
 FINAL_CONFIG = {"factors": 64, "regularization": 0.05, "alpha": 1.0, "beta": 1.0, "iterations": 30}
@@ -207,19 +209,53 @@ def calibrated_lists(
     kept_signal: np.ndarray,
     genres: list[list[int]],
     calibration: dict,
+    quality: np.ndarray | None = None,
+    gamma: float = 0.0,
 ) -> dict[str, list[int]]:
-    """Calibrated lists at the 8 slider positions (step 6c, D1, share mode, λ per position)."""
+    """Calibrated lists at the 8 slider positions (step 6c, D1, share mode, λ per position).
+    With `quality` (step 8, R6b): pool and calibration on score' = score / s_max + gamma q."""
     import calibration as cal
 
     n_genres = 1 + max(g for gs in genres for g in gs)
     prof = cal.share_profile_one(genres, n_genres, kept_items, kept_signal)
     out = {}
     for pos, lam in zip(SLIDER_POSITIONS, calibration["lambda_by_position"], strict=True):
-        pool = top_under_cap(scores, seen, recommendable, popularity, pos, calibration["pool"])
+        if quality is None:
+            pool = top_under_cap(scores, seen, recommendable, popularity, pos, calibration["pool"])
+            pool_scores = scores[pool]
+        else:
+            pool, pool_scores = quality_pool(
+                scores, seen, recommendable, popularity, pos, calibration["pool"], quality, gamma
+            )
         out["inf" if pos is None else str(pos)] = cal.calibrate_one(
-            pool, scores[pool], prof, genres, lam, calibration["n_list"], calibration["alpha"]
+            pool, pool_scores, prof, genres, lam, calibration["n_list"], calibration["alpha"]
         )
     return out
+
+
+def quality_pool(
+    scores: np.ndarray,
+    seen: np.ndarray,
+    recommendable: np.ndarray,
+    popularity: np.ndarray,
+    cap: int | None,
+    k: int,
+    quality: np.ndarray,
+    gamma: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Step 8 (R6b): the k candidates under the cap with the best score' = score / s_max +
+    gamma q (ties: item_idx), and their score'. s_max = best score among those candidates."""
+    cand = recommendable.copy()
+    cand[seen] = False
+    if cap is not None:
+        cand &= popularity <= cap
+    idx = np.flatnonzero(cand)
+    if len(idx) == 0:
+        return idx, np.array([], dtype=np.float64)
+    smax = float(scores[idx].max())
+    adj = qual.adjusted_scores(scores[idx], smax, quality[idx], gamma)
+    order = np.lexsort((idx, -adj))[:k]
+    return idx[order], adj[order]
 
 
 def version_partners(movie_ids: np.ndarray) -> dict[int, set[int]]:
@@ -374,6 +410,8 @@ def fixture_cases(
     movie_ids: np.ndarray,
     genres: list[list[int]],
     n_trained: int,
+    quality: np.ndarray | None = None,
+    gamma: float = 0.0,
 ) -> list[dict]:
     """20 real test histories (random, SEED) + synthetic edge cases, from the exported data.
     `movie_ids`: per item_idx (estimated films: -tmdb_id)."""
@@ -482,6 +520,8 @@ def fixture_cases(
                     signal.data[kept],
                     genres,
                     cal.PRODUCTION,
+                    quality,
+                    gamma,
                 ),
                 "excluded_versions": sorted(
                     int(i) for i in np.flatnonzero(seen) if i not in set(items)
@@ -537,7 +577,15 @@ def site_items(catalog: ev.Catalog) -> dict:
         genres = genres + [sorted(col[g] for g in gs) for gs in est["ml_genres"].to_list()]
         # estimated films have no MovieLens id: -tmdb_id in the fixtures only
         ext_ids = np.concatenate([ext_ids, -est["tmdb_id"].to_numpy().astype(np.int64)])
+    import site_catalog as sc
+
+    q_ints, q_info = qual.site_quality_from_files(
+        sc.load_catalog_frame(ev.CATALOG_PARQUET), pl.read_parquet(FILMS_PARQUET), est
+    )
+    assert len(q_ints) == len(Y), "quality != items"
     return {
+        "quality": q_ints,
+        "quality_info": q_info,
         "Y": Y,
         "popularity": pop,
         "pop_info": pop_info,
@@ -583,7 +631,7 @@ def estimated_meta(est: pl.DataFrame | None, n_trained: int) -> dict:
         "norm_factor": NORM_FACTOR,
         "norm_factor_why": "shrinkage of an uncertain estimate: content predictions point to "
         "the mean direction; at full norm they flood the lists (R3d)",
-        "quality_penalty_rho": 0.0,
+        "quality_penalty_rho": "replaced by the quality term (model-meta quality, R6b)",
     }
 
 
@@ -667,6 +715,7 @@ def cmd_export(out_dir: Path) -> None:
         },
         "movie_ids": movie_ids.tolist(),
         "estimated": estimated_meta(est, n_trained),
+        "quality": qual.quality_meta(items["quality_info"]),
         "non_recommendable_item_idx": np.flatnonzero(~items["recommendable"]).tolist(),
         "data_version": {
             "catalog_sha256": info["catalog_sha256"],
@@ -695,6 +744,8 @@ def cmd_export(out_dir: Path) -> None:
         items["ext_ids"],
         items["genres"],
         n_trained,
+        items["quality"],
+        qual.GAMMA,
     )
     fixture = {
         "description": "Fold-in reference cases for the TypeScript implementation (step 4). "
@@ -727,7 +778,7 @@ def cmd_verify(out_dir: Path) -> dict:
     meta = json.loads((out_dir / "model-meta.json").read_text())
     assert_web_safe(meta, "model-meta.json")
     q, scales = read_embeddings(out_dir / "embeddings.bin")
-    items = site_items(ev.load_catalog())
+    site = items = site_items(ev.load_catalog())
     Y = items["Y"]  # noqa: N806
     n_trained = items["n_trained"]
     assert meta["n_trained"] == n_trained
@@ -756,6 +807,7 @@ def cmd_verify(out_dir: Path) -> dict:
     partners = version_partners(np.array(meta["movie_ids"]))
     genres = items["genres"]
     assert meta["calibration"] == calibration_meta(), "model-meta.json calibration"
+    assert meta["quality"] == qual.quality_meta(items["quality_info"]), "model-meta.json quality"
     max_vec_err, n_tops, n_cal = 0.0, 0, 0
     for case in fixture["cases"]:
         items = np.array(case["item_idx"], dtype=np.int32)
@@ -788,7 +840,16 @@ def cmd_verify(out_dir: Path) -> dict:
             n_tops += 1
         sig = als.signal_values(R, cfg["beta"]).data
         cal_lists = calibrated_lists(
-            scores, seen, rec, pop, items[kept], sig[kept], genres, meta["calibration"]
+            scores,
+            seen,
+            rec,
+            pop,
+            items[kept],
+            sig[kept],
+            genres,
+            meta["calibration"],
+            site["quality"],
+            meta["quality"]["gamma"],
         )
         assert cal_lists == case["calibrated"], case["name"]
         n_cal += len(cal_lists)
@@ -853,10 +914,11 @@ def cmd_catalog(out_dir: Path) -> dict:
     versions = sc.version_pairs(cat, overrides)
     divisive = catalog_divisive(cat)
     full, est = site_catalog_frame(cat)
+    q_ints, _ = qual.site_quality_from_files(cat, pl.read_parquet(FILMS_PARQUET), est)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_compact_json(
         out_dir / "catalog.json",
-        sc.build_catalog_json(full, manual, versions, divisive, cat.height, est),
+        sc.build_catalog_json(full, manual, versions, divisive, cat.height, est, q_ints.tolist()),
     )
     write_compact_json(out_dir / "title-index.json", sc.build_title_index(full, manual))
     sizes = file_sizes(out_dir)
@@ -899,6 +961,11 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
     assert all(isinstance(c, int) and c >= 1 for c in ml_count[:nt]), "ml_count"
     assert all(m is None for m in ml_mean[nt:]) and all(c is None for c in ml_count[nt:])
     assert all(m is None or 0 <= m <= 50 for m in cat_json["tmdb_mean"]), "tmdb_mean"
+    full_cat, est_cat = site_catalog_frame(sc.load_catalog_frame(ev.CATALOG_PARQUET))
+    q_ints, _ = qual.site_quality_from_files(
+        sc.load_catalog_frame(ev.CATALOG_PARQUET), pl.read_parquet(FILMS_PARQUET), est_cat
+    )
+    assert cat_json["quality"] == q_ints.tolist(), "quality"
     assert index["keys"] == sorted(set(index["keys"])) and len(index["keys"]) == len(index["post"])
     where: dict[int, dict[str, int]] = {}
     for key, post in zip(index["keys"], index["post"], strict=True):
