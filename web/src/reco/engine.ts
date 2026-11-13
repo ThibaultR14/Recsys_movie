@@ -247,6 +247,13 @@ export interface Recommendations {
   positions: PositionResult[];
   history: UserFilm[];
   nExcluded: number;
+  /** Intermediate steps, for the diagnostics (`why-film`): scores of every item, the ranked
+   * candidates, each position before calibration (pool), the excluded items, the fold-in films. */
+  scores: Float64Array;
+  ranked: Int32Array;
+  pools: PositionResult[];
+  excluded: ReadonlySet<number>;
+  foldInItems: number[];
 }
 
 /** Fold-in on exact + probable_variant + confirmed, scores, exclusions, slider positions. */
@@ -308,5 +315,10 @@ export function recommend(
     positions,
     history,
     nExcluded: excluded.size,
+    scores,
+    ranked,
+    pools: raw,
+    excluded,
+    foldInItems: foldInFilms.map((h) => h.item),
   };
 }

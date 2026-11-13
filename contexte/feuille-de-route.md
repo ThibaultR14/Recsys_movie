@@ -3,9 +3,9 @@
 > Mise à jour le 12 novembre 2026, à la clôture de l'étape 6c. Ordre des étapes : `docs/stack-technique.md` §8.
 > Renvois : `é2` à `é6` = `docs/etape-2-modele.md`, `docs/etape-3-letterboxd.md`, `docs/etape-4-navigateur.md`, `docs/etape-5-interface.md`, `docs/etape-6-imdb.md`, `é6b` = `docs/etape-6b-retouches.md`, `é6c` = `docs/etape-6c-qualite.md` (§6 = « À reporter » ou questions ouvertes).
 
-## En cours : films récents (étape 8, arrêt visuel de R6)
+## En cours : films récents (étape 8, arrêt de R6b : choix de γ)
 
-Spec `docs/etape-8-films-recents.md` v0.5. Fait : collecte TMDB, faux départ à froid, contenu seul, norme par tranche de popularité × 0,8, ρ = 0, ω = 1, **nouvelle popularité à partir de 2019** (rang des votes dans l'année, catalogue compris), **site branché** : 3 358 films estimés (559 recommandables), `catalog.json` v3, cartes « ★ x,x · TMDB (estimé) » ; parité, Vitest, Playwright, axe, temps verts. **Arrêt** : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases, emplacements prêts). Restent à la clôture : textes, test une seule fois, vrai téléphone.
+Spec `docs/etape-8-films-recents.md` v0.5. Fait : collecte TMDB, faux départ à froid, contenu seul, norme par tranche de popularité × 0,8, ρ = 0, ω = 1, **nouvelle popularité à partir de 2019** (rang des votes dans l'année, catalogue compris), **site branché** : 3 358 films estimés (559 recommandables), `catalog.json` v3, cartes « ★ x,x · TMDB (estimé) » ; parité, Vitest, Playwright, axe, temps verts. Arrêt visuel (R6) : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases, emplacements prêts). **R6b** : script `why-film` (« pourquoi pas ce film ? ») et mesure hors ligne d'un terme de qualité (`score/s_max + γ q`, moyenne MovieLens bayésienne) : jusqu'à γ = 0,1, rien de mesurable perdu sur les films bien notés ; **arrêt pour le choix de γ** (proposition 0,1). Restent à la clôture : textes, test une seule fois, vrai téléphone.
 
 ## Fait : tags des cartes (après l'étape 6c)
 
@@ -98,6 +98,8 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 - **Calibration** : respecter les proportions du profil (genres, décennies, pays).
 - **Filtres** : durée, décennie, pays, langue, genre.
 - **« Comme ce film »** : partir d'un seul film. **Partir d'une liste ou d'une watchlist.**
+- **Rangée « les classiques qui te manquent »** (idée de Thibault, étape 8) : le modèle classe « ce que tu vas regarder », pas « ce que tu vas aimer » ; un chef-d'œuvre très bien noté mais loin des habitudes ne remonte pas (ex. : un classique de 1957 56ᵉ à ∞ sur un export réel, `why-film`). Une rangée à part, tirée par la qualité (moyenne bayésienne), garderait les listes principales intactes.
+- **« et celui-là, il me plairait ? »** (idée de Thibault, étape 8) : chercher un film par son titre et voir où il se place pour soi (rang, crans, films proches), avec le moteur de `why-film`.
 - **Profil cinéphile façon « Wrapped »** : réalisateurs, pays, décennies, part de pépites.
 - **Mode à deux** : fusionner deux historiques.
 - **Transition douce** près du plafond du curseur.

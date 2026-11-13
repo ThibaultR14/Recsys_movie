@@ -1,6 +1,6 @@
 # Étape 8 — Films récents
 
-> **⏸ Arrêt de R6 (12 novembre 2026) : essai à l'écran.** Site branché (films estimés dans les listes et le profil, cartes « ★ x,x · TMDB (estimé) », nouvelle popularité) ; parité, tests, Playwright, axe et temps verts ; emplacements de texte pour « comment ça marche » (section 5, R6).
+> **⏸ Arrêt de R6b (13 novembre 2026) : choix de γ** (terme de qualité avant la calibration, mesuré hors ligne ; section 5, R6b). Le site branché à R6 attend aussi les textes de « comment ça marche » et l'essai à l'écran.
 > Version 0.5 (12 novembre 2026) : **facteur 0,8 sur la norme cible** (D1c ; rétrécissement d'une estimation incertaine) ; nouvelle popularité validée par Thibault.
 > Version 0.4 (12 novembre 2026) : décisions de Thibault à l'arrêt de R3c : popularité par **rang absolu dans l'année, référence 2010-2018**, pour les films estimés et pour les films du catalogue sortis à partir de 2019 (`year_all` ✗ à partir de 2019) ; contrôles (a), (b), (c) ; ρ = 0 (R3b).
 > Version 0.3 (12 novembre 2026) : **décisions de Thibault à l'arrêt de R3** : contenu seul (voisins TMDB et mélange ✗) ; norme cible par tranche de **popularité du curseur** (tranche de votes ✗) ; < 500 votes non recommandables, comptent dans le profil ; popularité référence 2019-2022, contrôle « aucun des 10 films les plus votés de chaque année sous 10 000 » ; ω = 1 ; ρ tranché par une mesure de plus (règle en D4) ; test de clôture contre la vraie direction recalée (D5).
@@ -519,6 +519,73 @@ Résultats :
 - Restent pour la clôture : les textes, le test (une seule fois) et l'essai sur un vrai téléphone.
 
 **À voir à l'écran** (`npm run dev`, ton export A) : les cartes « (estimé) » (aux crans 20 000, 2 000 et 1 000, 1 à 3 dans les 8 premières), la section `#recents` de « comment ça marche » (textes à venir) et l'écran d'analyse (les films de 2024-2025 reconnus).
+
+
+### R6b — « pourquoi pas ce film ? » et terme de qualité (13 novembre 2026) — ⏸ arrêt : choix de γ
+
+Demandé par Thibault avant la clôture.
+
+**1. Script `why-film`** (`web/scripts/why-film.ts`, fonction pure `web/src/reco/whyFilm.ts`, même moteur que le site ; `recommend` expose maintenant ses étapes intermédiaires sans changer le calcul ; test Vitest `whyFilm.test.ts`). Il affiche :
+- film du catalogue ou estimé, recommandable ou non, vu ou non dans l'export ;
+- sa popularité et les crans où il est visible ;
+- à chaque cran visible, le rang de son score parmi les candidats avant calibration, s'il est dans le vivier, et sa place après calibration ;
+- les 3 films de l'historique les plus proches.
+
+Titres au terminal seulement.
+
+*12 Angry Men* (1957) sur l'export A (chiffres seulement ; les titres proches ont été montrés à Thibault dans le compte rendu) :
+- film du catalogue, recommandable, pas vu ;
+- **popularité 21 863 : visible seulement au cran ∞** ;
+- **56ᵉ** des 23 305 candidats avant calibration : il entre dans le vivier de 150, mais pas dans les 48 films affichés ;
+- les 3 films de l'historique les plus proches ont des cosinus de 0,53, 0,45 et 0,45. Le plus proche est un film estimé que Thibault a mal noté (percentile 0,19, donc hors du profil). Les films estimés, proches de la direction moyenne, sont « proches » de beaucoup de films : c'est à garder en tête pour « parce que t'as aimé ».
+
+**2. Terme de qualité, mesure hors ligne** (`pipeline/quality_term.py`, validation seulement, rien dans le site)
+- Formule : `score' = score / s_max + γ × q`, avec `s_max` = meilleur score parmi les candidats du cran. Viennent ensuite le vivier de 150 et la calibration de production.
+- `q = (n m + K C) / (n + K) − C` : moyenne MovieLens bayésienne centrée, calculée sur les **notes des utilisateurs d'entraînement** (pas de fuite). C = 3,54 est la moyenne de ces notes, et K le nombre de notes fictives. Pour *12 Angry Men*, q ≈ 0,75 étoile.
+- Protocole de l'étape 6c : fold-in D2, plafonds sur les comptes d'entraînement, 10 000 utilisateurs.
+- « Bien notés » : note du held-out ≥ médiane du fold-in. Δ : écart apparié avec γ = 0 (IC à 95 %).
+
+| Cran | γ (K = 50) | NDCG@20 bien notés (Δ) | Recall@20 bien notés (Δ) | NDCG@20 tous (Δ) | pop. médiane | avant 1970 |
+|---|---|---|---|---|---|---|
+| ∞ | 0 | 0,1598 | 0,1994 | 0,1705 | 28 994 | 5,8 % |
+| ∞ | 0,05 | −0,0002 ± 0,0005 | +0,0001 ± 0,0007 | −0,0008 ± 0,0004 | 29 322 | 6,0 % |
+| ∞ | **0,1** | **−0,0006 ± 0,0006** | **−0,0007 ± 0,0010** | −0,0018 ± 0,0006 (−1,1 %) | 29 787 | 6,3 % |
+| ∞ | 0,2 | −0,0021 ± 0,0009 (−1,3 %) | −0,0022 ± 0,0014 | −0,0046 ± 0,0008 (−2,7 %) | 30 693 | 6,8 % |
+| ∞ | 0,3 | −0,0036 ± 0,0011 (−2,3 %) | −0,0048 ± 0,0017 | −0,0071 ± 0,0010 (−4,2 %) | 31 570 | 7,3 % |
+| 2 000 | 0 | 0,0192 | 0,0221 | 0,0250 | 1 592 | 11,7 % |
+| 2 000 | 0,05 | +0,0002 ± 0,0003 | +0,0002 ± 0,0004 | −0,0001 ± 0,0003 | 1 591 | 12,8 % |
+| 2 000 | **0,1** | **+0,0001 ± 0,0004** | **+0,0003 ± 0,0004** | −0,0004 ± 0,0004 | 1 589 | 13,9 % |
+| 2 000 | 0,2 | −0,0002 ± 0,0005 | +0,0002 ± 0,0006 | −0,0011 ± 0,0005 | 1 580 | 16,1 % |
+| 2 000 | 0,3 | −0,0005 ± 0,0005 | −0,0005 ± 0,0007 | −0,0019 ± 0,0006 | 1 574 | 18,2 % |
+| 500 | 0 | 0,0056 | 0,0061 | 0,0077 | 406 | 17,1 % |
+| 500 | 0,05 | +0,0002 ± 0,0001 | +0,0002 ± 0,0002 | +0,0001 ± 0,0002 | 404 | 18,3 % |
+| 500 | **0,1** | **+0,0002 ± 0,0002** | **+0,0002 ± 0,0002** | +0,0001 ± 0,0002 | 402 | 19,4 % |
+| 500 | 0,2 | +0,0002 ± 0,0002 | +0,0002 ± 0,0002 | −0,0002 ± 0,0003 | 398 | 21,5 % |
+| 500 | 0,3 | +0,0001 ± 0,0003 | +0,0000 ± 0,0003 | −0,0006 ± 0,0003 | 394 | 23,4 % |
+
+- **K = 200** donne les mêmes chiffres à ±0,0001 près (détail dans `quality_term_val.json`) ; K = 50 suffit.
+- **Popularité moyenne** (log) : 10,22 → 10,30 à ∞ (γ = 0,3) ; 7,30 → 7,28 à 2 000 ; 5,95 → 5,92 à 500. Le terme ne fait pas remonter les films connus aux crans bas.
+
+**Rang de *12 Angry Men* à ∞ sur l'export A** (`why-film --gammas`, q tiré de `catalog.json`, comptes complets) :
+
+| γ | 0 | 0,05 | 0,1 | 0,2 | 0,3 |
+|---|---|---|---|---|---|
+| rang avant calibration (K = 50) | 56 | 47 | 40 | 31 | 21 |
+| place affichée sur 48 (K = 50) | absent | absent | **40** | 1 | 1 |
+| place affichée sur 48 (K = 200) | absent | absent | 40 | 30 | 1 |
+
+La calibration (λ = 0,1 à ∞) peut faire sauter un film du vivier très haut quand les scores se resserrent : avec γ ≥ 0,2, les scores du haut du vivier sont proches, et un drame pur « équilibre » bien un profil à dominante Drama. Le saut 31 → 1 en est l'effet.
+
+**Films estimés** (pas de moyenne MovieLens) : la note TMDB bayésienne (m = 200) prédit bien q, avec une corrélation de **0,77** sur 19 646 films du catalogue (K = 50 ; q ≈ 0,523 × note TMDB − 3,621 ; `quality_term.py tmdb-fit`).
+- **Pris pour les mesures : q = 0** pour les films estimés. La validation n'en contient pas, et l'illustration *12 Angry Men* leur donne 0.
+- Proposé pour le site : **q estimé à partir de la note TMDB par cette droite** (même échelle que les films du catalogue). Sinon, avec q = 0, les films estimés seraient désavantagés face aux classiques bien notés.
+
+**Lecture**
+- **Jusqu'à γ = 0,1, le terme ne coûte rien de mesurable sur les films bien notés**, à aucun cran (écarts dans les IC). Il coûte 1,1 % du NDCG@20 sur tous les films revus à ∞, et monte la part de films d'avant 1970 de 5,8 → 6,3 % (∞), 11,7 → 13,9 % (2 000) et 17,1 → 19,4 % (500).
+- **À γ ≥ 0,2**, la perte à ∞ devient nette (−1,3 % sur les bien notés, −2,7 % sur tous).
+- **Limite de la mesure** : le held-out de MovieLens, c'est « ce que l'utilisateur a regardé ensuite ». Il mesure donc mal « ce qu'il va aimer », et favorise par construction γ = 0 (le constat de Thibault). La vraie mesure sera la question des volontaires (étape 7).
+
+**Question pour Thibault** : quel γ ? Proposition : **γ = 0,1, K = 50**, et q TMDB par la droite pour les films estimés. C'est le plus fort qui ne coûte rien de mesurable sur les films bien notés, et il fait entrer *12 Angry Men* dans les 48 à ∞ sur l'export A. Branchement : référence Python, parité TypeScript, cas du fold-in, `model-meta.json` (γ, K, droite TMDB), comme la calibration.
 
 ---
 
