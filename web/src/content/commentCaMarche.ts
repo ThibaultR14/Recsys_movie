@@ -11,6 +11,8 @@ export const COMMENT_CA_MARCHE = {
       "le modèle a appris sur les notes de 200 000 cinéphiles. à force, il a rangé chaque film sur une sorte de carte des goûts : deux films sont proches quand ce sont les mêmes gens qui les aiment, même s'ils n'ont rien à voir sur le papier.",
       "quand tu déposes ton export, ton navigateur te place sur cette carte à partir de tes films et de tes notes, puis cherche les films proches de toi que t'as pas encore vus. ça prend quelques millisecondes, sur ta machine.",
       "ça s'appelle du filtrage collaboratif (ici, une méthode qui s'appelle ALS). sous chaque carte, « parce que t'as aimé… » cite les films de ton historique les plus proches du film proposé.",
+      // step 8 (R6b): quality term before the calibration
+      "le modèle devine surtout ce que tu vas avoir envie de regarder, pas ce que tu vas adorer. alors on ajoute un petit coup de pouce aux films que les gens ont vraiment aimés, d'après leurs notes : un chef-d'œuvre un peu loin de tes habitudes a ainsi sa chance. pour les films récents, on se sert de la note tmdb.",
     ],
   },
   percentiles: {
