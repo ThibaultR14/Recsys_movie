@@ -17,6 +17,7 @@ import {
   type Engine,
   type ExportInput,
   type ImportSummary,
+  type Tuning,
 } from './engine';
 import type { FetchFn } from './modelFiles';
 
@@ -24,7 +25,7 @@ export type RecoRequest =
   | { id: number; type: 'init' }
   | { id: number; type: 'import'; input: ExportInput }
   | { id: number; type: 'confirm'; choices: Choices }
-  | { id: number; type: 'recommend'; n?: number; caps?: (number | null)[] };
+  | { id: number; type: 'recommend'; n?: number; caps?: (number | null)[]; tuning?: Tuning };
 
 export type RecoResponse =
   | { id: number; ok: true; result: InitResult | ImportResult | ConfirmResult | RecommendResult }
@@ -196,7 +197,7 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     );
     return { counts: s.counts, nHistoryFilms: s.nHistoryFilms } satisfies ConfirmResult;
   }
-  const res = recommend(engine, state.matched, { n: req.n, caps: req.caps });
+  const res = recommend(engine, state.matched, { n: req.n, caps: req.caps, tuning: req.tuning });
   const distinct = [...new Set(res.positions.flatMap((p) => p.items))];
   const series = seriesOf(distinct, res.history, engine.catalog);
   const t0 = performance.now();

@@ -1,6 +1,7 @@
 # Étape 8 — Films récents
 
-> **⏸ Retour à l'arrêt visuel (R6, 13 novembre 2026)** : terme de qualité branché (γ = 0,1, K = 50, q TMDB pour les films estimés), films estimés jamais cités dans « parce que t'as aimé » (section 5, R6c) ; restent l'essai à l'écran et les textes de « comment ça marche ».
+> **⏸ Arrêt visuel, « pas encore OK » (R6d, 14 novembre 2026)** : analyse des réglages dans `docs/etape-8-analyse-reglages.md`, aucun réglage changé, décisions de Thibault attendues.
+> Retour à l'arrêt visuel (R6, 13 novembre 2026) : terme de qualité branché (γ = 0,1, K = 50, q TMDB pour les films estimés), films estimés jamais cités dans « parce que t'as aimé » (section 5, R6c) ; restent l'essai à l'écran et les textes de « comment ça marche ».
 > Version 0.6 (13 novembre 2026) : **terme de qualité** `score / s_max + γ q` avant le vivier et la calibration, γ = 0,1, K = 50 (D4 ; ρ ✗ remplacé) ; films estimés : q déduit de la note TMDB ; **un film estimé n'est jamais cité** dans les explications (D7).
 > Version 0.5 (12 novembre 2026) : **facteur 0,8 sur la norme cible** (D1c ; rétrécissement d'une estimation incertaine) ; nouvelle popularité validée par Thibault.
 > Version 0.4 (12 novembre 2026) : décisions de Thibault à l'arrêt de R3c : popularité par **rang absolu dans l'année, référence 2010-2018**, pour les films estimés et pour les films du catalogue sortis à partir de 2019 (`year_all` ✗ à partir de 2019) ; contrôles (a), (b), (c) ; ρ = 0 (R3b).
@@ -619,6 +620,18 @@ Décisions de Thibault après R6b : γ = 0,1, K = 50 ; q des films estimés tir�
 
 - ***12 Angry Men*** (export A, `why-film`) : 56ᵉ au score du modèle, **42ᵉ avec la qualité, affiché 42ᵉ sur 48 à ∞** (avant : absent).
 - **Temps** (`reco-bench`, médiane de 7) : export A 28,1 ms ; 3 000 films 109,5 ms (avant : 113,7 ms). Playwright 13/13, **changement de cran : médiane 33 ms** (max 35), modèle prêt 956 ms. Vitest 284/284 ; `tsc`, ESLint, Prettier verts.
+
+### R6d — Analyse des réglages (14 novembre 2026) — ⏸ arrêt : décisions de Thibault
+
+Retour de Thibault à l'arrêt visuel : « pas encore OK ». Les crans de gauche sont bons ; ceux du milieu et de droite sont dégradés ; *12 Angry Men* est trop bas ; les films récents sont trop présents à ∞, avec des explications génériques.
+
+L'analyse est dans **`docs/etape-8-analyse-reglages.md`** : constat chiffré, options, mesures (exports A et B, watchlists, validation) et verdict par question. **Aucun réglage n'est changé.**
+
+Seuls changements du site :
+- texte du bas de page des résultats : « les films récents sont placés d'après leur contenu : on les connaît moins bien. » ;
+- interrupteurs **en mode dev seulement** (`?calibration=0`, `?lambda=`, `?qualite=`, `?recents=`, `?classiques=`), absents du build de production.
+
+L'étape reste ouverte, en attente des décisions de Thibault sur la synthèse du document.
 
 ---
 

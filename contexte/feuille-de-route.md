@@ -5,7 +5,7 @@
 
 ## En cours : films récents (étape 8, arrêt visuel)
 
-Spec `docs/etape-8-films-recents.md` v0.6. Fait : collecte TMDB, faux départ à froid, contenu seul, norme × 0,8, nouvelle popularité à partir de 2019, site branché (3 358 films estimés, 559 recommandables, cartes « ★ x,x · TMDB (estimé) »), script `why-film`, **terme de qualité γ = 0,1** (q MovieLens bayésien, note TMDB pour les estimés ; *12 Angry Men* affiché à ∞ sur l'export A), **films estimés jamais cités** dans « parce que t'as aimé ». Parité, Vitest, Playwright, axe, temps verts. **Arrêt visuel** : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases ; paragraphe sur le coup de pouce à la qualité posé). Restent à la clôture : textes, test une seule fois (norme 0,8 et γ compris), vrai téléphone.
+Spec `docs/etape-8-films-recents.md` v0.6. Fait : collecte TMDB, faux départ à froid, contenu seul, norme × 0,8, nouvelle popularité à partir de 2019, site branché (3 358 films estimés, 559 recommandables, cartes « ★ x,x · TMDB (estimé) »), script `why-film`, **terme de qualité γ = 0,1** (q MovieLens bayésien, note TMDB pour les estimés ; *12 Angry Men* affiché à ∞ sur l'export A), **films estimés jamais cités** dans « parce que t'as aimé ». Parité, Vitest, Playwright, axe, temps verts. **Arrêt visuel** : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases ; paragraphe sur le coup de pouce à la qualité posé). Restent à la clôture : textes, test une seule fois (norme 0,8 et γ compris), vrai téléphone. **14 novembre 2026, arrêt visuel « pas encore OK »** : analyse des réglages dans `docs/etape-8-analyse-reglages.md` (milieu du curseur, classiques, films récents, curseur ; interrupteurs en mode dev), aucun réglage changé, décisions de Thibault attendues.
 
 ## Fait : tags des cartes (après l'étape 6c)
 
@@ -99,7 +99,8 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 - **Calibration** : respecter les proportions du profil (genres, décennies, pays).
 - **Filtres** : durée, décennie, pays, langue, genre.
 - **« Comme ce film »** : partir d'un seul film. **Partir d'une liste ou d'une watchlist.**
-- **Rangée « les classiques qui te manquent »** (idée de Thibault, étape 8) : le modèle classe « ce que tu vas regarder », pas « ce que tu vas aimer » ; un chef-d'œuvre très bien noté mais loin des habitudes ne remonte pas (ex. : un classique de 1957 56ᵉ à ∞ sur un export réel, `why-film`). Une rangée à part, tirée par la qualité (moyenne bayésienne), garderait les listes principales intactes.
+- **Rangée « les classiques qui te manquent »** (idée de Thibault, étape 8) : le modèle classe « ce que tu vas regarder », pas « ce que tu vas aimer » ; un chef-d'œuvre très bien noté mais loin des habitudes ne remonte pas (ex. : un classique de 1957 56ᵉ à ∞ sur un export réel, `why-film`). Une rangée à part, tirée par la qualité (moyenne bayésienne), garderait les listes principales intactes. Avis et mesures dans `docs/etape-8-analyse-reglages.md` (question 3).
+- **Tag « dans ta watchlist »** (idée de Thibault, étape 8) : si l'export contient `watchlist.csv`, signaler sur la carte un film recommandé que la personne voulait déjà voir (lu dans le navigateur, rien de stocké ; la watchlist sert aujourd'hui de mesure personnelle seulement, `docs/etape-8-analyse-reglages.md`).
 - **« et celui-là, il me plairait ? »** (idée de Thibault, étape 8) : chercher un film par son titre et voir où il se place pour soi (rang, crans, films proches), avec le moteur de `why-film`.
 - **Profil cinéphile façon « Wrapped »** : réalisateurs, pays, décennies, part de pépites.
 - **Mode à deux** : fusionner deux historiques.

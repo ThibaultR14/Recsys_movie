@@ -19,6 +19,7 @@ import { buildModelFiles, fetchModelFiles, type FetchFn, type ModelFiles } from 
 import {
   qualityPool,
   rankCandidates,
+  type ClassicsBonus,
   scoreAll,
   topByPosition,
   type PositionResult,
@@ -227,9 +228,10 @@ export function calibratePositions(
   genres: readonly (readonly number[])[],
   calibration: NonNullable<ModelFiles['meta']['calibration']>,
   n: number,
+  lambdaFor: (cap: number | null) => number = (cap) => lambdaOf(calibration, cap),
 ): PositionResult[] {
   return pools.map((pos) => {
-    const lambda = lambdaOf(calibration, pos.cap);
+    const lambda = lambdaFor(pos.cap);
     const items = calibrateShare(
       pos.items,
       pos.scores,
@@ -261,6 +263,8 @@ export function qualityPools(
   model: ModelFiles,
   q: readonly number[] | undefined,
   k: number,
+  gamma?: number,
+  classics?: ClassicsBonus,
 ): PositionResult[] {
   const quality = model.meta.quality;
   if (!quality || !q || q.length !== model.nItems) return [...raw];
@@ -273,13 +277,75 @@ export function qualityPools(
       model.popularity,
       pos.cap,
       q,
-      quality.gamma,
+      gamma ?? quality.gamma,
       quality.scale,
       k,
       qMax / quality.scale,
+      classics,
     );
     return { ...pos, items: p.items, scores: p.scores };
   });
+}
+
+/**
+ * Variants of the settings, for the analysis of the visual stop (docs/etape-8-analyse-reglages.md)
+ * and the dev-only switches of the site (`?calibration=0`…, never in production). Absent = the
+ * production settings, computed exactly as before.
+ */
+export interface Tuning {
+  /** false: no genre calibration (each pool cut to n, in score' order). */
+  calibration?: boolean;
+  /** One λ for the notches <= LOW_NOTCH_CAP (the others unchanged), or one λ per position. */
+  lambda?: number | readonly number[];
+  /** false: no quality term (gamma = 0). */
+  quality?: boolean;
+  /** Override of gamma (model-meta `quality.gamma`). */
+  gamma?: number;
+  /** 'not-recommended': estimated films never recommended (still in the profile);
+   * 'off': neither recommended nor in the profile (still seen). */
+  recent?: 'not-recommended' | 'off';
+  /** Classics bonus score' += gamma × max(0, q − q_p), q_p = percentile `percentile` of q over the
+   * trained recommendable films; estimated films get it only with `estimated: true`. */
+  classics?: { gamma: number; percentile: number; estimated?: boolean };
+  /** Calibration pool depth at the notches <= LOW_NOTCH_CAP (production: model-meta, 150). */
+  pool?: number;
+}
+
+/** `?lambda=<value>` changes the notches at or below this cap (the left notches stay as they are). */
+export const LOW_NOTCH_CAP = 5000;
+
+/** λ of each cap under a tuning (production table when absent). */
+export function tunedLambda(
+  calibration: NonNullable<ModelFiles['meta']['calibration']>,
+  tuning: Tuning | undefined,
+): (cap: number | null) => number {
+  const lambda = tuning?.lambda;
+  return (cap) => {
+    if (tuning?.calibration === false) return 0;
+    if (typeof lambda === 'number') {
+      return cap !== null && cap <= LOW_NOTCH_CAP ? lambda : lambdaOf(calibration, cap);
+    }
+    if (lambda) {
+      const i = calibration.positions.indexOf(cap);
+      return i < 0 ? 0 : (lambda[i] ?? lambdaOf(calibration, cap));
+    }
+    return lambdaOf(calibration, cap);
+  };
+}
+
+/** q at the given percentile (0-100, nearest rank) over the trained recommendable films. */
+export function qualityPercentile(engine: Engine, percentile: number): number {
+  const { catalog, model } = engine;
+  const scale = model.meta.quality?.scale ?? 1;
+  const nTrained = catalog.n_trained ?? catalog.n;
+  const values: number[] = [];
+  for (let i = 0; i < nTrained; i++) {
+    if (model.recommendable[i]) values.push((catalog.quality?.[i] ?? 0) / scale);
+  }
+  values.sort((a, b) => a - b);
+  if (!values.length) return 0;
+  const k = Math.ceil((percentile / 100) * values.length) - 1;
+  return values[Math.min(values.length - 1, Math.max(0, k))]!;
 }
 
 export interface Recommendations {
@@ -301,18 +367,23 @@ export interface Recommendations {
 export function recommend(
   engine: Engine,
   matched: readonly MatchedEntry[],
-  options: { n?: number; caps?: readonly (number | null)[] } = {},
+  options: { n?: number; caps?: readonly (number | null)[]; tuning?: Tuning } = {},
 ): Recommendations {
   const { model } = engine;
+  const tuning = options.tuning;
+  const nTrained = engine.catalog.n_trained ?? engine.catalog.n;
   const history = toUserHistory(matched); // exact + probable_variant + confirmed
+  // tuning 'off': estimated films out of the profile (they stay seen)
+  const profileFilms =
+    tuning?.recent === 'off' ? history.filter((h) => h.item < nTrained) : history;
   // step 6c (D2): disliked rated films out of the fold-in (they stay seen, never recommended)
   const kept = keptForFoldIn(
-    history.map((h) => h.percentile),
-    history.map((h) => h.rating !== undefined),
+    profileFilms.map((h) => h.percentile),
+    profileFilms.map((h) => h.rating !== undefined),
     model.meta.foldin_drop_below,
     model.meta.foldin_min_kept ?? 0,
   );
-  const foldInFilms = history.filter((_, i) => kept[i]);
+  const foldInFilms = profileFilms.filter((_, i) => kept[i]);
   const x = foldIn(
     model,
     foldInFilms.map((h) => h.item),
@@ -322,6 +393,7 @@ export function recommend(
   const excluded = exclusions(matched, history);
   const seen = history.map((h) => h.item);
   for (const i of versionExclusions(engine.versions, seen)) excluded.add(i);
+  if (tuning?.recent) for (let i = nTrained; i < model.nItems; i++) excluded.add(i);
   const ranked = rankCandidates(scores, model.recommendable, excluded);
   const caps = options.caps ?? model.meta.slider.positions;
   const n = options.n ?? 50;
@@ -335,14 +407,33 @@ export function recommend(
   );
   // step 8 (R6b): quality term, pools on score' = score / s_max + gamma q (raw kept for the
   // relative scores « loin de tes goûts »)
-  const pools = qualityPools(
+  const classics = tuning?.classics
+    ? {
+        gamma: tuning.classics.gamma,
+        threshold: qualityPercentile(engine, tuning.classics.percentile),
+        maxItem: tuning.classics.estimated ? model.nItems : nTrained,
+      }
+    : undefined;
+  const qualityRanked = qualityPools(
     raw,
     ranked,
     scores,
     model,
     engine.catalog.quality,
     calibration ? Math.max(n, calibration.pool) : n,
+    tuning?.quality === false ? 0 : tuning?.gamma,
+    classics,
   );
+  // tuning `pool`: a shallower calibration pool at the notches <= LOW_NOTCH_CAP (analysis)
+  const depth = tuning?.pool;
+  const pools =
+    depth === undefined
+      ? qualityRanked
+      : qualityRanked.map((p) =>
+          p.cap !== null && p.cap <= LOW_NOTCH_CAP
+            ? { ...p, items: p.items.slice(0, depth), scores: p.scores.slice(0, depth) }
+            : p,
+        );
   // step 6c (D1): genre calibration of each position, once, on its pool (the fold-in films' genres)
   const t0 = performance.now();
   const positions = calibration
@@ -358,6 +449,7 @@ export function recommend(
         engine.catalog.genres,
         calibration,
         n,
+        tunedLambda(calibration, tuning),
       )
     : pools.map((p) => ({
         ...p,

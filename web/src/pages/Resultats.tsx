@@ -110,7 +110,7 @@ export function Resultats({ nEntries, reco, view: controlled, onViewChange }: Re
       )}
 
       <p className="m-0 text-[14px] text-muted">
-        on connaît moins bien les films sortis après 2023, désolé.
+        les films récents sont placés d'après leur contenu : on les connaît moins bien.
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-4">

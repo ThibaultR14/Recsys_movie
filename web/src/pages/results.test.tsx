@@ -112,7 +112,9 @@ describe('Resultats', () => {
     expect(cards()).toHaveLength(8);
     expect(cards()[0]).toHaveTextContent('film 2000 #0');
     expect(
-      screen.getByText('on connaît moins bien les films sortis après 2023, désolé.'),
+      screen.getByText(
+        "les films récents sont placés d'après leur contenu : on les connaît moins bien.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("dis-nous si on s'est planté, ça nous aide")).toBeInTheDocument();
     expect(

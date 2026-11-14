@@ -4,6 +4,8 @@
 // current screen, which is kept (step 6b, D2).
 import { useEffect, useState } from 'react';
 import { Layout } from './components/Layout';
+import { DevBanner } from './dev/DevBanner';
+import { parseDevTuning } from './dev/devTuning';
 import { APropos } from './pages/APropos';
 import { Accueil } from './pages/Accueil';
 import { Analyse } from './pages/Analyse';
@@ -23,6 +25,13 @@ export type RecoApi = Pick<RecoClient, 'init' | 'importExport' | 'confirm' | 're
 
 /** Number of films computed per slider position (8 cards, « encore des films » up to 48). */
 export const N_RECOMMENDED = 48;
+/** Dev-only switches of the settings (`?calibration=0`…, src/dev/devTuning.ts): `import.meta.env.DEV`
+ * is false in the production build, which drops them. */
+const DEV_TUNING =
+  import.meta.env.DEV && typeof window !== 'undefined'
+    ? parseDevTuning(window.location.search)
+    : undefined;
+
 export const EXAMPLE_URL = `${import.meta.env.BASE_URL}exemple/letterboxd-exemple.zip`;
 
 type Screen =
@@ -140,7 +149,7 @@ export function App({ client: injected }: { client?: RecoApi }) {
     setBusy(true);
     try {
       await client.confirm(choices);
-      const reco = await client.recommend({ n: N_RECOMMENDED });
+      const reco = await client.recommend({ n: N_RECOMMENDED, tuning: DEV_TUNING });
       if (reco.nHistory === 0) {
         setError(MESSAGES.noneRecognized);
         return;
@@ -194,6 +203,7 @@ export function App({ client: injected }: { client?: RecoApi }) {
           view={screen.view}
           onViewChange={(view) => setScreen({ ...screen, view })}
         />
+        {import.meta.env.DEV && DEV_TUNING && <DevBanner tuning={DEV_TUNING} />}
       </Layout>
     );
   }

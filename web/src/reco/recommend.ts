@@ -47,6 +47,15 @@ export function rankCandidates(
   return Int32Array.from(items);
 }
 
+/** Targeted bonus of the « classics by consensus » (analysis, not in production): items below
+ * `maxItem` only (the trained films when estimated films are left out). */
+export interface ClassicsBonus {
+  gamma: number;
+  /** q threshold (same unit as quality / scale). */
+  threshold: number;
+  maxItem: number;
+}
+
 /**
  * Step 8 (R6b): the `k` candidates under the cap with the best score' = score / s_max + gamma q
  * (ties: item_idx), q = quality[i] / scale, s_max = best score under the cap (1 if <= 0); same
@@ -63,17 +72,24 @@ export function qualityPool(
   scale: number,
   k: number,
   qMax: number,
+  classics?: ClassicsBonus,
 ): { items: number[]; scores: number[] } {
   const items: number[] = [];
   const adj: number[] = [];
+  // analysis only (docs/etape-8-analyse-reglages.md): + gc * max(0, q - threshold), increasing in
+  // q, so the early stop stays exact with the bound taken at qMax
+  const bonusMax = classics ? classics.gamma * Math.max(0, qMax - classics.threshold) : 0;
   let d = 0;
   for (let r = 0; r < ranked.length; r++) {
     const i = ranked[r]!;
     if (cap !== null && popularity[i]! > cap) continue;
     const s = scores[i]!;
     if (d === 0) d = s > 0 ? s : 1;
-    if (items.length === k && s / d + gamma * qMax < adj[k - 1]!) break;
-    const a = s / d + gamma * (quality[i]! / scale);
+    if (items.length === k && s / d + gamma * qMax + bonusMax < adj[k - 1]!) break;
+    let a = s / d + gamma * (quality[i]! / scale);
+    if (classics && i < classics.maxItem) {
+      a += classics.gamma * Math.max(0, quality[i]! / scale - classics.threshold);
+    }
     if (items.length === k) {
       const lastA = adj[k - 1]!;
       if (!(a > lastA || (a === lastA && i < items[k - 1]!))) continue;

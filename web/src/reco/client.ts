@@ -7,7 +7,7 @@
  *   await reco.confirm({ [unrecognized[0].index]: unrecognized[0].candidates[0].item });
  *   const { positions } = await reco.recommend({ n: 50 });
  */
-import type { Choices, ExportInput } from './engine';
+import type { Choices, ExportInput, Tuning } from './engine';
 import type {
   ConfirmResult,
   ImportResult,
@@ -69,7 +69,9 @@ export class RecoClient {
     return this.send({ type: 'confirm', choices });
   }
 
-  recommend(options: { n?: number; caps?: (number | null)[] } = {}): Promise<RecommendResult> {
+  recommend(
+    options: { n?: number; caps?: (number | null)[]; tuning?: Tuning } = {},
+  ): Promise<RecommendResult> {
     return this.send({ type: 'recommend', ...options });
   }
 }
