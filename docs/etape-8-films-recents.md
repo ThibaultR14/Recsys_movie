@@ -1,6 +1,8 @@
 # Étape 8 — Films récents
 
-> **⏸ Arrêt visuel, « pas encore OK » (R6d, 14 novembre 2026)** : analyse des réglages dans `docs/etape-8-analyse-reglages.md`, aucun réglage changé, décisions de Thibault attendues.
+> **⏸ Arrêt visuel (R6e, 14 novembre 2026)** : les 4 recommandations de `docs/etape-8-analyse-reglages.md` adoptées par Thibault et appliquées (v0.7) ; textes de « comment ça marche » posés ; URL de comparaison en section 5, R6e.
+> Version 0.7 (14 novembre 2026, décisions de Thibault après R6d) : films estimés **au plus 1 par rangée de 8**, **jamais de « ✱ pépite »**, **pas de « parce que t'as aimé »** sur leur carte (D7) ; q des films estimés sur la **droite des films 2019-2023** (D4) ; λ = **0,7 à 5 000** (0,9 de 2 000 à 200, 0,1 de ∞ à 10 000) ; **bonus des classiques** (centile 99, γc = 0,5, films entraînés seulement ; jugement de produit) (D4).
+> Arrêt visuel « pas encore OK » (R6d, 14 novembre 2026) : analyse des réglages dans `docs/etape-8-analyse-reglages.md`.
 > Retour à l'arrêt visuel (R6, 13 novembre 2026) : terme de qualité branché (γ = 0,1, K = 50, q TMDB pour les films estimés), films estimés jamais cités dans « parce que t'as aimé » (section 5, R6c) ; restent l'essai à l'écran et les textes de « comment ça marche ».
 > Version 0.6 (13 novembre 2026) : **terme de qualité** `score / s_max + γ q` avant le vivier et la calibration, γ = 0,1, K = 50 (D4 ; ρ ✗ remplacé) ; films estimés : q déduit de la note TMDB ; **un film estimé n'est jamais cité** dans les explications (D7).
 > Version 0.5 (12 novembre 2026) : **facteur 0,8 sur la norme cible** (D1c ; rétrécissement d'une estimation incertaine) ; nouvelle popularité validée par Thibault.
@@ -179,6 +181,9 @@ Rapports `match-report` (dans `web/test-data/reports/`, ignoré). « Retrouvés 
 - **q** = moyenne MovieLens bayésienne centrée, `(n m + K C) / (n + K) − C`, K = 50 notes fictives, C = moyenne de toutes les notes (comptes complets) ; **films estimés** : `q = a × t + b`, t = note TMDB bayésienne (200 votes fictifs à la note TMDB moyenne du catalogue), droite ajustée sur les films du catalogue (≥ 50 votes TMDB, ≥ 20 notes MovieLens ; corrélation 0,77) : même centrage, rétrécie selon les votes TMDB ; un film récent mal reçu a un q bas (**remplace ρ**).
 - **γ = 0,1**. Raison : le held-out mesure « ce qu'on regarde », pas « ce qu'on aime », donc il favorise γ = 0 par construction ; on prend la valeur la plus forte **sans perte mesurable sur les films bien notés** (R6b). À 0,2, la calibration fait des sauts (*12 Angry Men* 31ᵉ → 1ᵉʳ sur l'export A) : signe de scores trop resserrés. γ à recaler avec les volontaires (§6).
 - q dans `catalog.json` (`quality`, arrondi au millième × 1000), réglages dans `model-meta.json` (`quality`), référence Python (`pipeline/quality.py`, `export.quality_pool`), parité TypeScript (`qualityPool`, `qualityPools`).
+- **v0.7 (décisions de Thibault après R6d)** :
+  - **droite des films estimés ajustée sur les films du catalogue sortis depuis 2019** (`q = 0,2945 × t − 2,1630`, 1 877 films, corrélation 0,63) : la note TMDB d'un film récent et très voté est gonflée à la sortie (≈ 0,28 étoile de trop à 2 000 votes et plus) ; la droite de tout le catalogue (R6b) reste dans `model-meta.json` (`tmdb.catalog_line`), pour comparer ;
+  - **bonus des classiques**, en plus de γ·q : **`score' += γc × max(0, q − q₉₉)`**, γc = 0,5, q₉₉ = centile 99 de q (rang le plus proche) sur les films entraînés recommandables (0,478 ; 229 films au-dessus), **films entraînés seulement** (leur q est un consensus MovieLens ; celui d'un film estimé, une estimation TMDB). **Jugement de produit** : un film que presque tout le monde a adoré est une bonne recommandation, même loin des habitudes ; la validation le tolère (NDCG@20 à ∞ −1,0 %, critère −2 %) sans pouvoir le confirmer. `model-meta.json` `quality.classics`. Si la rangée « les classiques qui te manquent » est faite (étape 9), **γc passe à 0**.
 
 Décision d'origine (v0.2-v0.3, ✗ en v0.6) :
 
@@ -213,6 +218,7 @@ Décision d'origine (v0.2-v0.3, ✗ en v0.6) :
 ### D7. Site
 
 - **Popularité du curseur** des films estimés : **pas `0,285 × votes` tel quel** (2.4 : 89 % sous le plafond 200). **v0.4 : rang absolu dans l'année, référence 2010-2018, à partir de 2019, catalogue compris** (`popularity.py`, `rank_corrected` ; détails en section 5, R3d ; ✗ centile v0.2-v0.3 ci-après). Ancienne règle : **correspondance par rang dans l'année** (v0.2) : un film au centile c des votes TMDB parmi les films TMDB de son année de sortie (≥ 50 votes) reçoit la popularité au centile c de la **distribution de référence des films 2019-2022** (même univers : films TMDB ≥ 50 votes de ces années ; popularité `popularity.bin` pour ceux du catalogue, `0,285 × votes` pour les autres) ; jamais moins que `0,285 × votes`. **Contrôle (v0.3)** : **aucun des 10 films les plus votés de chaque année sous 10 000** (un succès doit disparaître au cran 10 000, pas forcément à 20 000 ; ✗ contrôle v0.2 « au-dessus de 20 000 », intenable avec cette référence). S'il échoue : arrêt. Table dans `model-meta.json`. Dans le faux départ à froid, la référence est 2018-2021 (sans la base).
+- **v0.7 (après R6d)** : sur la carte d'un film estimé, **jamais de tampon « ✱ pépite »** (sa popularité n'est qu'estimée : « peu connu » parce que nouveau, pas parce que pépite ; le film entraîné le moins connu de la rangée le reçoit s'il passe la règle) et **pas de « parce que t'as aimé »** (citations génériques, le centrage n'y change rien) ; **au plus 1 film estimé par rangée de 8** : la calibration choisit 96 films, puis les films estimés en trop attendent la première rangée qui a de la place (`model-meta.json` `estimated.per_row`, `export.cap_estimated` = `capEstimated`). Écran d'analyse : « N films trop récents ou trop peu connus pour qu'on sache les placer : on fait sans. »
 - **Carte** : « ★ x,x · TMDB » (note TMDB ramenée sur 5, une décimale, au lieu de la moyenne MovieLens) et **« (estimé) »** ; lien Letterboxd par `tmdb_id` (inchangé) ; tag « encore un <réalisateur> » (réalisateurs TMDB, même calcul) et tampon « ✱ pépite » (popularité D7) **s'appliquent** ; **pas** « ça divise » (pas de notes individuelles) ; « vieux trésor » sans objet (récents par définition) ; « parce que t'as aimé X et Y » permis (cosinus des vecteurs estimés), à vérifier en R6. **v0.6 : un film estimé n'est jamais cité** dans « parce que t'as aimé » (il reste dans le profil) : ses vecteurs, proches de la direction moyenne, sont « proches » de tout (avant : 14-19 % des cartes de deux exports réels en citaient un).
 - **Rangée « sorties récentes »** : non (v0.3) : le contenu passe le seuil de D5, les films estimés sont mêlés aux autres.
 - **Calibration des genres** : genres TMDB des films estimés traduits en genres MovieLens (Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Fantasy, Horror, Mystery, Romance, Thriller, War, Western : même nom ; Science Fiction → Sci-Fi ; Family → Children ; Music → Musical ; History et TV Movie → aucun). Correspondance vérifiée en R1 sur les films du catalogue (accord par genre, rapporté).
@@ -633,11 +639,76 @@ Seuls changements du site :
 
 L'étape reste ouverte, en attente des décisions de Thibault sur la synthèse du document.
 
+### R6e — Les quatre réglages adoptés (14 novembre 2026) — ⏸ arrêt visuel
+
+Décisions de Thibault sur la synthèse de `docs/etape-8-analyse-reglages.md` : les 4 recommandations, dans l'ordre proposé. λ de 2 000 à 200 à recaler avec les volontaires (§ 6) ; le bonus des classiques est un **jugement de produit**, écrit comme tel (D4) ; la rangée « les classiques qui te manquent » est pour l'étape 9 (γc → 0 si elle est faite).
+
+**Ce qui change** (référence Python, parité TypeScript, `model-meta.json`) :
+
+| réglage | avant | après | où |
+|---|---|---|---|
+| films estimés par rangée de 8 | pas de plafond | **1 au plus** (calibration de 96 films, puis les estimés en trop attendent la première rangée qui a de la place) | `export.cap_estimated` = `capEstimated` ; `model-meta.json` `estimated.per_row` |
+| « ✱ pépite » sur un film estimé | permis | **jamais** (le film entraîné le moins connu de la rangée le reçoit s'il passe la règle) | `pepiteStamps`, `cardTags` |
+| « parce que t'as aimé » sur un film estimé | affiché | **masqué** | `workerCore` |
+| q des films estimés | droite du catalogue `0,5258 t − 3,6374` | **droite des films 2019-2023** `0,2945 t − 2,1630` (1 877 films, corrélation 0,63) | `quality.py` (`RECENT_FIT_FROM`), `model-meta.json` `quality.tmdb` (ancienne droite : `catalog_line`) |
+| λ de la calibration (∞ … 200) | 0,1 · 0,1 · 0,1 · 0,9 · 0,9 · 0,9 · 0,9 · 0,9 | 0,1 · 0,1 · 0,1 · **0,7** · 0,9 · 0,9 · 0,9 · 0,9 | `calibration.PRODUCTION` |
+| bonus des classiques | aucun | **`+ 0,5 × max(0, q − 0,478)`**, films entraînés seulement (229 films au-dessus du seuil) | `quality.classics_info`, `export.quality_pool`, `qualityPool` ; `model-meta.json` `quality.classics` |
+
+- Films estimés recommandables : q moyen −0,06 → **−0,16**, au plus 0,397 ; au-dessus du centile 98 : 49 → **0** ; au-dessus du seuil des classiques : 36 → 0 (ils en sont exclus de toute façon).
+- Ordre du moteur : fold-in → scores → exclusions → vivier (`score'` avec γ·q et le bonus des classiques) → calibration (96 films) → plafond des films estimés (48) → explications.
+
+**Contrôles**
+- `export.py catalog` et `export.py export` (staging et `--out web`) ; `foldin_cases.json` régénéré hors du dépôt ; `export.py verify --out web` : 27 cas, **81 listes top 10 et 216 listes calibrées identiques**, écart des vecteurs 0. **Parité TypeScript : 216/216** (bonus des classiques et plafond compris).
+- pytest **283** (dont `test_r6e.py` : droite récente, seuil des classiques au rang le plus proche, vivier avec le bonus identique à un tri complet, plafond par rangée, table λ) ; ruff vert.
+- Vitest **300** (dont : plafond identique au Python, seuil des classiques = `qualityPercentile(99)`, au plus 1 estimé par rangée sur les vrais fichiers, tampon jamais sur un film estimé, interrupteurs) ; `tsc`, ESLint, Prettier verts ; `BLOCKING = true` (aucun texte en attente).
+- Playwright **13/13** (parcours, téléphone, réseau, stockage, axe dans les deux thèmes) ; **changement de cran : médiane 34 ms** (max 38) ; modèle prêt 904 ms. `reco-bench` (médiane de 7) : export A 36,7 ms dont calibration 4,9 ms (96 films au lieu de 48) ; 3 000 films 114,1 ms.
+- Build de production : aucune chaîne des interrupteurs dans `dist/` ; en mode dev, le bandeau les liste (vérifié avec `?avant=1`).
+
+**Effet sur les exports A et B** (`tuning-report.ts --r6e`, comptes seulement ; « avant » = les réglages de R6d, `?avant=1`)
+
+| A / B | ∞ | 20 000 | 10 000 | 5 000 | 2 000 | 1 000 | 500 | 200 |
+|---|---|---|---|---|---|---|---|---|
+| films estimés dans les 48, avant | 6 / 7 | 10 / 9 | 9 / 8 | 10 / 5 | 13 / 9 | 14 / 5 | 5 / 2 | 0 / 0 |
+| films estimés dans les 48, après | 4 / 6 | 6 / 6 | 6 / 6 | 6 / 3 | 6 / 6 | 6 / 4 | 4 / 1 | 0 / 0 |
+| films estimés dans les 8 premiers, avant | 0 / 2 | 2 / 4 | 2 / 2 | 1 / 0 | 4 / 2 | 2 / 0 | 1 / 1 | 0 / 0 |
+| films estimés dans les 8 premiers, après | 0 / 1 | 1 / 1 | 1 / 1 | 1 / 0 | 1 / 1 | 1 / 0 | 1 / 1 | 0 / 0 |
+| tampons sur un film estimé, avant | 1 / 1 | 0 / 0 | 2 / 0 | 1 / 0 | 1 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| tampons sur un film estimé, après | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| score relatif médian des 8 premières, avant | 1,11 / 1,10 | 0,85 / 0,99 | 0,64 / 0,82 | 0,24 / 0,37 | 0,16 / 0,20 | 0,07 / 0,13 | 0,04 / 0,08 | 0,01 / 0,03 |
+| score relatif médian des 8 premières, après | 1,08 / 1,10 | 0,83 / 0,94 | 0,64 / 0,81 | **0,29 / 0,34** | 0,16 / 0,21 | 0,06 / 0,13 | 0,04 / 0,08 | 0,01 / 0,03 |
+| animation dans les 16 premières (%), avant | 19 / 25 | 25 / 38 | 31 / 38 | 25 / 25 | 31 / 25 | 31 / 31 | 25 / 25 | 25 / 31 |
+| animation dans les 16 premières (%), après | 12 / 31 | 19 / 31 | 31 / 38 | 31 / 19 | 31 / 31 | 38 / 31 | 25 / 25 | 25 / 31 |
+| films communs avec avant (sur 48) | 43 / 43 | 44 / 45 | 45 / 46 | 39 / 40 | 41 / 44 | 40 / 44 | 47 / 45 | 48 / 48 |
+
+- ***12 Angry Men*** à ∞ : A 42ᵉ → **1ᵉʳ** (18ᵉ du vivier), B absent → **2ᵉ** (32ᵉ du vivier) ; *The Godfather Part II* (A) 10ᵉ → 7ᵉ ; *Spirited Away* (A) reste 2ᵉ.
+- **Watchlist** (films dans les 48, 8 crans sommés) : A 18 → 18, B 16 → 15 (un film en moins au cran 5 000 : dans le bruit, § 3 de l'analyse).
+- **Un écart avec l'analyse, à regarder à l'œil** : à 5 000 sur B, le score de la première rangée reste à 0,34 (avant 0,37) alors que λ = 0,7 seul le montait à 0,52. Ce sont le bonus des classiques (sans lui : 0,42) et la droite récente (avec l'ancienne : 0,52) qui changent le vivier de B à ce cran ; sur A, le gain est là (0,24 → 0,29).
+- Un réglage à la fois (lignes complètes dans `web/test-data/reports/tuning_{A,B}_r6e.json`, ignoré) : le plafond fait l'essentiel de la baisse des films estimés (sans lui : 7 à 13 sur 48 de 20 000 à 1 000 sur A) ; le bonus des classiques change 4 films sur 48 à ∞ (A et B) ; λ 0,7 change 7 à 9 films à 5 000 ; la droite récente change 0 à 4 films selon le cran.
+
+**Textes** (Claude Web) posés : section « les films récents » (`#recents`, titre et 4 paragraphes), « curseur » (popularité depuis 2019), « d'où viennent les données » (note TMDB), « ce qu'on sait pas faire » (films récents), coup de pouce aux grands classiques (« le principe »), tampon « ✱ pépite » jamais sur un film récent ; écran d'analyse : « N films trop récents ou trop peu connus pour qu'on sache les placer : on fait sans. » (singulier : « 1 film trop récent ou trop peu connu pour qu'on sache le placer : on fait sans. »).
+
+**URL de comparaison** (`cd web && npm run dev`, puis déposer l'export ; rien n'est stocké, chaque URL demande de redéposer) :
+
+1. Production (R6e) : `http://localhost:5173/`
+2. Tout comme avant (R6d) : `http://localhost:5173/?avant=1`
+3. Un réglage à la fois, remis comme avant :
+   - λ 0,9 à 5 000 : `http://localhost:5173/?lambda=0.9`
+   - sans plafond des films estimés : `http://localhost:5173/?plafond_estimes=0`
+   - tampon permis sur les films estimés : `http://localhost:5173/?tampon_estimes=1`
+   - « parce que t'as aimé » sur les films estimés : `http://localhost:5173/?explication_estimes=1`
+   - q des films estimés sur l'ancienne droite : `http://localhost:5173/?q_estimes=catalogue`
+   - sans bonus des classiques : `http://localhost:5173/?classiques=0`
+4. Pour aller plus loin : `?classiques=1` (γc = 1), `?lambda=0.7` (λ 0,7 jusqu'à 200, à recaler avec les volontaires), `?recents=0` (aucun film estimé recommandé).
+
+**À juger à l'œil** : le cran 5 000 (A et B, voir l'écart ci-dessus) ; les classiques qui entrent à ∞ (*12 Angry Men* 1ᵉʳ ou 2ᵉ) ; la place des films estimés (1 par rangée) ; les textes de « comment ça marche ».
+
 ---
 
 ## 6. À reporter
 
 - **γ du terme de qualité** (0,1, v0.6) : à recaler avec les volontaires (la question « combien de ces films as-tu envie de voir ? » mesure ce que le held-out ne voit pas).
+- **λ de 2 000 à 200** (0,9, v0.7) : à recaler avec les volontaires (la validation promet +11 % de NDCG@20 à λ = 0,7, mais elle ne voit pas l'animation ; `docs/etape-8-analyse-reglages.md` § 2).
+- **Bonus des classiques** (γc = 0,5, v0.7) : à relire avec les watchlists des volontaires ; **γc = 0** si la rangée « les classiques qui te manquent » est faite (étape 9).
 
 - **Embedding du résumé** (D2) : seulement si le contenu sans résumé reste sous le seuil.
 - **Pages 2 et plus de `recommendations`** : non mesurées (k = 5 suffit d'après 2.3).

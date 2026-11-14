@@ -207,7 +207,11 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     engine.model.vectors,
     engine.model.dims,
     res.history.filter((h) => !isEstimated(engine.catalog, h.item)),
-    distinct.filter((item) => !series.has(item)),
+    // step 8 (R6e): no « parce que t'as aimé » on an estimated film's card (generic citations)
+    distinct.filter(
+      (item) =>
+        !series.has(item) && (req.tuning?.estimatedExplain || !isEstimated(engine.catalog, item)),
+    ),
     { maxCited: CANDIDATES },
   );
   const explainMs = performance.now() - t0;

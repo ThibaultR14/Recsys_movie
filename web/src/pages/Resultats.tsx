@@ -16,10 +16,18 @@ interface ResultatsProps {
   /** Controlled view (App keeps it across pages); internal state when absent (tests). */
   view?: ResultsView;
   onViewChange?: (view: ResultsView) => void;
+  /** Dev only (`?tampon_estimes=1`, step 8 R6e): « ✱ pépite » allowed on estimated films. */
+  stampEstimated?: boolean;
 }
 
 /** Screen 3: recommendations, the slider and the annotations (mockup C, D5). */
-export function Resultats({ nEntries, reco, view: controlled, onViewChange }: ResultatsProps) {
+export function Resultats({
+  nEntries,
+  reco,
+  view: controlled,
+  onViewChange,
+  stampEstimated,
+}: ResultatsProps) {
   const caps = useMemo(() => reco.positions.map((p) => p.cap), [reco]);
   const [own, setOwn] = useState(() => initialView(reco));
   const view = controlled ?? own;
@@ -104,6 +112,7 @@ export function Resultats({ nEntries, reco, view: controlled, onViewChange }: Re
           seriesOf={series}
           explain={!far}
           profileDirectors={reco.profileDirectors}
+          stampEstimated={stampEstimated}
         />
       ) : (
         <p className="m-0 text-[16px]">plus rien à ce cran-là : essaie un peu plus à gauche.</p>

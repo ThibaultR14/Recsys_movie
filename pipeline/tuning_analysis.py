@@ -254,6 +254,7 @@ def cmd_tmdb_age() -> dict:
 
     meta = json.loads((WEB_DATA / "model-meta.json").read_text(encoding="utf-8"))["quality"]
     t = meta["tmdb"]
+    t = t | t.get("catalog_line", {})  # the R6b line (catalogue-wide), the reference of § 5a
     cat = pl.read_parquet(
         ev.CATALOG_PARQUET, columns=["item_idx", "ml_rating_count", "ml_mean_rating"]
     ).sort("item_idx")

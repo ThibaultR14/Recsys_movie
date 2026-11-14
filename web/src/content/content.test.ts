@@ -8,9 +8,8 @@ import * as nav from './nav';
 import { isPending, pending } from './pending';
 import * as theme from './theme';
 
-/** False during step 8 (docs/etape-8-films-recents.md): the texts on the recent films are given
- * by Claude Web at the visual stop; back to true at the closing (no placeholder may remain). */
-const BLOCKING = false;
+/** No placeholder may remain (step 8: the texts on the recent films were given at R6e). */
+const BLOCKING = true;
 
 function strings(value: unknown): string[] {
   if (typeof value === 'string') return [value];

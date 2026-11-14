@@ -305,10 +305,85 @@ export interface Tuning {
    * 'off': neither recommended nor in the profile (still seen). */
   recent?: 'not-recommended' | 'off';
   /** Classics bonus score' += gamma × max(0, q − q_p), q_p = percentile `percentile` of q over the
-   * trained recommendable films; estimated films get it only with `estimated: true`. */
+   * trained recommendable films; estimated films get it only with `estimated: true`. Replaces the
+   * production bonus (model-meta `quality.classics`); gamma 0 = no bonus. */
   classics?: { gamma: number; percentile: number; estimated?: boolean };
   /** Calibration pool depth at the notches <= LOW_NOTCH_CAP (production: model-meta, 150). */
   pool?: number;
+  /** false: no cap of the estimated films per row (R6e; model-meta `estimated.per_row`). */
+  estimatedPerRow?: boolean;
+  /** 'catalog': q of the estimated films from the catalogue-wide TMDB line of R6b (production:
+   * the line of the 2019+ films, R6e). */
+  estimatedQuality?: 'catalog';
+  /** Display (worker / grid), R6e: true = « parce que t'as aimé » and « ✱ pépite » allowed on the
+   * card of an estimated film again (production: never). */
+  estimatedExplain?: boolean;
+  estimatedStamp?: boolean;
+}
+
+/**
+ * Step 8 (R6e): at most `maxPerRow` estimated films (item >= firstEstimated) per row of `row`
+ * cards; the others wait, in order, for the first row with room; the list is completed with the
+ * next films. Stops when only waiting estimated films remain and the row is full. Mirror of
+ * Python `export.cap_estimated`.
+ */
+export function capEstimated(
+  items: readonly number[],
+  firstEstimated: number,
+  maxPerRow: number,
+  row: number,
+  n: number,
+): number[] {
+  const out: number[] = [];
+  const pending: number[] = [];
+  let k = 0;
+  while (out.length < n && (k < items.length || pending.length)) {
+    const start = out.length - (out.length % row);
+    let inRow = 0;
+    for (let j = start; j < out.length; j++) if (out[j]! >= firstEstimated) inRow++;
+    if (pending.length && inRow < maxPerRow) {
+      out.push(pending.shift()!);
+      continue;
+    }
+    if (k >= items.length) break;
+    const i = items[k++]!;
+    if (i >= firstEstimated && inRow >= maxPerRow) pending.push(i);
+    else out.push(i);
+  }
+  return out;
+}
+
+/** The classics bonus of the pools (R6e): production (model-meta) unless a tuning replaces it. */
+export function classicsBonus(engine: Engine, tuning?: Tuning): ClassicsBonus | undefined {
+  const nTrained = engine.catalog.n_trained ?? engine.catalog.n;
+  const t = tuning?.classics;
+  if (t) {
+    if (t.gamma === 0) return undefined;
+    return {
+      gamma: t.gamma,
+      threshold: qualityPercentile(engine, t.percentile),
+      maxItem: t.estimated ? engine.model.nItems : nTrained,
+    };
+  }
+  const c = engine.model.meta.quality?.classics;
+  if (!c || c.gamma === 0) return undefined;
+  return { gamma: c.gamma, threshold: c.threshold, maxItem: nTrained };
+}
+
+/** q of every item; with `estimatedQuality: 'catalog'`, the estimated films' q re-derived on the
+ * catalogue-wide line of R6b (dev comparison: t from the production line, then the old line). */
+export function itemQuality(engine: Engine, tuning?: Tuning): readonly number[] | undefined {
+  const q = engine.catalog.quality;
+  const meta = engine.model.meta.quality;
+  const line = meta?.tmdb;
+  if (tuning?.estimatedQuality !== 'catalog' || !q || !meta || !line?.catalog_line) return q;
+  const old = line.catalog_line;
+  const out = q.slice();
+  for (let i = engine.catalog.n_trained ?? engine.catalog.n; i < out.length; i++) {
+    const t = (q[i]! / meta.scale - line.intercept) / line.slope;
+    out[i] = Math.round(meta.scale * (old.slope * t + old.intercept));
+  }
+  return out;
 }
 
 /** `?lambda=<value>` changes the notches at or below this cap (the left notches stay as they are). */
@@ -398,31 +473,23 @@ export function recommend(
   const caps = options.caps ?? model.meta.slider.positions;
   const n = options.n ?? 50;
   const calibration = model.meta.calibration;
-  const raw = topByPosition(
-    ranked,
-    scores,
-    model.popularity,
-    caps,
-    calibration ? Math.max(n, calibration.pool) : n,
-  );
+  // step 8 (R6e): a calibrated list of list_factor x n films, then at most max_per_row estimated
+  // films per row (the greedy's first picks do not depend on its length)
+  const perRow = tuning?.estimatedPerRow === false ? undefined : model.meta.estimated?.per_row;
+  const nList = perRow ? n * perRow.list_factor : n;
+  const depth0 = calibration ? Math.max(nList, calibration.pool) : nList;
+  const raw = topByPosition(ranked, scores, model.popularity, caps, depth0);
   // step 8 (R6b): quality term, pools on score' = score / s_max + gamma q (raw kept for the
-  // relative scores « loin de tes goûts »)
-  const classics = tuning?.classics
-    ? {
-        gamma: tuning.classics.gamma,
-        threshold: qualityPercentile(engine, tuning.classics.percentile),
-        maxItem: tuning.classics.estimated ? model.nItems : nTrained,
-      }
-    : undefined;
+  // relative scores « loin de tes goûts »); R6e: + the classics bonus of the trained films
   const qualityRanked = qualityPools(
     raw,
     ranked,
     scores,
     model,
-    engine.catalog.quality,
-    calibration ? Math.max(n, calibration.pool) : n,
+    itemQuality(engine, tuning),
+    depth0,
     tuning?.quality === false ? 0 : tuning?.gamma,
-    classics,
+    classicsBonus(engine, tuning),
   );
   // tuning `pool`: a shallower calibration pool at the notches <= LOW_NOTCH_CAP (analysis)
   const depth = tuning?.pool;
@@ -436,7 +503,7 @@ export function recommend(
         );
   // step 6c (D1): genre calibration of each position, once, on its pool (the fold-in films' genres)
   const t0 = performance.now();
-  const positions = calibration
+  const calibrated = calibration
     ? calibratePositions(
         pools,
         scores,
@@ -448,14 +515,32 @@ export function recommend(
         ),
         engine.catalog.genres,
         calibration,
-        n,
+        nList,
         tunedLambda(calibration, tuning),
       )
     : pools.map((p) => ({
         ...p,
-        items: p.items.slice(0, n),
-        scores: p.items.slice(0, n).map((i) => scores[i]!),
+        items: p.items.slice(0, nList),
+        scores: p.items.slice(0, nList).map((i) => scores[i]!),
       }));
+  const positions = perRow
+    ? calibrated.map((p) => {
+        const items = capEstimated(
+          p.items,
+          perRow.first_item_idx,
+          perRow.max_per_row,
+          perRow.row,
+          n,
+        );
+        const s = items.map((i) => scores[i]!);
+        return {
+          ...p,
+          items,
+          scores: s,
+          relativeScores: s.map((x) => (p.base > 0 ? x / p.base : 0)),
+        };
+      })
+    : calibrated;
   const calibrationMs = performance.now() - t0;
   return {
     calibrationMs,

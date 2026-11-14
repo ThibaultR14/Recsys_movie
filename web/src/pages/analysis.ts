@@ -38,8 +38,8 @@ export function films(n: number): string {
 
 export function tooRecentSentence(n: number): string {
   return n > 1
-    ? `${n} films sont sortis après 2023 : trop récents pour nous, désolé.`
-    : '1 film est sorti après 2023 : trop récent pour nous, désolé.';
+    ? `${n} films trop récents ou trop peu connus pour qu'on sache les placer : on fait sans.`
+    : "1 film trop récent ou trop peu connu pour qu'on sache le placer : on fait sans.";
 }
 
 export function nonFilmSentence(n: number): string {

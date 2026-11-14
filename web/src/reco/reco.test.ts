@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { percentiles } from '../adapters/normalizeRatings';
 import type { MatchedEntry } from '../matching/history';
 import {
+  capEstimated,
+  classicsBonus,
   exclusions,
   loadEngine,
   calibratePositions,
@@ -271,10 +273,14 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
     expect(worst).toBeLessThanOrEqual(1e-14);
   });
 
-  it('216 calibrated lists identical to Python (6c D1: share mode, λ per position; 8 R6b: quality)', () => {
+  it('216 calibrated lists identical to Python (6c D1; 8 R6b: quality; R6e: classics, per row)', () => {
     const model = engine!.model;
     const cal = model.meta.calibration!;
-    expect(cal.lambda_by_position).toEqual([0.1, 0.1, 0.1, 0.9, 0.9, 0.9, 0.9, 0.9]);
+    expect(cal.lambda_by_position).toEqual([0.1, 0.1, 0.1, 0.7, 0.9, 0.9, 0.9, 0.9]);
+    const perRow = model.meta.estimated!.per_row!;
+    expect(perRow.max_per_row).toBe(1);
+    const classics = classicsBonus(engine!);
+    expect(classics?.gamma).toBe(0.5);
     let lists = 0;
     for (const c of fixture!.cases) {
       const p = percentiles(c.rating);
@@ -294,17 +300,33 @@ describe.skipIf(!ready)('Python fold-in cases (foldin_cases.json)', async () => 
         model,
         engine!.catalog.quality,
         cal.pool,
-      ); // step 8 (R6b): quality term before the calibration
+        undefined,
+        classics,
+      ); // step 8 (R6b): quality term (+ R6e: classics bonus) before the calibration
       const profile = shareProfile(
         engine!.catalog.genres,
         engine!.catalog.genre_names.length,
         items,
         pick(p, kept).map((v) => signal(v, model.meta.beta)),
       );
-      const got = calibratePositions(pools, scores, profile, engine!.catalog.genres, cal, 48);
+      const got = calibratePositions(
+        pools,
+        scores,
+        profile,
+        engine!.catalog.genres,
+        cal,
+        48 * perRow.list_factor,
+      );
       for (const pos of got) {
         const key = pos.cap === null ? 'inf' : String(pos.cap);
-        expect(pos.items, `${c.name} @ ${key}`).toEqual(c.calibrated[key]);
+        const items = capEstimated(
+          pos.items,
+          perRow.first_item_idx,
+          perRow.max_per_row,
+          perRow.row,
+          48,
+        );
+        expect(items, `${c.name} @ ${key}`).toEqual(c.calibrated[key]);
         lists++;
       }
     }

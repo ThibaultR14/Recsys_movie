@@ -75,6 +75,11 @@ FINAL_INFO = PROCESSED / "models" / "als_final_info.json"
 FINAL_MOVIE_IDS = PROCESSED / "models" / "als_final_movie_ids.npy"
 STAGING = PROCESSED / "export"
 FIXTURE_NAME = "foldin_cases.json"
+# step 8 (R6e): at most PER_ROW_MAX estimated films per row of PER_ROW cards, on a calibrated list
+# of PER_ROW_LIST_FACTOR x n films (model-meta `estimated.per_row`)
+PER_ROW_MAX = 1
+PER_ROW = 8
+PER_ROW_LIST_FACTOR = 2
 # The fixture holds raw MovieLens ratings of test users: never versioned (.gitignore), never served.
 # Staging export -> data/processed/export/foldin_cases.json ; web export -> web/test-data/.
 WEB_FIXTURE = REPO_ROOT / "web" / "test-data" / FIXTURE_NAME
@@ -211,13 +216,19 @@ def calibrated_lists(
     calibration: dict,
     quality: np.ndarray | None = None,
     gamma: float = 0.0,
+    classics: dict | None = None,
+    per_row: dict | None = None,
 ) -> dict[str, list[int]]:
     """Calibrated lists at the 8 slider positions (step 6c, D1, share mode, λ per position).
-    With `quality` (step 8, R6b): pool and calibration on score' = score / s_max + gamma q."""
+    With `quality` (step 8, R6b): pool and calibration on score' = score / s_max + gamma q
+    (+ the classics bonus, R6e). With `per_row` (R6e): calibrated list of list_factor x n_list
+    films, then at most max_per_row estimated films per row (`cap_estimated`)."""
     import calibration as cal
 
     n_genres = 1 + max(g for gs in genres for g in gs)
     prof = cal.share_profile_one(genres, n_genres, kept_items, kept_signal)
+    n_list = calibration["n_list"]
+    n_cal = n_list * per_row["list_factor"] if per_row else n_list
     out = {}
     for pos, lam in zip(SLIDER_POSITIONS, calibration["lambda_by_position"], strict=True):
         if quality is None:
@@ -225,11 +236,47 @@ def calibrated_lists(
             pool_scores = scores[pool]
         else:
             pool, pool_scores = quality_pool(
-                scores, seen, recommendable, popularity, pos, calibration["pool"], quality, gamma
+                scores,
+                seen,
+                recommendable,
+                popularity,
+                pos,
+                calibration["pool"],
+                quality,
+                gamma,
+                classics,
             )
-        out["inf" if pos is None else str(pos)] = cal.calibrate_one(
-            pool, pool_scores, prof, genres, lam, calibration["n_list"], calibration["alpha"]
-        )
+        lst = cal.calibrate_one(pool, pool_scores, prof, genres, lam, n_cal, calibration["alpha"])
+        if per_row:
+            lst = cap_estimated(
+                lst, per_row["first_item_idx"], per_row["max_per_row"], per_row["row"], n_list
+            )
+        out["inf" if pos is None else str(pos)] = lst
+    return out
+
+
+def cap_estimated(items: list[int], first_estimated: int, max_per_row: int, row: int, n: int):
+    """Step 8 (R6e): at most `max_per_row` estimated films (item >= first_estimated) per row of
+    `row` cards; the others wait (in order) for the first row with room; the list is completed
+    with the next films. Stops when only waiting estimated films remain and the row is full.
+    Mirror of the TypeScript `capEstimated` (engine.ts)."""
+    out: list[int] = []
+    pending: list[int] = []
+    k = 0
+    while len(out) < n and (k < len(items) or pending):
+        start = len(out) - len(out) % row
+        in_row = sum(1 for i in out[start:] if i >= first_estimated)
+        if pending and in_row < max_per_row:
+            out.append(pending.pop(0))
+            continue
+        if k >= len(items):
+            break
+        i = int(items[k])
+        k += 1
+        if i >= first_estimated and in_row >= max_per_row:
+            pending.append(i)
+        else:
+            out.append(i)
     return out
 
 
@@ -242,9 +289,11 @@ def quality_pool(
     k: int,
     quality: np.ndarray,
     gamma: float,
+    classics: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Step 8 (R6b): the k candidates under the cap with the best score' = score / s_max +
-    gamma q (ties: item_idx), and their score'. s_max = best score among those candidates."""
+    gamma q (ties: item_idx), and their score'. s_max = best score among those candidates.
+    `classics` (R6e): {gamma, threshold, max_item}, the bonus of the trained films."""
     cand = recommendable.copy()
     cand[seen] = False
     if cap is not None:
@@ -253,7 +302,7 @@ def quality_pool(
     if len(idx) == 0:
         return idx, np.array([], dtype=np.float64)
     smax = float(scores[idx].max())
-    adj = qual.adjusted_scores(scores[idx], smax, quality[idx], gamma)
+    adj = qual.adjusted_scores(scores[idx], smax, quality[idx], gamma, classics, idx)
     order = np.lexsort((idx, -adj))[:k]
     return idx[order], adj[order]
 
@@ -402,6 +451,14 @@ def cmd_int8_check() -> None:
 # --- export ---------------------------------------------------------------------------------------
 
 
+def quality_meta_of(items: dict) -> dict:
+    """model-meta.json `quality`, with the classics bonus (R6e)."""
+    return qual.quality_meta(
+        items["quality_info"],
+        qual.classics_info(items["quality"], items["recommendable"], items["n_trained"]),
+    )
+
+
 def fixture_cases(
     Y: np.ndarray,  # noqa: N803
     yty: np.ndarray,
@@ -412,6 +469,8 @@ def fixture_cases(
     n_trained: int,
     quality: np.ndarray | None = None,
     gamma: float = 0.0,
+    classics: dict | None = None,
+    per_row: dict | None = None,
 ) -> list[dict]:
     """20 real test histories (random, SEED) + synthetic edge cases, from the exported data.
     `movie_ids`: per item_idx (estimated films: -tmdb_id)."""
@@ -522,6 +581,8 @@ def fixture_cases(
                     cal.PRODUCTION,
                     quality,
                     gamma,
+                    classics,
+                    per_row,
                 ),
                 "excluded_versions": sorted(
                     int(i) for i in np.flatnonzero(seen) if i not in set(items)
@@ -632,7 +693,33 @@ def estimated_meta(est: pl.DataFrame | None, n_trained: int) -> dict:
         "norm_factor_why": "shrinkage of an uncertain estimate: content predictions point to "
         "the mean direction; at full norm they flood the lists (R3d)",
         "quality_penalty_rho": "replaced by the quality term (model-meta quality, R6b)",
+        "per_row": per_row_meta(n_trained),
+        "display": "step 8 (R6e): never the « ✱ pépite » stamp (their popularity is an estimate: "
+        "unknown because new, not a gem), never « parce que t'as aimé » (their vector points to "
+        "the mean direction: generic citations), never cited (R6c)",
     }
+
+
+def per_row_meta(n_trained: int) -> dict:
+    """model-meta.json `estimated.per_row` (step 8, R6e): read by calibrated_lists and engine.ts."""
+    return {
+        "first_item_idx": int(n_trained),
+        "max_per_row": PER_ROW_MAX,
+        "row": PER_ROW,
+        "list_factor": PER_ROW_LIST_FACTOR,
+        "rule": "after the calibration of list_factor x n films: at most max_per_row estimated "
+        "films per row of `row` cards, the others wait for the first row with room, the list is "
+        "completed with the next calibrated films",
+        "why": "estimated vectors are shrunk towards the mean, so « close » to many profiles: "
+        "9 to 14 of 48 at the middle notches of export A (docs/etape-8-analyse-reglages.md § 5d)",
+    }
+
+
+def classics_for_pool(meta_quality: dict, n_trained: int) -> dict | None:
+    c = meta_quality.get("classics")
+    if not c or c["gamma"] == 0:
+        return None
+    return {"gamma": c["gamma"], "threshold": c["threshold"], "max_item": int(n_trained)}
 
 
 def cmd_export(out_dir: Path) -> None:
@@ -715,7 +802,7 @@ def cmd_export(out_dir: Path) -> None:
         },
         "movie_ids": movie_ids.tolist(),
         "estimated": estimated_meta(est, n_trained),
-        "quality": qual.quality_meta(items["quality_info"]),
+        "quality": quality_meta_of(items),
         "non_recommendable_item_idx": np.flatnonzero(~items["recommendable"]).tolist(),
         "data_version": {
             "catalog_sha256": info["catalog_sha256"],
@@ -746,6 +833,8 @@ def cmd_export(out_dir: Path) -> None:
         n_trained,
         items["quality"],
         qual.GAMMA,
+        classics_for_pool(meta["quality"], n_trained),
+        meta["estimated"]["per_row"],
     )
     fixture = {
         "description": "Fold-in reference cases for the TypeScript implementation (step 4). "
@@ -807,7 +896,7 @@ def cmd_verify(out_dir: Path) -> dict:
     partners = version_partners(np.array(meta["movie_ids"]))
     genres = items["genres"]
     assert meta["calibration"] == calibration_meta(), "model-meta.json calibration"
-    assert meta["quality"] == qual.quality_meta(items["quality_info"]), "model-meta.json quality"
+    assert meta["quality"] == quality_meta_of(items), "model-meta.json quality"
     max_vec_err, n_tops, n_cal = 0.0, 0, 0
     for case in fixture["cases"]:
         items = np.array(case["item_idx"], dtype=np.int32)
@@ -850,6 +939,8 @@ def cmd_verify(out_dir: Path) -> dict:
             meta["calibration"],
             site["quality"],
             meta["quality"]["gamma"],
+            classics_for_pool(meta["quality"], n_trained),
+            meta["estimated"]["per_row"],
         )
         assert cal_lists == case["calibrated"], case["name"]
         n_cal += len(cal_lists)

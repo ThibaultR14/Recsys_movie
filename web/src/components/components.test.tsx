@@ -215,6 +215,23 @@ describe('card rules', () => {
     expect(pepiteStamps([]).size).toBe(0);
   });
 
+  it('pépite stamp never on an estimated film (step 8, R6e): next least known trained film', () => {
+    const block = [900, 800, 700, 600, 500, 400, 250, 200]; // median 550
+    const eligible = [true, true, true, true, true, true, true, false];
+    expect([...pepiteStamps(block, eligible)]).toEqual([6]); // 250 <= 275
+    // the next trained film is too known: no stamp at all
+    expect(pepiteStamps([900, 800, 700, 600, 500, 400, 300, 200], eligible).size).toBe(0);
+    const films = block.map((popularity, i) => ({
+      popularity,
+      year: 2000,
+      directors: [],
+      estimated: i === 7,
+    }));
+    expect(cardTags(films, [])[7]).toBeNull();
+    expect(cardTags(films, [])[6]).toEqual({ kind: 'pepite' });
+    expect(cardTags(films, [], { stampEstimated: true })[7]).toEqual({ kind: 'pepite' });
+  });
+
   it('byline: up to two directors, then the year', () => {
     expect(byline(['Andrei Tarkovsky'], 1979)).toBe('Andrei Tarkovsky, 1979');
     expect(byline(['Joel Coen', 'Ethan Coen', 'X'], 1996)).toBe('Joel Coen et Ethan Coen, 1996');

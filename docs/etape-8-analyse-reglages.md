@@ -2,6 +2,8 @@
 
 > **14 novembre 2026.** Document demandé par Thibault à l'arrêt visuel de l'étape 8 (« pas encore OK »). **Analyse seulement : aucun réglage du site n'est changé**, l'étape 8 n'est pas close. Seuls changements du site : le texte du bas de page des résultats, et des interrupteurs **en mode dev uniquement** pour juger à l'œil (§ 8). Validation seulement, le test n'est pas touché. Exports réels nommés **A** (Letterboxd, 217 films reconnus, dont 29 estimés) et **B** (Letterboxd, 491 films, dont 112 estimés) ; aucun de leurs titres ici, seulement des comptes. Les titres cités (*12 Angry Men*, *The Godfather Part II*, *Spirited Away*) sont des films de référence du catalogue.
 
+> **Suite (R6e, 14 novembre 2026)** : Thibault a adopté les 4 recommandations, dans l'ordre proposé (λ de 2 000 à 200 à recaler avec les volontaires ; bonus des classiques = jugement de produit). Appliquées et mesurées : `docs/etape-8-films-recents.md`, section 5, R6e. Les « valeurs actuelles » ci-dessous sont celles d'avant R6e.
+
 ## 0. Synthèse
 
 **Ce qui a dégradé le milieu du curseur** : d'abord la **calibration forte** (λ = 0,9 dès 5 000). Elle va chercher loin dans le vivier des films qui corrigent le mélange de genres, et le score de la première rangée chute (A, 5 000 : 0,41 → 0,24). Ensuite les **films estimés** : 9 à 14 sur 48 aux crans du milieu de A. Le terme de qualité n'y est presque pour rien. **Le curseur lui-même n'est pas en cause**, et les crans de gauche ne bougent pas.

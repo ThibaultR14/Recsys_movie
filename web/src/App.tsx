@@ -202,6 +202,7 @@ export function App({ client: injected }: { client?: RecoApi }) {
           reco={screen.reco}
           view={screen.view}
           onViewChange={(view) => setScreen({ ...screen, view })}
+          stampEstimated={DEV_TUNING?.estimatedStamp}
         />
         {import.meta.env.DEV && DEV_TUNING && <DevBanner tuning={DEV_TUNING} />}
       </Layout>

@@ -4,7 +4,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { describeTuning, parseDevTuning } from '../dev/devTuning';
-import { importExport, loadEngine, qualityPercentile, recommend, tunedLambda } from './engine';
+import {
+  capEstimated,
+  classicsBonus,
+  importExport,
+  itemQuality,
+  loadEngine,
+  qualityPercentile,
+  recommend,
+  tunedLambda,
+} from './engine';
 import { qualityPool } from './recommend';
 
 describe('parseDevTuning', () => {
@@ -27,13 +36,53 @@ describe('parseDevTuning', () => {
     expect(parseDevTuning('?classiques=0.5&centile=99&classiques_estimes=1')).toEqual({
       classics: { gamma: 0.5, percentile: 99, estimated: true },
     });
-    expect(parseDevTuning('?classiques=1')).toEqual({ classics: { gamma: 1, percentile: 98 } });
+    expect(parseDevTuning('?classiques=1')).toEqual({ classics: { gamma: 1, percentile: 99 } });
+    expect(parseDevTuning('?classiques=0')).toEqual({ classics: { gamma: 0, percentile: 99 } });
+  });
+
+  it('switches back to the settings before R6e, one by one or all at once', () => {
+    expect(
+      parseDevTuning(
+        '?plafond_estimes=0&tampon_estimes=1&explication_estimes=1&q_estimes=catalogue',
+      ),
+    ).toEqual({
+      estimatedPerRow: false,
+      estimatedStamp: true,
+      estimatedExplain: true,
+      estimatedQuality: 'catalog',
+    });
+    expect(parseDevTuning('?avant=1')).toEqual({
+      lambda: 0.9,
+      classics: { gamma: 0, percentile: 99 },
+      estimatedPerRow: false,
+      estimatedStamp: true,
+      estimatedExplain: true,
+      estimatedQuality: 'catalog',
+    });
+    expect(describeTuning(parseDevTuning('?avant=1')!)).toContain('sans bonus des classiques');
   });
 
   it('describes the switches for the banner', () => {
     expect(describeTuning({ calibration: false, lambda: 0.5 })).toBe(
       'sans calibration · λ 0,5 (≤ 5 000)',
     );
+  });
+});
+
+describe('capEstimated (step 8, R6e)', () => {
+  it('at most one estimated film per row of 8; the others open the next rows', () => {
+    const items = [100, 101, 1, 2, 102, 3, 4, 5, 6, 7, 8, 9, 10, 11, 103, 12, 13, 14];
+    const out = capEstimated(items, 100, 1, 8, 16);
+    expect(out).toHaveLength(16);
+    expect(out[0]).toBe(100);
+    expect(out[8]).toBe(101);
+    for (let r = 0; r < 2; r++) {
+      expect(out.slice(r * 8, r * 8 + 8).filter((i) => i >= 100).length).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('stops when only waiting estimated films remain (same as Python)', () => {
+    expect(capEstimated([100, 101, 102, 1], 100, 1, 8, 8)).toEqual([100, 1]);
   });
 });
 
@@ -129,7 +178,10 @@ describe.skipIf(!ready)('tuning on the real files (example export)', async () =>
   });
 
   it('without calibration: each pool cut to 48, in score order', () => {
-    const r = recommend(engine, matched, { n: 48, tuning: { calibration: false } });
+    const r = recommend(engine, matched, {
+      n: 48,
+      tuning: { calibration: false, estimatedPerRow: false },
+    });
     r.positions.forEach((p, k) => expect(p.items).toEqual(r.pools[k]!.items.slice(0, 48)));
   });
 
@@ -146,9 +198,46 @@ describe.skipIf(!ready)('tuning on the real files (example export)', async () =>
     const base = recommend(engine, matched, { n: 48 });
     const r = recommend(engine, matched, {
       n: 48,
-      tuning: { classics: { gamma: 0, percentile: 98 } },
+      tuning: { classics: { gamma: 0.5, percentile: 99 } },
     });
-    expect(items(r)).toEqual(items(base));
+    expect(items(r)).toEqual(items(base)); // the production bonus, re-derived
     expect(qualityPercentile(engine, 99)).toBeGreaterThan(qualityPercentile(engine, 95));
+  });
+
+  it('R6e production: classics bonus of model-meta (threshold = q percentile 99, trained only)', () => {
+    const c = classicsBonus(engine)!;
+    expect(c.gamma).toBe(0.5);
+    expect(c.threshold).toBe(qualityPercentile(engine, 99));
+    expect(c.maxItem).toBe(engine.catalog.n_trained);
+    expect(classicsBonus(engine, { classics: { gamma: 0, percentile: 99 } })).toBeUndefined();
+  });
+
+  it('R6e production: at most one estimated film per row of 8; the switch lifts the cap', () => {
+    const nT = engine.catalog.n_trained!;
+    const base = recommend(engine, matched, { n: 48 });
+    for (const p of base.positions) {
+      expect(p.items).toHaveLength(48);
+      for (let r = 0; r < 6; r++) {
+        expect(p.items.slice(r * 8, r * 8 + 8).filter((i) => i >= nT).length).toBeLessThanOrEqual(
+          1,
+        );
+      }
+    }
+    const off = recommend(engine, matched, { n: 48, tuning: { estimatedPerRow: false } });
+    expect(off.positions.some((p, k) => p.items.join() !== base.positions[k]!.items.join())).toBe(
+      true,
+    );
+  });
+
+  it('R6e: the old line of the estimated films only changes their q', () => {
+    const nT = engine.catalog.n_trained!;
+    const q = engine.catalog.quality!;
+    const old = itemQuality(engine, { estimatedQuality: 'catalog' })!;
+    expect(old.slice(0, nT)).toEqual(q.slice(0, nT));
+    const line = engine.model.meta.quality!.tmdb!;
+    expect(line.slope).toBeLessThan(line.catalog_line!.slope);
+    let higher = 0;
+    for (let i = nT; i < q.length; i++) if (old[i]! > q[i]!) higher++;
+    expect(higher).toBeGreaterThan(0);
   });
 });

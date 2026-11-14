@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { unzipSync, strFromU8 } from 'fflate';
 import { parseLetterboxdCsv } from '../src/adapters/letterboxd';
 import { citationPicks, pepiteStamps } from '../src/components/cardRules';
+import { parseDevTuning } from '../src/dev/devTuning';
 import { matchHistory, RECOMMENDATION_STATUSES } from '../src/matching/history';
 import { FAR_FROM_TASTE } from '../src/pages/resultsText';
 import { shareProfile } from '../src/reco/calibrate';
@@ -87,6 +88,18 @@ const VARIANTS: { name: string; tuning: Tuning }[] = [
     tuning: { lambda: SOFT_A, classics: { gamma: 1, percentile: 99 } },
   },
 ];
+
+/** `--r6e` (step 8, R6e): production against each setting of R6d put back, and all of them. */
+const R6E_VARIANTS: { name: string; tuning: Tuning }[] = [
+  { name: 'production (R6e)', tuning: {} },
+  { name: 'avant (R6d), tout', tuning: parseDevTuning('?avant=1')! },
+  { name: 'λ 0,9 à 5 000', tuning: { lambda: 0.9 } },
+  { name: 'sans plafond des estimés', tuning: { estimatedPerRow: false } },
+  { name: 'q des estimés : droite du catalogue', tuning: { estimatedQuality: 'catalog' } },
+  { name: 'sans bonus des classiques', tuning: { classics: { gamma: 0, percentile: 99 } } },
+  { name: 'tampon permis sur les estimés', tuning: { estimatedStamp: true } },
+];
+const R6E = process.argv.includes('--r6e');
 
 const REFERENCES: { title: string; year: number }[] = [
   { title: '12 Angry Men', year: 1957 },
@@ -199,14 +212,18 @@ async function main() {
   );
 
   const current = base.positions.map((p) => new Set(p.items));
-  const variants = VARIANTS.map(({ name: vname, tuning }) => {
+  const variants = (R6E ? R6E_VARIANTS : VARIANTS).map(({ name: vname, tuning }) => {
     const r = recommend(engine, matched, { n: N, tuning });
     const notches = r.positions.map((p, k) => {
       const items = p.items;
       const first8 = items.slice(0, ROW);
       const poolRank = new Map(r.pools[k]!.items.map((i, j) => [i, j + 1]));
       const wlRanks = items.flatMap((i, j) => (watch.has(i) ? [j + 1] : []));
-      const stamps = pepiteStamps(items.map((i) => pop[i]!));
+      // step 8 (R6e): never on an estimated film, unless the variant allows it again
+      const stamps = pepiteStamps(
+        items.map((i) => pop[i]!),
+        tuning.estimatedStamp ? undefined : items.map((i) => !isEst(i)),
+      );
       return {
         cap: p.cap,
         overlap: items.filter((i) => current[k]!.has(i)).length,
@@ -406,7 +423,12 @@ async function main() {
     capEstimatedPerRow: capped,
     qAlternatives,
   };
-  const file = join(WEB_ROOT, 'test-data', 'reports', `tuning_${name}.json`);
+  const file = join(
+    WEB_ROOT,
+    'test-data',
+    'reports',
+    R6E ? `tuning_${name}_r6e.json` : `tuning_${name}.json`,
+  );
   writeFileSync(file, JSON.stringify(out, null, 1));
   console.log(`-> ${file}`);
 }

@@ -114,10 +114,10 @@ describe('analysis groups', () => {
 
   it('sentences, singular and plural', () => {
     expect(tooRecentSentence(3)).toBe(
-      '3 films sont sortis après 2023 : trop récents pour nous, désolé.',
+      "3 films trop récents ou trop peu connus pour qu'on sache les placer : on fait sans.",
     );
     expect(tooRecentSentence(1)).toBe(
-      '1 film est sorti après 2023 : trop récent pour nous, désolé.',
+      "1 film trop récent ou trop peu connu pour qu'on sache le placer : on fait sans.",
     );
     expect(notInCatalogSentence(2)).toBe("2 films qu'on connaît pas (séries, films très peu vus…)");
     expect(notInCatalogSentence(1)).toBe("1 film qu'on connaît pas (séries, films très peu vus…)");

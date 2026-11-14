@@ -16,14 +16,22 @@ function median(xs: readonly number[]): number {
  * Indexes of the stamped cards, relative to the grid: at most one per block of 8 consecutive cards,
  * on the least known film of the block (lowest popularity; first in list order on a tie), and only if
  * its popularity is at most half the block median. A shorter last block follows the same rule.
+ * Step 8 (R6e): only the `eligible` cards can be stamped (not an estimated film: its popularity is
+ * an estimate, « unknown » because new); the median stays the one of the whole block.
  */
-export function pepiteStamps(popularities: readonly number[]): Set<number> {
+export function pepiteStamps(
+  popularities: readonly number[],
+  eligible?: readonly boolean[],
+): Set<number> {
   const out = new Set<number>();
   for (let start = 0; start < popularities.length; start += STAMP_BLOCK) {
     const block = popularities.slice(start, start + STAMP_BLOCK);
-    let low = 0;
-    for (let i = 1; i < block.length; i++) if (block[i]! < block[low]!) low = i;
-    if (block[low]! * 2 <= median(block)) out.add(start + low);
+    let low = -1;
+    for (let i = 0; i < block.length; i++) {
+      if (eligible && !eligible[start + i]) continue;
+      if (low < 0 || block[i]! < block[low]!) low = i;
+    }
+    if (low >= 0 && block[low]! * 2 <= median(block)) out.add(start + low);
   }
   return out;
 }
@@ -53,6 +61,8 @@ export interface TaggedFilm {
   year: number | null;
   directors: readonly string[];
   divisive?: boolean;
+  /** Estimated film (step 8): never the « ✱ pépite » stamp (R6e). */
+  estimated?: boolean;
 }
 
 /**
@@ -64,8 +74,12 @@ export interface TaggedFilm {
 export function cardTags(
   films: readonly TaggedFilm[],
   profileDirectors: readonly string[],
+  options: { stampEstimated?: boolean } = {},
 ): (CardTag | null)[] {
-  const stamps = pepiteStamps(films.map((f) => f.popularity));
+  const stamps = pepiteStamps(
+    films.map((f) => f.popularity),
+    options.stampEstimated ? undefined : films.map((f) => !f.estimated),
+  );
   const liked = new Set(profileDirectors);
   const best = films.map((f, i): CardTag | null => {
     if (stamps.has(i)) return { kind: 'pepite' };

@@ -123,7 +123,9 @@ describe('Analyse', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('on en a reconnu 7.');
 
     expect(
-      screen.getByText('1 film est sorti après 2023 : trop récent pour nous, désolé.'),
+      screen.getByText(
+        "1 film trop récent ou trop peu connu pour qu'on sache le placer : on fait sans.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("1 film qu'on connaît pas (séries, films très peu vus…)"),

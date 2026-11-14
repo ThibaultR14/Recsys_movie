@@ -1,5 +1,3 @@
-import { pending } from './pending';
-
 // « comment ça marche », detailed (D2). One entry per paragraph or list item. Texts: Claude Web
 // (R7). `{en:…}` marks English words (rendered with lang="en", see RichText).
 export const COMMENT_CA_MARCHE = {
@@ -11,8 +9,8 @@ export const COMMENT_CA_MARCHE = {
       "le modèle a appris sur les notes de 200 000 cinéphiles. à force, il a rangé chaque film sur une sorte de carte des goûts : deux films sont proches quand ce sont les mêmes gens qui les aiment, même s'ils n'ont rien à voir sur le papier.",
       "quand tu déposes ton export, ton navigateur te place sur cette carte à partir de tes films et de tes notes, puis cherche les films proches de toi que t'as pas encore vus. ça prend quelques millisecondes, sur ta machine.",
       "ça s'appelle du filtrage collaboratif (ici, une méthode qui s'appelle ALS). sous chaque carte, « parce que t'as aimé… » cite les films de ton historique les plus proches du film proposé.",
-      // step 8 (R6b): quality term before the calibration
-      "le modèle devine surtout ce que tu vas avoir envie de regarder, pas ce que tu vas adorer. alors on ajoute un petit coup de pouce aux films que les gens ont vraiment aimés, d'après leurs notes : un chef-d'œuvre un peu loin de tes habitudes a ainsi sa chance. pour les films récents, on se sert de la note tmdb.",
+      // step 8 (R6b): quality term before the calibration; R6e: classics bonus
+      "le modèle devine surtout ce que tu vas avoir envie de regarder, pas ce que tu vas adorer. alors on ajoute un petit coup de pouce aux films que les gens ont vraiment aimés, d'après leurs notes : un chef-d'œuvre un peu loin de tes habitudes a ainsi sa chance. pour les films récents, on se sert de la note tmdb. et les grands classiques, ceux que presque tout le monde a adorés (comme {en:12 Angry Men}), ont droit à un coup de pouce en plus : si t'en as pas vu un et qu'il te correspond un peu, il remonte.",
     ],
   },
   percentiles: {
@@ -42,19 +40,19 @@ export const COMMENT_CA_MARCHE = {
       "le curseur pose un plafond. à chaque cran, on ne garde que les films vus moins d'un certain nombre de fois (20 000, 10 000… jusqu'à 200), toujours classés selon tes goûts. tout à gauche, pas de plafond.",
       'pour savoir combien de gens ont vu un film, on combine les notes MovieLens et les votes TMDB, parce que MovieLens sous-compte les films récents.',
       // step 8 (R3d): from 2019 on, rank of the TMDB votes within the release year
-      pending('curseur.recents'),
+      "pour les films sortis depuis 2019, MovieLens compte trop peu de monde. alors on regarde leur rang dans leur année sur tmdb, et on leur donne la popularité d'un film du même rang dans une année normale (de 2010 à 2018). un succès de 2024 compte comme un succès de 2015 : il ne passe pas pour une pépite.",
       "le tampon « ✱ pépite » signale le film le moins connu d'une rangée, quand il l'est nettement plus que les autres.",
     ],
   },
   // step 8: recent films (TMDB films missing from MovieLens, vector estimated from their
-  // content; « ★ 3,4 · TMDB (estimé) » on their cards). Texts: Claude Web, at the visual stop.
+  // content; « ★ 3,4 · TMDB (estimé) » on their cards). Texts: Claude Web (R6e).
   recents: {
-    titre: pending('recents.titre'),
+    titre: 'les films récents',
     paragraphes: [
-      pending('recents.pourquoi'),
-      pending('recents.comment'),
-      pending('recents.carte'),
-      pending('recents.limites'),
+      "nos notes s'arrêtent en octobre 2023 : dans nos données, personne n'a noté un film sorti après. sans rien faire, on ne pourrait ni te les proposer, ni les compter dans tes goûts.",
+      "alors on les place sur la carte des goûts d'après leur contenu, avec les infos de tmdb : réalisateur, acteurs, genres, mots-clés. on a appris ce lien sur les 23 019 films qu'on connaît, et un nouveau film se retrouve près de ceux qui lui ressemblent sur le papier. avant de s'en servir, on a vérifié : on a fait comme si des films de 2022 et 2023 étaient nouveaux, et leur place estimée retrouvait bien les gens qui les avaient aimés. on leur fait quand même un peu moins confiance qu'aux autres : pas plus d'un par rangée.",
+      "sur leur carte, « (estimé) » te le rappelle, et la note vient de tmdb, ramenée sur 5. c'est la note du grand public, pas celle des critiques : un film exigeant peut y être mal noté et te plaire quand même. et comme leur place n'est qu'estimée, ils n'ont ni tampon « ✱ pépite », ni « parce que t'as aimé… ».",
+      "on ne te propose que les films récents qui ont au moins 500 votes sur tmdb : en dessous, on ne sait pas encore les placer assez bien. s'ils sont dans ton historique, ils comptent quand même dans tes goûts. un film trop peu connu de tmdb, ou dont on ne connaît ni le réalisateur, ni les acteurs, ni les mots-clés, reste « trop récent ».",
     ],
   },
   // step 6c, Q6: card tags
@@ -62,7 +60,7 @@ export const COMMENT_CA_MARCHE = {
     titre: 'les tampons',
     paragraphes: [
       'sur certaines affiches, un petit tampon te dit pourquoi le film sort du lot. un seul par film, deux au plus par rangée, pour que ça reste lisible.',
-      "✱ pépite : le film le moins connu de sa rangée, quand il l'est nettement plus que les autres. pas de tampon quand ils se valent tous.",
+      "✱ pépite : le film le moins connu de sa rangée, quand il l'est nettement plus que les autres. pas de tampon quand ils se valent tous. jamais sur un film récent : sa popularité n'est qu'estimée.",
       "encore un… : un réalisateur que t'as l'air d'aimer, d'après tes films.",
       'ça divise : un film que les gens adorent ou détestent, avec des notes très dispersées.',
       'vieux trésor : un film sorti avant 1960 et peu vu.',
@@ -76,7 +74,7 @@ export const COMMENT_CA_MARCHE = {
       'les titres, les réalisateurs et les affiches viennent de TMDB, une base de films collaborative.',
       "la note sous chaque carte, c'est la moyenne MovieLens sur 5, avec le nombre de notes.",
       // step 8: estimated films show the TMDB rating instead
-      pending('donnees.noteTmdb'),
+      "pour les films récents, il n'y a pas de note MovieLens : la carte affiche la note moyenne tmdb, ramenée sur 5, avec la mention « tmdb ».",
       "les données d'imdb servent seulement à vérifier les correspondances entre films, avant de construire le site. rien d'imdb n'est dans le site.",
     ],
   },
@@ -94,7 +92,7 @@ export const COMMENT_CA_MARCHE = {
     titre: "ce qu'on sait pas faire",
     liste: [
       // step 8: replaces « les films sortis après 2023 : nos données s'arrêtent là »
-      pending('limites.recents'),
+      "les films récents : on les place d'après leur contenu, donc moins finement que les autres, et on ne propose que ceux qui ont au moins 500 votes sur tmdb",
       'les séries',
       'les films très peu vus (moins de 20 notes dans nos données)',
       "les titres qu'on reconnaît mal : on te les montre dans « à vérifier », à toi de trancher",

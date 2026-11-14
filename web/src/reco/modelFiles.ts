@@ -19,7 +19,26 @@ export interface ModelMeta {
   /** Step 6c (D1): genre calibration (share mode, λ per slider position). */
   calibration?: CalibrationMeta;
   /** Step 8 (R6b): quality term, score' = score / s_max + gamma * q before the pool. */
-  quality?: { gamma: number; scale: number };
+  quality?: {
+    gamma: number;
+    scale: number;
+    /** q of the estimated films = slope * t + intercept (R6e: line of the 2019+ films);
+     * catalog_line = the catalogue-wide line of R6b (dev switch `?q_estimes=catalogue`). */
+    tmdb?: {
+      slope: number;
+      intercept: number;
+      catalog_line?: { slope: number; intercept: number };
+    };
+    /** R6e: score' += gamma * max(0, q - threshold), trained films only. */
+    classics?: { gamma: number; percentile: number; threshold: number };
+  };
+  /** Step 8: estimated films (item_idx >= first_item_idx). */
+  estimated?: {
+    first_item_idx: number;
+    /** R6e: at most max_per_row estimated films per row of `row` cards, on a calibrated list of
+     * list_factor x n films. */
+    per_row?: { first_item_idx: number; max_per_row: number; row: number; list_factor: number };
+  };
   slider: { variant: string; positions: (number | null)[] };
   movie_ids: number[];
   non_recommendable_item_idx: number[];

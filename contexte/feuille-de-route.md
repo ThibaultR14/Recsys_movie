@@ -5,7 +5,7 @@
 
 ## En cours : films récents (étape 8, arrêt visuel)
 
-Spec `docs/etape-8-films-recents.md` v0.6. Fait : collecte TMDB, faux départ à froid, contenu seul, norme × 0,8, nouvelle popularité à partir de 2019, site branché (3 358 films estimés, 559 recommandables, cartes « ★ x,x · TMDB (estimé) »), script `why-film`, **terme de qualité γ = 0,1** (q MovieLens bayésien, note TMDB pour les estimés ; *12 Angry Men* affiché à ∞ sur l'export A), **films estimés jamais cités** dans « parce que t'as aimé ». Parité, Vitest, Playwright, axe, temps verts. **Arrêt visuel** : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases ; paragraphe sur le coup de pouce à la qualité posé). Restent à la clôture : textes, test une seule fois (norme 0,8 et γ compris), vrai téléphone. **14 novembre 2026, arrêt visuel « pas encore OK »** : analyse des réglages dans `docs/etape-8-analyse-reglages.md` (milieu du curseur, classiques, films récents, curseur ; interrupteurs en mode dev), aucun réglage changé, décisions de Thibault attendues.
+Spec `docs/etape-8-films-recents.md` v0.6. Fait : collecte TMDB, faux départ à froid, contenu seul, norme × 0,8, nouvelle popularité à partir de 2019, site branché (3 358 films estimés, 559 recommandables, cartes « ★ x,x · TMDB (estimé) »), script `why-film`, **terme de qualité γ = 0,1** (q MovieLens bayésien, note TMDB pour les estimés ; *12 Angry Men* affiché à ∞ sur l'export A), **films estimés jamais cités** dans « parce que t'as aimé ». Parité, Vitest, Playwright, axe, temps verts. **Arrêt visuel** : essai à l'écran et textes de « comment ça marche » (section `#recents` et 3 phrases ; paragraphe sur le coup de pouce à la qualité posé). Restent à la clôture : textes, test une seule fois (norme 0,8 et γ compris), vrai téléphone. **14 novembre 2026, arrêt visuel « pas encore OK »** : analyse des réglages dans `docs/etape-8-analyse-reglages.md` (milieu du curseur, classiques, films récents, curseur ; interrupteurs en mode dev), aucun réglage changé, décisions de Thibault attendues. **R6e (même jour)** : les 4 recommandations adoptées et appliquées (films estimés : 1 au plus par rangée, ni tampon ni « parce que t'as aimé » ; droite 2019-2023 pour leur q ; λ 0,7 à 5 000 ; bonus des classiques c99 γc 0,5), interrupteurs dev pour revenir à chaque ancien réglage (`?avant=1`), textes de « comment ça marche » posés (`BLOCKING = true`) ; **arrêt visuel** (URL dans la spec, R6e). Restent à la clôture : test une seule fois, vrai téléphone.
 
 ## Fait : tags des cartes (après l'étape 6c)
 
@@ -56,7 +56,8 @@ Historique de l'étape 6 : Spec `docs/etape-6-imdb.md` v0.2 **validée** le 8 no
 
 - **Essai sur un vrai téléphone de la version 6b** : **fait, OK** (Thibault, 12 novembre 2026).
 - **Essai sur un vrai téléphone de la version 6c** (équilibre des genres, tags des cartes, deux thèmes) : à faire par Thibault.
-- **μ de D1b** et **λ des crans bas** : à recaler avec les volontaires (voir « Étape 7 »).
+- **μ de D1b** et **λ des crans bas** : à recaler avec les volontaires (voir « Étape 7 ») ; λ de 2 000 à 200 (0,9 ; 0,7 à 5 000 depuis l'étape 8, R6e).
+- **Bonus des classiques** (γc = 0,5, étape 8) : à relire avec les watchlists des volontaires ; γc → 0 si la rangée « les classiques qui te manquent » est faite.
 
 ### Suivi de l'étape 6
 

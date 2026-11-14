@@ -73,7 +73,10 @@ PRODUCTION = {
     "pool": POOL,
     "n_list": N_LIST,
     "alpha": ALPHA,
-    "lambda_by_position": [0.1, 0.1, 0.1, 0.9, 0.9, 0.9, 0.9, 0.9],
+    # step 8 (R6e, docs/etape-8-analyse-reglages.md § 2): 0.7 at 5 000 (the biggest drop of the
+    # first row's score came from λ 0.1 -> 0.9 there); 0.9 kept from 2 000 to 200, to recalibrate
+    # with the volunteers (step 7)
+    "lambda_by_position": [0.1, 0.1, 0.1, 0.7, 0.9, 0.9, 0.9, 0.9],
 }
 
 

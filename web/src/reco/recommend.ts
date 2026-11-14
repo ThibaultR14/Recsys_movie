@@ -47,8 +47,8 @@ export function rankCandidates(
   return Int32Array.from(items);
 }
 
-/** Targeted bonus of the « classics by consensus » (analysis, not in production): items below
- * `maxItem` only (the trained films when estimated films are left out). */
+/** Targeted bonus of the « classics by consensus » (step 8, R6e; model-meta `quality.classics`):
+ * items below `maxItem` only (the trained films; the estimated films are left out). */
 export interface ClassicsBonus {
   gamma: number;
   /** q threshold (same unit as quality / scale). */
@@ -76,8 +76,8 @@ export function qualityPool(
 ): { items: number[]; scores: number[] } {
   const items: number[] = [];
   const adj: number[] = [];
-  // analysis only (docs/etape-8-analyse-reglages.md): + gc * max(0, q - threshold), increasing in
-  // q, so the early stop stays exact with the bound taken at qMax
+  // R6e: + gc * max(0, q - threshold), increasing in q, so the early stop stays exact with the
+  // bound taken at qMax
   const bonusMax = classics ? classics.gamma * Math.max(0, qMax - classics.threshold) : 0;
   let d = 0;
   for (let r = 0; r < ranked.length; r++) {

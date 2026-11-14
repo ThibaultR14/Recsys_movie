@@ -11,6 +11,8 @@ interface FilmGridProps {
   explain?: boolean;
   /** Directors of the profile phrase, for the « encore un … » tag (step 6c, Q6). */
   profileDirectors?: readonly string[];
+  /** Dev only (`?tampon_estimes=1`): the « ✱ pépite » stamp allowed on estimated films again. */
+  stampEstimated?: boolean;
 }
 
 /** Results grid: auto-fill columns of at least 220 px, wide gaps for the tilted cards. */
@@ -19,9 +21,14 @@ export function FilmGrid({
   seriesOf,
   explain = true,
   profileDirectors = [],
+  stampEstimated = false,
 }: FilmGridProps) {
-  // one tag per card, at most 2 per row of 8, « ✱ pépite » first (step 6c, Q6)
-  const tags = useMemo(() => cardTags(films, profileDirectors), [films, profileDirectors]);
+  // one tag per card, at most 2 per row of 8, « ✱ pépite » first (step 6c, Q6); never the stamp on
+  // an estimated film (step 8, R6e)
+  const tags = useMemo(
+    () => cardTags(films, profileDirectors, { stampEstimated }),
+    [films, profileDirectors, stampEstimated],
+  );
   const picks = useMemo(
     () => citationPicks(films.map((f) => (explain ? f.because?.items : undefined))),
     [films, explain],
