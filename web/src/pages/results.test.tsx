@@ -340,6 +340,7 @@ describe('pages (step 6b, D2)', () => {
       'percentiles',
       'equilibre',
       'curseur',
+      'affiner',
       'recents',
       'tampons',
       'donnees',
@@ -502,6 +503,41 @@ describe('« affiner » (step 8b, D3)', () => {
     expect(more).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(more);
     expect(chips().slice(8)).toEqual(['coréen', 'cantonais']);
+  });
+});
+
+describe('« télécharger la liste (csv) » (step 8b, D6)', () => {
+  it('under the grid: the 48 films of the category, in order; help sentence; nothing sent', async () => {
+    const saved: { text: string; name: string }[] = [];
+    const blobs: Blob[] = [];
+    const create = URL.createObjectURL;
+    const revoke = URL.revokeObjectURL;
+    URL.createObjectURL = (b: Blob) => {
+      blobs.push(b);
+      return 'blob:test';
+    };
+    URL.revokeObjectURL = () => {};
+    const click = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+      saved.push({ text: '', name: this.download });
+    };
+    try {
+      render(<Resultats nEntries={66} reco={reco()} />);
+      expect(screen.getByText("compatible avec l'import de listes de Letterboxd.")).toBeVisible();
+      await userEvent.click(screen.getByRole('button', { name: 'télécharger la liste (csv)' }));
+      expect(saved).toHaveLength(1);
+      expect(saved[0]!.name).toMatch(/^pepite-moins-connus-\d{4}-\d{2}-\d{2}\.csv$/);
+      const text = await blobs[0]!.text();
+      const lines = text.trimEnd().split('\r\n');
+      expect(lines[0]).toBe('tmdbID,imdbID,Title,Year');
+      expect(lines).toHaveLength(49); // the 48 films, not only the 8 shown
+      expect(lines[1]).toContain('film 2000 #0');
+      expect(lines[48]).toContain('film 2000 #47');
+    } finally {
+      URL.createObjectURL = create;
+      URL.revokeObjectURL = revoke;
+      HTMLAnchorElement.prototype.click = click;
+    }
   });
 });
 

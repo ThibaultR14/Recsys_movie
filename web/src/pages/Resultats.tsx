@@ -12,6 +12,8 @@ import { RefinePanel } from '../components/RefinePanel';
 import { PEOPLE } from '../content/people';
 import type { PersonSuggestion } from '../reco/people';
 import { activeCount, type RefineOptions } from '../reco/filters';
+import { DOWNLOAD } from '../content/download';
+import { csvFileName, listCsv, personPart, saveText } from './download';
 import { availableCategories, categoryAt } from './categories';
 import {
   FAR_FROM_TASTE,
@@ -94,6 +96,10 @@ export function Resultats({
   const far = !person && !farRows && position.relativeScore < FAR_FROM_TASTE;
   const category = categoryAt(caps, index);
   const nFilters = activeCount(filters);
+  // step 8b (D6): pepite-<categorie>-…, pepite-films-de-<nom>-… (dev 8 notches: the cap)
+  const filePart = person
+    ? personPart(person.name)
+    : (category?.file ?? (position.cap === null ? 'tout' : `moins-de-${position.cap}`));
   const what = category
     ? `${category.label}${nFilters ? `, ${nFilters === 1 ? '1 filtre' : `${nFilters} filtres`}` : ''}`
     : '';
@@ -187,6 +193,19 @@ export function Resultats({
           </p>
         )}
       </div>
+
+      {films.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            className="h-11 w-fit cursor-pointer rounded-[3px] border-2 border-ink bg-surface px-4 text-[15px] font-bold text-ink hover:text-pen focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pen"
+            onClick={() => saveText(listCsv(films), csvFileName(filePart, new Date()))}
+          >
+            {DOWNLOAD.button}
+          </button>
+          <p className="m-0 text-[14px] text-muted">{DOWNLOAD.help}</p>
+        </div>
+      )}
 
       <p className="m-0 text-[14px] text-muted">
         les films récents sont placés d'après leur contenu : on les connaît moins bien.

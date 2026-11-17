@@ -85,6 +85,8 @@ export interface FilmCard {
   popularity: number;
   /** TMDB id (card link), null when unknown. */
   tmdbId: number | null;
+  /** IMDb id (tt…, MovieLens links.csv or TMDB), for the CSV of step 8b (D6). */
+  imdbId?: string | null;
   /** MovieLens genre names (e.g. "Documentary"). */
   genres: string[];
   /** Public rating (step 6b, D5): MovieLens mean x 10 (39 = 3,9 / 5) and number of ratings. */
@@ -185,6 +187,7 @@ export function filmCard(engine: Engine, item: number): FilmCard {
     posterPath: c.poster_path[item] ?? null,
     popularity: engine.model.popularity[item] ?? 0,
     tmdbId: c.tmdb_id[item] ?? null,
+    imdbId: c.imdb_id[item] ?? null,
     genres: (c.genres[item] ?? []).map((g) => c.genre_names[g] ?? ''),
     ...publicRating(c, item),
     ...(engine.divisive.has(item) ? { divisive: true as const } : {}),
