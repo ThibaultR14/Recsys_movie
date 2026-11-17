@@ -44,6 +44,7 @@ import polars as pl  # noqa: E402
 import scipy.sparse as sp  # noqa: E402
 
 import evaluate as ev  # noqa: E402
+import people as ppl  # noqa: E402
 import popularity as popm  # noqa: E402
 import quality as qual  # noqa: E402
 from config import (  # noqa: E402
@@ -956,6 +957,10 @@ def cmd_verify(out_dir: Path) -> dict:
 
 CATALOG_FILES = ("catalog.json", "title-index.json")
 WEB_DATA_GZIP_BUDGET = 5 * 1024 * 1024  # step 3 criterion: all of web/public/data <= 5 MB gzip
+# step 8b (D4, v0.3): all of web/public/data <= 4.0 MB gzip with the actors; above it, the actors
+# need >= PEOPLE_FALLBACK_MIN_FILMS films instead of people.MIN_FILMS (option a of U0)
+WEB_DATA_PEOPLE_BUDGET = 4_000_000
+PEOPLE_FALLBACK_MIN_FILMS = 4
 
 
 def write_compact_json(path: Path, obj) -> None:
@@ -1007,13 +1012,28 @@ def cmd_catalog(out_dir: Path) -> dict:
     full, est = site_catalog_frame(cat)
     q_ints, _ = qual.site_quality_from_files(cat, pl.read_parquet(FILMS_PARQUET), est)
     out_dir.mkdir(parents=True, exist_ok=True)
-    write_compact_json(
-        out_dir / "catalog.json",
-        sc.build_catalog_json(full, manual, versions, divisive, cat.height, est, q_ints.tolist()),
-    )
+    # step 8b (D5): language, runtime and people from the step 8 TMDB cache (no HTTP)
+    fulls = ppl.full_records(full["tmdb_id"].to_list())
+    directors = [list(d or []) for d in full["tmdb_directors"].to_list()]
+    actor_names = ppl.actor_names_from_cache(ppl.kept_actors(ppl.cast_lists(fulls)))
+    lang_runtime = sc.language_runtime(fulls)
     write_compact_json(out_dir / "title-index.json", sc.build_title_index(full, manual))
-    sizes = file_sizes(out_dir)
-    total = sum(v["gzip_bytes"] for v in sizes.values())
+    people_report = {}
+    for min_films in (ppl.MIN_FILMS, PEOPLE_FALLBACK_MIN_FILMS):
+        built = ppl.build_people(fulls, directors, actor_names, min_films)
+        extra = {**lang_runtime, **built}
+        write_compact_json(
+            out_dir / "catalog.json",
+            sc.build_catalog_json(
+                full, manual, versions, divisive, cat.height, est, q_ints.tolist(), extra
+            ),
+        )
+        sizes = file_sizes(out_dir)
+        total = sum(v["gzip_bytes"] for v in sizes.values())
+        people_report = {**built["stats"], "min_films": min_films}
+        if total <= WEB_DATA_PEOPLE_BUDGET:
+            break
+    assert total <= WEB_DATA_PEOPLE_BUDGET, f"web/public/data {total} > {WEB_DATA_PEOPLE_BUDGET}"
     report = {
         "out_dir": str(out_dir),
         "sizes": sizes,
@@ -1022,6 +1042,10 @@ def cmd_catalog(out_dir: Path) -> dict:
         "within_5mb_gzip": total <= WEB_DATA_GZIP_BUDGET,
         "manual_titles": len(manual),
         "divisive": len(divisive),
+        "within_4mb_gzip_with_people": total <= WEB_DATA_PEOPLE_BUDGET,
+        "people": people_report,
+        "languages": len(lang_runtime["languages"]),
+        "runtime_known": sum(r is not None for r in lang_runtime["runtime"]),
     }
     (RESULTS_DIR / "catalog_export_report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
@@ -1040,9 +1064,18 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
     n = cat_json["n"]
     meta = json.loads((out_dir / "model-meta.json").read_text())
     assert n == meta["n_items"]
-    cols = ("title", "year", "tmdb_id", "imdb_id", "directors", "poster_path", "genres")
-    for col in (*cols, "ml_mean", "ml_count"):
+    cols = ("title", "year", "tmdb_id", "imdb_id", "director_ids", "poster_path", "genres")
+    for col in (*cols, "ml_mean", "ml_count", "language", "runtime", "cast"):
         assert len(cat_json[col]) == n, col
+    # step 8b (D5): people, language, runtime; `directors` rebuilt from people + director_ids
+    assert "directors" not in cat_json
+    people = cat_json["people"]
+    assert all(0 <= k < len(people) for row in cat_json["director_ids"] for k in row)
+    assert all(0 <= k < len(people) for row in cat_json["cast"] for k in row)
+    assert all(k is None or 0 <= k < len(cat_json["languages"]) for k in cat_json["language"]), (
+        "language"
+    )
+    assert all(r is None or (isinstance(r, int) and r > 0) for r in cat_json["runtime"])
     assert cat_json["v"] == sc.CATALOG_JSON_VERSION
     nt = cat_json["n_trained"]
     assert nt == meta["n_trained"] and len(cat_json["tmdb_mean"]) == n - nt
@@ -1065,6 +1098,8 @@ def cmd_catalog_verify(out_dir: Path) -> dict:
             where.setdefault(code // 4, {})[key] = code % 4
     cat = sc.load_catalog_frame(ev.CATALOG_PARQUET)
     full, _ = site_catalog_frame(cat)
+    rebuilt = ppl.rebuild_directors(people, cat_json["director_ids"])
+    assert rebuilt == [list(d or []) for d in full["tmdb_directors"].to_list()], "directors"
     missing = 0
     for r in full.iter_rows(named=True):
         key = normalize_title(r["tmdb_title"]) if r["tmdb_title"] else None

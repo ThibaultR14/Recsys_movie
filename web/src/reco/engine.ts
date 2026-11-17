@@ -14,6 +14,7 @@ import { ImdbIdIndex } from '../matching/imdbIds';
 import { Matcher, type MatchStatus } from '../matching/match';
 import { TitleIndex, type TitleIndexFile } from '../matching/titleIndex';
 import { calibrateShare, lambdaOf, shareProfile } from './calibrate';
+import { parseCatalog } from './catalogFile';
 import type { CompiledFilter } from './filters';
 import { foldIn, keptForFoldIn, signal } from './foldIn';
 import { buildModelFiles, fetchModelFiles, type FetchFn, type ModelFiles } from './modelFiles';
@@ -36,6 +37,7 @@ export interface CatalogFile {
   tmdb_id: (number | null)[];
   imdb_id: (string | null)[];
   imdb_id_aliases?: Record<string, string[]>;
+  /** Rebuilt at reading from `people` + `director_ids` (v4, `parseCatalog`). */
   directors: string[][];
   poster_path: (string | null)[];
   genres: number[][];
@@ -59,6 +61,12 @@ export interface CatalogFile {
   languages?: string[];
   /** v4 (step 8b, D5): TMDB runtime in minutes. */
   runtime?: (number | null)[];
+  /** v4 (step 8b, D4-D5): one display name per TMDB person (directors and kept actors). */
+  people?: string[];
+  /** v4: per film, indices into `people` of its directors (order of `directors`), of its kept
+   * actors (first 5 roles, in >= 3 catalogue films; role order). */
+  director_ids?: number[][];
+  cast?: number[][];
 }
 
 export interface Engine {
@@ -79,7 +87,7 @@ export async function loadEngine(fetchFn: FetchFn, base = '/data/'): Promise<Eng
   const t0 = performance.now();
   const [files, catalog, indexFile] = await Promise.all([
     fetchModelFiles(fetchFn, base),
-    fetchFn(`${base}catalog.json`).then((r) => r.json() as Promise<CatalogFile>),
+    fetchFn(`${base}catalog.json`).then(async (r) => parseCatalog(await r.json())),
     fetchFn(`${base}title-index.json`).then((r) => r.json() as Promise<TitleIndexFile>),
   ]);
   const t1 = performance.now();

@@ -7,6 +7,7 @@
  * Writes test-data/reports/<label>.json (ignored by git): every film with its status and matched
  * catalogue film, for the review and for pipeline/match_diagnostics.py. Prints counts only.
  */
+import { parseCatalog } from '../src/reco/catalogFile';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,14 +64,7 @@ async function main() {
   const index = await loadTitleIndex(
     async (url) => new Response(readFileSync(join(DATA, url.replace('/data/', '')))),
   );
-  const catalog = JSON.parse(readFileSync(join(DATA, 'catalog.json'), 'utf-8')) as {
-    title: string[];
-    year: (number | null)[];
-    tmdb_id: (number | null)[];
-    directors: string[][];
-    imdb_id: (string | null)[];
-    imdb_id_aliases?: Record<string, string[]>;
-  };
+  const catalog = parseCatalog(JSON.parse(readFileSync(join(DATA, 'catalog.json'), 'utf-8')));
   const ids = new ImdbIdIndex(catalog.imdb_id, catalog.imdb_id_aliases);
   const parsed = readExport(path);
   const t0 = performance.now();

@@ -140,6 +140,11 @@ def discover_all(api: Tmdb, start: date = DISCOVER_FROM, end: date | None = None
     return sorted(films.values(), key=lambda f: (f["release_date"] or "", f["id"]))
 
 
+def cast_id(c) -> int | None:
+    """A cast entry of the cache: an id (step 8) or {id, name} (since step 8b)."""
+    return c.get("id") if isinstance(c, dict) else c
+
+
 def slim_full(raw: dict) -> dict:
     """What step 8 may use from /movie/{id} (+ credits, keywords, recommendations, similar)."""
     credits = raw.get("credits") or {}
@@ -171,7 +176,9 @@ def slim_full(raw: dict) -> dict:
         "poster_path": raw.get("poster_path") or None,
         "overview_len": len(raw.get("overview") or ""),
         "directors": directors,
-        "cast": [p.get("id") for p in cast],
+        # step 8b (Q2): {id, name}, like the directors (names for the « des films de… » search,
+        # monthly refresh); the step-8 cache has ids only: readers take both (`cast_id`)
+        "cast": [{"id": p.get("id"), "name": p.get("name")} for p in cast],
         "keywords": [k.get("id") for k in (raw.get("keywords") or {}).get("keywords") or []],
         "recommendations": ids("recommendations"),
         "similar": ids("similar"),
@@ -284,7 +291,7 @@ def films_table(cat: pl.DataFrame, discovered: pl.DataFrame) -> pl.DataFrame:
                 "overview_len": d["overview_len"],
                 "director_ids": [p["id"] for p in d["directors"]],
                 "director_names": [p["name"] for p in d["directors"]],
-                "cast": d["cast"],
+                "cast": [cast_id(c) for c in d["cast"]],
                 "keywords": d["keywords"],
                 "recommendations": d["recommendations"]["ids"],
                 "similar": d["similar"]["ids"],

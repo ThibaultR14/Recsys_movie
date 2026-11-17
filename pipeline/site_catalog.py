@@ -55,7 +55,9 @@ CATALOG_COLUMNS = [
     "ml_rating_count",
 ]
 
-CATALOG_JSON_VERSION = 3  # v2 (step 6b, D5): ml_mean, ml_count; v3 (step 8): estimated films
+# v2 (step 6b, D5): ml_mean, ml_count; v3 (step 8): estimated films; v4 (step 8b, D5): language,
+# runtime, people (`directors` no longer written: rebuilt by the site from people + director_ids)
+CATALOG_JSON_VERSION = 4
 
 
 def mean_x10(mean: float | None) -> int | None:
@@ -171,7 +173,11 @@ def build_catalog_json(
     n_trained: int | None = None,
     estimated: pl.DataFrame | None = None,
     quality: list[int] | None = None,
+    site_extra: dict | None = None,
 ) -> dict:
+    """`site_extra` (step 8b, D5): `languages`, `language`, `runtime`, and the people of
+    `people.build_people` (`people`, `director_ids`, `cast`); without it (tests), the people are
+    the directors by name and language / runtime are unknown."""
     manual = manual_titles or {}
     rows = cat.to_dicts()
     genre_names = sorted({g for r in rows for g in (r["ml_genres"] or []) if g != NO_GENRE})
@@ -194,7 +200,6 @@ def build_catalog_json(
         "imdb_id_aliases": {
             str(i): list(r["imdb_id_aliases"]) for i, r in enumerate(rows) if r["imdb_id_aliases"]
         },
-        "directors": [list(r["tmdb_directors"] or []) for r in rows],
         "poster_path": [r["poster_path"] for r in rows],
         "genres": [sorted(gid[g] for g in (r["ml_genres"] or []) if g != NO_GENRE) for r in rows],
         "genre_names": genre_names,
@@ -213,6 +218,53 @@ def build_catalog_json(
         "tmdb_count": [] if estimated is None else estimated["vote_count"].to_list(),
         # Quality term (step 8, R6b): round(1000 q) per item, see quality.py
         "quality": quality or [],
+        **site_columns([list(r["tmdb_directors"] or []) for r in rows], site_extra),
+    }
+
+
+def people_from_names(directors: list[list[str]]) -> dict:
+    """people / director_ids from the director names alone (one entry per name), no actor."""
+    names: list[str] = []
+    idx: dict[str, int] = {}
+    ids = []
+    for row in directors:
+        ids.append([idx.setdefault(nm, len(idx)) for nm in row])
+    names = list(idx)
+    return {"people": names, "director_ids": ids, "cast": [[] for _ in directors]}
+
+
+def site_columns(directors: list[list[str]], extra: dict | None) -> dict:
+    """v4 columns (step 8b, D5): language (index into `languages`), runtime (minutes), people."""
+    extra = extra or {}
+    n = len(directors)
+    people = extra if "people" in extra else people_from_names(directors)
+    rebuilt = [[people["people"][k] for k in row] for row in people["director_ids"]]
+    assert rebuilt == directors, "people + director_ids must give the v3 directors back"
+    return {
+        "languages": extra.get("languages", []),
+        "language": extra.get("language", [None] * n),
+        "runtime": extra.get("runtime", [None] * n),
+        "people": people["people"],
+        "director_ids": people["director_ids"],
+        "cast": people["cast"],
+    }
+
+
+def language_runtime(fulls: list[dict | None]) -> dict:
+    """languages / language / runtime from the TMDB records of the step 8 cache (D5): languages
+    sorted by number of films (ties: code); runtime 0 or missing -> None."""
+    codes = [(f or {}).get("original_language") or None for f in fulls]
+    counts: dict[str, int] = {}
+    for c in codes:
+        if c:
+            counts[c] = counts.get(c, 0) + 1
+    languages = sorted(counts, key=lambda c: (-counts[c], c))
+    li = {c: k for k, c in enumerate(languages)}
+    runtime = [((f or {}).get("runtime") or None) for f in fulls]
+    return {
+        "languages": languages,
+        "language": [li[c] if c else None for c in codes],
+        "runtime": [int(r) if r else None for r in runtime],
     }
 
 

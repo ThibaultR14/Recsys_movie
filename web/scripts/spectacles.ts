@@ -5,6 +5,7 @@
  *
  *   npm run spectacles [-- --all]   # --all: also the films caught by the title alone
  */
+import { parseCatalog } from '../src/reco/catalogFile';
 import { readFileSync } from 'node:fs';
 import { isStandUpTitle } from '../src/reco/spectacle';
 
@@ -17,7 +18,7 @@ interface Catalog {
 }
 
 const DATA = new URL('../public/data/', import.meta.url);
-const c = JSON.parse(readFileSync(new URL('catalog.json', DATA), 'utf-8')) as Catalog;
+const c: Catalog = parseCatalog(JSON.parse(readFileSync(new URL('catalog.json', DATA), 'utf-8')));
 const pop = new Uint32Array(readFileSync(new URL('popularity.bin', DATA)).buffer.slice(0));
 const comedy = c.genre_names.indexOf('Comedy');
 

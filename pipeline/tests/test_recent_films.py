@@ -28,7 +28,10 @@ def test_slim_full_keeps_only_what_is_used():
                 {"id": 1, "name": "A", "job": "Director"},
                 {"id": 2, "name": "B", "job": "Writer"},
             ],
-            "cast": [{"id": 30 + i, "order": 11 - i} for i in range(12)],
+            "cast": [
+                {"id": 30 + i, "name": f"N{i}", "order": 11 - i, "character": "x"}
+                for i in range(12)
+            ],
         },
         "keywords": {"keywords": [{"id": 5, "name": "k"}]},
         "recommendations": {"results": [{"id": 9}, {"id": 8}], "total_results": 2},
@@ -36,7 +39,11 @@ def test_slim_full_keeps_only_what_is_used():
     }
     s = rf.slim_full(raw)
     assert s["directors"] == [{"id": 1, "name": "A"}]
-    assert s["cast"][0] == 41 and len(s["cast"]) == 10  # sorted by order, 10 kept
+    # sorted by order, 10 kept; step 8b: {id, name} only (no character, nothing else)
+    assert s["cast"][0] == {"id": 41, "name": "N11"} and len(s["cast"]) == 10
+    assert all(set(c) == {"id", "name"} for c in s["cast"])
+    # readers take both cache forms (step 8: ids; step 8b: {id, name})
+    assert rf.cast_id(41) == 41 and rf.cast_id({"id": 41, "name": "N11"}) == 41
     assert s["genres"] == [18] and s["keywords"] == [5]
     assert s["recommendations"] == {"ids": [9, 8], "total": 2}
     assert s["overview_len"] == 3 and "overview" not in s

@@ -47,7 +47,12 @@ def test_catalog_json_columns_and_sparse_fields():
     assert c["imdb_id_aliases"] == {"1": ["tt9999999"]}
     assert c["genre_names"] == ["Comedy", "Crime", "Romance", "Thriller"]
     assert c["genres"] == [[1, 3], [], [0, 2]]
-    assert c["v"] == 3
+    assert c["v"] == 4
+    # step 8b (D5): `directors` no longer written; people + director_ids give it back
+    assert "directors" not in c
+    assert c["people"] == ["Bryan Singer", "Jean-Pierre Jeunet"]
+    assert c["director_ids"] == [[0], [], [1]] and c["cast"] == [[], [], []]
+    assert c["language"] == [None, None, None] and c["runtime"] == [None, None, None]
     assert c["n_trained"] == 3 and c["tmdb_mean"] == [] and c["tmdb_count"] == []
     assert c["ml_mean"] == [43, 39, 38]  # x 10, half up
     assert c["ml_count"] == [102929, 20, 1240]
@@ -206,3 +211,22 @@ def test_estimated_films_follow_the_trained_ones():
     keys = {k for k, post in zip(idx["keys"], idx["post"], strict=True) if 4 * 3 in post}
     assert keys == {"un film recent"}  # TMDB title as source 0
     assert sc.tmdb_mean_x10(None) is None
+
+
+def test_language_runtime_from_the_tmdb_records():
+    fulls = [
+        {"original_language": "fr", "runtime": 99},
+        None,
+        {"original_language": "en", "runtime": 0},
+        {"original_language": "fr", "runtime": 136},
+        {"original_language": None, "runtime": None},
+    ]
+    out = sc.language_runtime(fulls)
+    assert out["languages"] == ["fr", "en"]  # by number of films
+    assert out["language"] == [0, None, 1, 0, None]
+    assert out["runtime"] == [99, None, None, 136, None]
+
+
+def test_site_columns_refuse_people_that_do_not_give_the_directors_back():
+    with pytest.raises(AssertionError):
+        sc.site_columns([["A"]], {"people": ["B"], "director_ids": [[0]], "cast": [[]]})
