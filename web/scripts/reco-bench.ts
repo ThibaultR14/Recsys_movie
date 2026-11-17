@@ -11,6 +11,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CatalogFile } from '../src/reco/engine';
 import type { ImportResult, InitResult, RecommendResult } from '../src/reco/workerCore';
+import { CATEGORIES } from '../src/pages/categories';
+import { NO_FILTERS, type Filters } from '../src/reco/filters';
 import { exportInput, localHandler, WEB_ROOT } from './local';
 
 const RUNS = 7;
@@ -63,7 +65,12 @@ async function main() {
       const a = performance.now();
       const imported = await call<ImportResult>({ id: id++, type: 'import', input });
       const b = performance.now();
-      const reco = await call<RecommendResult>({ id: id++, type: 'recommend', n: 48 });
+      const reco = await call<RecommendResult>({
+        id: id++,
+        type: 'recommend',
+        n: 48,
+        explainCaps: EXPLAIN_CAPS,
+      });
       const c = performance.now();
       importMs.push(b - a);
       recoMs.push(c - b);
@@ -78,8 +85,65 @@ async function main() {
         `et explications ${median(explainMs).toFixed(1)} ms ` +
         `(médiane de ${RUNS})`,
     );
+    // step 8b (D2): filtered recomputation, fold-in kept (criterion: median <= 100 ms)
+    for (const [name, filters] of FILTERED) {
+      const ms: number[] = [];
+      for (let run = 0; run < REFINE_RUNS; run++) {
+        // alternate with the unfiltered lists, as a user toggling a filter
+        await call<RecommendResult>({
+          id: id++,
+          type: 'recommend',
+          n: 48,
+          explainCaps: EXPLAIN_CAPS,
+        });
+        const a = performance.now();
+        await call<RecommendResult>({
+          id: id++,
+          type: 'recommend',
+          n: 48,
+          explainCaps: EXPLAIN_CAPS,
+          filters: { ...NO_FILTERS, ...filters },
+        });
+        ms.push(performance.now() - a);
+      }
+      // first time (the filtered films not explained yet): a fresh import clears the cache
+      const cold: number[] = [];
+      for (let run = 0; run < RUNS; run++) {
+        await call<ImportResult>({ id: id++, type: 'import', input });
+        await call<RecommendResult>({
+          id: id++,
+          type: 'recommend',
+          n: 48,
+          explainCaps: EXPLAIN_CAPS,
+        });
+        const a = performance.now();
+        await call<RecommendResult>({
+          id: id++,
+          type: 'recommend',
+          n: 48,
+          explainCaps: EXPLAIN_CAPS,
+          filters: { ...NO_FILTERS, ...filters },
+        });
+        cold.push(performance.now() - a);
+      }
+      console.log(
+        `${''.padEnd(18)} recalcul filtré « ${name} » : ${median(ms).toFixed(1)} ms ` +
+          `(médiane de ${REFINE_RUNS}, max ${Math.max(...ms).toFixed(1)}) ; première fois ` +
+          `${median(cold).toFixed(1)} ms (médiane de ${RUNS})`,
+      );
+    }
   }
 }
+
+const REFINE_RUNS = 21;
+/** The categories' caps (step 8b, D2: explanations for the caps shown only). */
+const EXPLAIN_CAPS = CATEGORIES.map((c) => c.cap);
+const FILTERED: [string, Partial<Filters>][] = [
+  ['horreur', { genres: ['Horror'] }],
+  ['années 70', { decades: ['1970'] }],
+  ['drame + années 2000', { genres: ['Drama'], decades: ['2000'] }],
+  ['sans documentaires', { docs: false }],
+];
 
 main().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : err);

@@ -1,3 +1,4 @@
+import { NO_FILTERS, type Filters } from '../reco/filters';
 import type { RecommendResult } from '../reco/workerCore';
 
 import { START_CATEGORY_CAP } from './categories';
@@ -10,10 +11,11 @@ export const PAGE = 8;
 export interface ResultsView {
   index: number;
   visible: number;
-  noDocs: boolean;
+  /** « affiner » (step 8b, D3): changing them recomputes the lists in the worker (D2). */
+  filters: Filters;
 }
 
 export function initialView(reco: RecommendResult): ResultsView {
   const caps = reco.positions.map((p) => p.cap);
-  return { index: Math.max(0, caps.indexOf(START_CAP)), visible: PAGE, noDocs: false };
+  return { index: Math.max(0, caps.indexOf(START_CAP)), visible: PAGE, filters: NO_FILTERS };
 }

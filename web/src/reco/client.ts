@@ -8,6 +8,7 @@
  *   const { positions } = await reco.recommend({ n: 50 });
  */
 import type { Choices, ExportInput, Tuning } from './engine';
+import type { Filters } from './filters';
 import type {
   ConfirmResult,
   ImportResult,
@@ -69,8 +70,16 @@ export class RecoClient {
     return this.send({ type: 'confirm', choices });
   }
 
+  /** `filters` (step 8b, D2): recomputes the lists from the kept fold-in; `explainCaps`: the caps
+   * whose films get « parce que t'as aimé » (those shown). */
   recommend(
-    options: { n?: number; caps?: (number | null)[]; tuning?: Tuning } = {},
+    options: {
+      n?: number;
+      caps?: (number | null)[];
+      tuning?: Tuning;
+      filters?: Filters;
+      explainCaps?: (number | null)[];
+    } = {},
   ): Promise<RecommendResult> {
     return this.send({ type: 'recommend', ...options });
   }

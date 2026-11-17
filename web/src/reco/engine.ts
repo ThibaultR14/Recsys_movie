@@ -14,11 +14,13 @@ import { ImdbIdIndex } from '../matching/imdbIds';
 import { Matcher, type MatchStatus } from '../matching/match';
 import { TitleIndex, type TitleIndexFile } from '../matching/titleIndex';
 import { calibrateShare, lambdaOf, shareProfile } from './calibrate';
+import type { CompiledFilter } from './filters';
 import { foldIn, keptForFoldIn, signal } from './foldIn';
 import { buildModelFiles, fetchModelFiles, type FetchFn, type ModelFiles } from './modelFiles';
 import {
   qualityPool,
   rankCandidates,
+  RELATIVE_TOP,
   type ClassicsBonus,
   scoreAll,
   topByPosition,
@@ -52,6 +54,11 @@ export interface CatalogFile {
   /** v3 (step 8): TMDB rating out of 5 x 10 (34 = 3,4) and votes, one per estimated film. */
   tmdb_mean?: (number | null)[];
   tmdb_count?: number[];
+  /** v4 (step 8b, D5): original language, an index into `languages` (ISO 639-1, TMDB). */
+  language?: (number | null)[];
+  languages?: string[];
+  /** v4 (step 8b, D5): TMDB runtime in minutes. */
+  runtime?: (number | null)[];
 }
 
 export interface Engine {
@@ -442,13 +449,26 @@ export interface Recommendations {
 }
 
 /** Fold-in on exact + probable_variant + confirmed, scores, exclusions, slider positions. */
-export function recommend(
+/** The user's side of `recommend` (step 8b, D2): kept by the worker, so that a filter recomputes
+ * the lists without a new fold-in. */
+export interface UserProfile {
+  history: UserFilm[];
+  /** Films of the fold-in (after D2 of step 6c), with their signal. */
+  foldInFilms: UserFilm[];
+  scores: Float64Array;
+  /** Seen, not recommendable, ambiguous, fuzzy, other versions (+ estimated films by tuning). */
+  excluded: Set<number>;
+  /** Candidates of the unfiltered lists, and the base of their relative scores (∞, 20 first). */
+  ranked: Int32Array;
+  base: number;
+}
+
+export function userProfile(
   engine: Engine,
   matched: readonly MatchedEntry[],
-  options: { n?: number; caps?: readonly (number | null)[]; tuning?: Tuning } = {},
-): Recommendations {
+  tuning?: Tuning,
+): UserProfile {
   const { model } = engine;
-  const tuning = options.tuning;
   const nTrained = engine.catalog.n_trained ?? engine.catalog.n;
   const history = toUserHistory(matched); // exact + probable_variant + confirmed
   // tuning 'off': estimated films out of the profile (they stay seen)
@@ -473,6 +493,48 @@ export function recommend(
   for (const i of versionExclusions(engine.versions, seen)) excluded.add(i);
   if (tuning?.recent) for (let i = nTrained; i < model.nItems; i++) excluded.add(i);
   const ranked = rankCandidates(scores, model.recommendable, excluded);
+  const base = topByPosition(ranked, scores, model.popularity, [null], RELATIVE_TOP)[0]!.base;
+  return { history, foldInFilms, scores, excluded, ranked, base };
+}
+
+/** Minimum number of fold-in films with a chosen genre for the calibration to follow it (D2);
+ * below it, λ = 0. */
+export const MIN_GENRE_FOLDIN = 10;
+
+export function recommend(
+  engine: Engine,
+  matched: readonly MatchedEntry[],
+  options: { n?: number; caps?: readonly (number | null)[]; tuning?: Tuning } = {},
+): Recommendations {
+  return recommendFrom(engine, userProfile(engine, matched, options.tuning), options);
+}
+
+/**
+ * The lists of every cap from a user profile (fold-in kept). With `filter` (step 8b, D2): the
+ * films that do not pass it are excluded before the pools; the calibration target follows the
+ * chosen genres (fold-in films with one of them; λ = 0 below MIN_GENRE_FOLDIN); the relative
+ * scores keep the unfiltered base.
+ */
+export function recommendFrom(
+  engine: Engine,
+  user: UserProfile,
+  options: {
+    n?: number;
+    caps?: readonly (number | null)[];
+    tuning?: Tuning;
+    filter?: CompiledFilter;
+  } = {},
+): Recommendations {
+  const { model } = engine;
+  const { tuning, filter } = options;
+  const { history, foldInFilms, scores } = user;
+  let excluded = user.excluded;
+  let ranked = user.ranked;
+  if (filter) {
+    excluded = new Set(user.excluded);
+    for (let i = 0; i < model.nItems; i++) if (!filter.passes(i)) excluded.add(i);
+    ranked = rankCandidates(scores, model.recommendable, excluded);
+  }
   const caps = options.caps ?? model.meta.slider.positions;
   const n = options.n ?? 50;
   const calibration = model.meta.calibration;
@@ -481,7 +543,7 @@ export function recommend(
   const perRow = tuning?.estimatedPerRow === false ? undefined : model.meta.estimated?.per_row;
   const nList = perRow ? n * perRow.list_factor : n;
   const depth0 = calibration ? Math.max(nList, calibration.pool) : nList;
-  const raw = topByPosition(ranked, scores, model.popularity, caps, depth0);
+  const raw = topByPosition(ranked, scores, model.popularity, caps, depth0, user.base);
   // step 8 (R6b): quality term, pools on score' = score / s_max + gamma q (raw kept for the
   // relative scores « loin de tes goûts »); R6e: + the classics bonus of the trained films
   const qualityRanked = qualityPools(
@@ -504,7 +566,15 @@ export function recommend(
             ? { ...p, items: p.items.slice(0, depth), scores: p.scores.slice(0, depth) }
             : p,
         );
-  // step 6c (D1): genre calibration of each position, once, on its pool (the fold-in films' genres)
+  // step 6c (D1): genre calibration of each position, once, on its pool (the fold-in films' genres;
+  // step 8b D2: those with a chosen genre, λ = 0 when fewer than MIN_GENRE_FOLDIN)
+  const genres = filter?.genres ?? [];
+  const target = genres.length
+    ? foldInFilms.filter((h) =>
+        genres.some((g) => (engine.catalog.genres[h.item] ?? []).includes(g)),
+      )
+    : foldInFilms;
+  const noCalibration = genres.length > 0 && target.length < MIN_GENRE_FOLDIN;
   const t0 = performance.now();
   const calibrated = calibration
     ? calibratePositions(
@@ -513,13 +583,13 @@ export function recommend(
         shareProfile(
           engine.catalog.genres,
           engine.catalog.genre_names.length,
-          foldInFilms.map((h) => h.item),
-          foldInFilms.map((h) => signal(h.percentile, model.meta.beta)),
+          target.map((h) => h.item),
+          target.map((h) => signal(h.percentile, model.meta.beta)),
         ),
         engine.catalog.genres,
         calibration,
         nList,
-        tunedLambda(calibration, tuning),
+        noCalibration ? () => 0 : tunedLambda(calibration, tuning),
       )
     : pools.map((p) => ({
         ...p,

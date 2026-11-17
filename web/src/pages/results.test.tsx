@@ -8,7 +8,16 @@ import { CommentCaMarche } from './CommentCaMarche';
 import { isSectionHash, pageOfHash } from './pages';
 import { Resultats } from './Resultats';
 import { CATEGORIES, availableCategories } from './categories';
-import { FAR_ROWS_NOTE, NOTHING_HERE, numberWord, profileNote, titlePhrase } from './resultsText';
+import {
+  FAR_ROWS_NOTE,
+  NOTHING_HERE,
+  NOTHING_PASSES,
+  numberWord,
+  profileNote,
+  titlePhrase,
+} from './resultsText';
+import type { ResultsView } from './resultsView';
+import { NO_FILTERS, type Filters } from '../reco/filters';
 
 const POSITIONS = [null, 20000, 10000, 5000, 2000, 1000, 500, 200];
 
@@ -247,15 +256,31 @@ describe('Resultats', () => {
     expect(screen.queryByRole('button', { name: 'encore des films' })).not.toBeInTheDocument();
   });
 
-  it('« sans les documentaires » filters the computed list', async () => {
-    render(<Resultats allNotches nEntries={66} reco={reco()} />);
-    expect(
-      within(screen.getByRole('list', { name: 'films recommandés' })).getAllByText('documentaire'),
-    ).toHaveLength(2);
-    await userEvent.click(screen.getByRole('checkbox', { name: 'sans les documentaires' }));
-    expect(screen.queryByText('documentaire')).not.toBeInTheDocument();
-    expect(cards()).toHaveLength(8);
-    expect(cards()[0]).toHaveTextContent('film 2000 #1');
+  it('« les documentaires »: ticked by default; unticking asks for new lists (step 8b, D2-D3)', async () => {
+    const views: ResultsView[] = [];
+    render(<Resultats nEntries={66} reco={reco()} onViewChange={(v) => views.push(v)} />);
+    const box = screen.getByRole('checkbox', { name: 'les documentaires' });
+    expect(box).toBeChecked();
+    // the page never filters by itself: the worker sends filtered lists
+    await userEvent.click(box);
+    expect(views.at(-1)!.filters).toEqual({ ...NO_FILTERS, docs: false });
+    expect(views.at(-1)!.visible).toBe(8);
+  });
+
+  it('filters and no film left: « rien ne passe tous ces filtres ici… »', () => {
+    const r = reco();
+    r.positions[POSITIONS.indexOf(2000)]!.films = [];
+    render(
+      <Resultats
+        nEntries={66}
+        reco={r}
+        view={{ index: 4, visible: 8, filters: { ...NO_FILTERS, genres: ['Horror'] } }}
+      />,
+    );
+    expect(screen.getByText(NOTHING_PASSES)).toBeInTheDocument();
+    expect(NOTHING_PASSES).toBe(
+      'rien ne passe tous ces filtres ici. enlève-en un, ou essaie « les valeurs sûres ».',
+    );
   });
 
   it('same-series note on the card', () => {
@@ -351,6 +376,46 @@ describe('pages (step 6b, D2)', () => {
     await userEvent.click(screen.getByRole('link', { name: '← retour' }));
     await act(async () => window.dispatchEvent(new HashChangeEvent('hashchange')));
     expect(screen.getByRole('radio', { name: /^les pépites/ })).toBeChecked();
+  });
+});
+
+describe('filtered recomputation through App (step 8b, D2)', () => {
+  it('a filter asks the worker; the grid stays with aria-busy; an older answer is ignored', async () => {
+    const calls: { filters?: Filters; explainCaps?: (number | null)[] }[] = [];
+    const pending: ((r: RecommendResult) => void)[] = [];
+    const api = fakeApi();
+    api.recommend = (opts) => {
+      calls.push(opts ?? {});
+      if (!opts?.filters) return Promise.resolve(reco());
+      return new Promise((resolve) => pending.push(resolve));
+    };
+    render(<App client={api} />);
+    await userEvent.upload(
+      screen.getByLabelText(/glisse ton fichier ici/),
+      new File(['Date,Name,Year,Letterboxd URI,Rating\n'], 'ratings.csv', { type: 'text/csv' }),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'voir mes films' }));
+    await screen.findByRole('radio', { name: /^les moins connus/ });
+    // the first lists: explanations for the three categories only
+    expect(calls[0]!.explainCaps).toEqual([null, 2000, 500]);
+    const zone = () =>
+      screen.getByRole('list', { name: 'films recommandés' }).closest('[aria-busy]')!;
+    expect(zone()).toHaveAttribute('aria-busy', 'false');
+    const box = screen.getByRole('checkbox', { name: 'les documentaires' });
+    await userEvent.click(box); // docs off -> request 1
+    expect(zone()).toHaveAttribute('aria-busy', 'true');
+    expect(cards()[0]).toHaveTextContent('film 2000 #0'); // the previous grid stays
+    await userEvent.click(box); // docs on again -> request 2
+    expect(calls.map((c) => c.filters?.docs)).toEqual([undefined, false, true]);
+    // the second answer arrives first, then the older one: the older is ignored
+    const second = reco();
+    second.positions[POSITIONS.indexOf(2000)]!.films[0]!.title = 'réponse 2';
+    const first = reco();
+    first.positions[POSITIONS.indexOf(2000)]!.films[0]!.title = 'réponse 1';
+    await act(async () => pending[1]!(second));
+    await act(async () => pending[0]!(first));
+    expect(cards()[0]).toHaveTextContent('réponse 2');
+    expect(zone()).toHaveAttribute('aria-busy', 'false');
   });
 });
 

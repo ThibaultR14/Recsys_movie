@@ -10,6 +10,10 @@ export const FAR_ROWS_NOTE =
 /** No film left, without any filter (step 8b, D9; Claude Web). */
 export const NOTHING_HERE = 'plus rien ici : essaie « les valeurs sûres ».';
 
+/** No film left, with filters (step 8b, D3; Thibault). */
+export const NOTHING_PASSES =
+  'rien ne passe tous ces filtres ici. enlève-en un, ou essaie « les valeurs sûres ».';
+
 const UNITS = [
   'zéro',
   'un',

@@ -149,3 +149,67 @@ describe.skipIf(!ready)('worker protocol on the real files', () => {
     );
   });
 });
+
+describe.skipIf(!ready)(
+  'step 8b (D2): fold-in kept, filters, explanations of the caps shown',
+  () => {
+    it('filters recompute the lists from the kept fold-in; explanations cached per history', async () => {
+      const handle = createHandler(async (url) => new Response(readFileSync(DATA + url.slice(6))));
+      type Req = RecoRequest extends infer R ? (R extends unknown ? Omit<R, 'id'> : never) : never;
+      const call = async <T>(req: Req): Promise<T> => {
+        const r = await handle(structuredClone({ ...req, id: 1 }) as RecoRequest);
+        if (!r.ok) throw new Error(r.error);
+        return r.result as T;
+      };
+      await call({ type: 'init' });
+      const imported = await call<ImportResult>({
+        type: 'import',
+        input: { kind: 'files', files: { 'watched.csv': WATCHED, 'ratings.csv': RATINGS } },
+      });
+      const caps = [null, 2000, 500];
+      const a = await call<RecommendResult>({ type: 'recommend', n: 48, explainCaps: caps });
+      // only the films of the caps shown are explained
+      for (const p of a.positions) {
+        const explained = p.films.filter((f) => f.because).length;
+        if (!caps.includes(p.cap)) {
+          const shownItems = new Set(
+            a.positions
+              .filter((q) => caps.includes(q.cap))
+              .flatMap((q) => q.films.map((f) => f.item)),
+          );
+          for (const f of p.films) if (!shownItems.has(f.item)) expect(f.because).toBeUndefined();
+        } else expect(explained).toBeGreaterThan(0);
+      }
+      // a filter: no film without the genre; unfiltered again: the first lists back, identical
+      const horror = await call<RecommendResult>({
+        type: 'recommend',
+        n: 48,
+        explainCaps: caps,
+        filters: {
+          genres: ['Horror'],
+          decades: [],
+          durations: [],
+          languages: [],
+          docs: true,
+        },
+      });
+      for (const p of horror.positions)
+        for (const f of p.films) expect(f.genres).toContain('Horror');
+      const back = await call<RecommendResult>({ type: 'recommend', n: 48, explainCaps: caps });
+      expect(back.positions.map((p) => p.films.map((f) => [f.item, f.because?.items]))).toEqual(
+        a.positions.map((p) => p.films.map((f) => [f.item, f.because?.items])),
+      );
+      // explanations come from the cache the second time (same history)
+      expect(back.explainMs!).toBeLessThan(a.explainMs! + 1);
+      // without explainCaps (scripts): every cap explained, as before step 8b
+      const all = await call<RecommendResult>({ type: 'recommend', n: 48 });
+      expect(all.positions.every((p) => p.films.some((f) => f.because))).toBe(true);
+      // confirm clears the kept fold-in: one more film in the history
+      expect(a.nHistory).toBe(4);
+      const hamlet = imported.unrecognized.find((u) => u.status === 'ambiguous')!;
+      await call({ type: 'confirm', choices: { [hamlet.index]: hamlet.candidates[0]!.item } });
+      const again = await call<RecommendResult>({ type: 'recommend', n: 48, explainCaps: caps });
+      expect(again.nHistory).toBe(5);
+    });
+  },
+);

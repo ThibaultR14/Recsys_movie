@@ -2,7 +2,7 @@
 // brings back the home screen. The model loads in the Web Worker as soon as the page opens.
 // Pages (« comment ça marche », « à propos », « contact ») open from the URL anchor, over the
 // current screen, which is kept (step 6b, D2).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Layout } from './components/Layout';
 import { DevBanner } from './dev/DevBanner';
 import { parseDevTuning } from './dev/devTuning';
@@ -13,7 +13,9 @@ import { CommentCaMarche } from './pages/CommentCaMarche';
 import { Contact } from './pages/Contact';
 import { isSectionHash, pageOfHash } from './pages/pages';
 import { Resultats } from './pages/Resultats';
-import { initialView, type ResultsView } from './pages/resultsView';
+import { CATEGORIES } from './pages/categories';
+import { PAGE, initialView, type ResultsView } from './pages/resultsView';
+import { sameFilters, type Filters } from './reco/filters';
 import { groupUnrecognized } from './pages/analysis';
 import { MESSAGES, readUpload, type UploadResult } from './pages/readUpload';
 import { RecoClient } from './reco/client';
@@ -32,12 +34,23 @@ const DEV_TUNING =
     ? parseDevTuning(window.location.search)
     : undefined;
 
+/** Step 8b (D2): « parce que t'as aimé » for the films of the caps shown only (the 3 categories;
+ * the 8 notches with the dev switch `?crans=8`). */
+const EXPLAIN_CAPS = DEV_TUNING?.allNotches ? undefined : CATEGORIES.map((c) => c.cap);
+
 export const EXAMPLE_URL = `${import.meta.env.BASE_URL}exemple/letterboxd-exemple.zip`;
 
 type Screen =
   | { name: 'accueil' }
   | { name: 'analyse'; summary: ImportSummary; unrecognized: Unrecognized[] }
-  | { name: 'resultats'; nEntries: number; reco: RecommendResult; view: ResultsView };
+  | {
+      name: 'resultats';
+      nEntries: number;
+      reco: RecommendResult;
+      view: ResultsView;
+      /** A recomputation with new filters is running (step 8b, D2). */
+      busy?: boolean;
+    };
 
 function currentHash(): string {
   return typeof window === 'undefined' ? '' : window.location.hash;
@@ -75,6 +88,8 @@ export function App({ client: injected }: { client?: RecoApi }) {
   const [status, setStatus] = useState<string>();
   const [error, setError] = useState<string>();
   const [hash, setHash] = useState(currentHash);
+  // step 8b (D2): only the last recomputation counts (an older answer is ignored)
+  const refineId = useRef(0);
   const page = pageOfHash(hash);
 
   useEffect(() => {
@@ -149,7 +164,11 @@ export function App({ client: injected }: { client?: RecoApi }) {
     setBusy(true);
     try {
       await client.confirm(choices);
-      const reco = await client.recommend({ n: N_RECOMMENDED, tuning: DEV_TUNING });
+      const reco = await client.recommend({
+        n: N_RECOMMENDED,
+        tuning: DEV_TUNING,
+        explainCaps: EXPLAIN_CAPS,
+      });
       if (reco.nHistory === 0) {
         setError(MESSAGES.noneRecognized);
         return;
@@ -165,6 +184,37 @@ export function App({ client: injected }: { client?: RecoApi }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  // step 8b (D2): new filters -> the worker recomputes the lists from the kept fold-in; the
+  // previous grid stays (aria-busy) until the answer
+  const refine = async (filters: Filters) => {
+    const id = ++refineId.current;
+    try {
+      const reco = await client.recommend({
+        n: N_RECOMMENDED,
+        tuning: DEV_TUNING,
+        filters,
+        explainCaps: EXPLAIN_CAPS,
+      });
+      if (id !== refineId.current) return;
+      setScreen((s) => (s.name === 'resultats' ? { ...s, reco, busy: false } : s));
+    } catch (err) {
+      if (id !== refineId.current) return;
+      setScreen((s) => (s.name === 'resultats' ? { ...s, busy: false } : s));
+      setError(`oups : ${(err as Error).message}`);
+    }
+  };
+
+  const onViewChange = (view: ResultsView) => {
+    if (screen.name !== 'resultats') return;
+    const changed = !sameFilters(view.filters, screen.view.filters);
+    setScreen({
+      ...screen,
+      view: changed ? { ...view, visible: PAGE } : view,
+      busy: changed || screen.busy,
+    });
+    if (changed) void refine(view.filters);
   };
 
   const backHome = () => {
@@ -201,7 +251,8 @@ export function App({ client: injected }: { client?: RecoApi }) {
           nEntries={screen.nEntries}
           reco={screen.reco}
           view={screen.view}
-          onViewChange={(view) => setScreen({ ...screen, view })}
+          onViewChange={onViewChange}
+          busy={screen.busy}
           stampEstimated={DEV_TUNING?.estimatedStamp}
           allNotches={DEV_TUNING?.allNotches}
         />

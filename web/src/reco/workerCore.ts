@@ -3,21 +3,24 @@
  * handler. Pure apart from the injected `fetch` (only /data/ files): testable in Node.
  * The user's export is read here and never leaves the worker except as the results below.
  */
-import { RECOMMENDATION_STATUSES, type MatchedEntry } from '../matching/history';
+import { RECOMMENDATION_STATUSES, type MatchedEntry, type UserFilm } from '../matching/history';
 import type { MatchStatus } from '../matching/match';
 import { profileDirectors, seriesOf } from './annotations';
-import { CANDIDATES, explain } from './explain';
+import { CANDIDATES, explain, type Explanation } from './explain';
+import { compileFilters, type Filters } from './filters';
 import {
   applyChoices,
   importExport,
   loadEngine,
-  recommend,
+  recommendFrom,
   summarize,
+  userProfile,
   type Choices,
   type Engine,
   type ExportInput,
   type ImportSummary,
   type Tuning,
+  type UserProfile,
 } from './engine';
 import type { FetchFn } from './modelFiles';
 
@@ -25,7 +28,17 @@ export type RecoRequest =
   | { id: number; type: 'init' }
   | { id: number; type: 'import'; input: ExportInput }
   | { id: number; type: 'confirm'; choices: Choices }
-  | { id: number; type: 'recommend'; n?: number; caps?: (number | null)[]; tuning?: Tuning };
+  | {
+      id: number;
+      type: 'recommend';
+      n?: number;
+      caps?: (number | null)[];
+      tuning?: Tuning;
+      /** Step 8b (D2): « affiner »; the fold-in is kept, only the lists are recomputed. */
+      filters?: Filters;
+      /** Step 8b (D2): caps whose films get « parce que t'as aimé » (those shown); all if absent. */
+      explainCaps?: (number | null)[];
+    };
 
 export type RecoResponse =
   | { id: number; ok: true; result: InitResult | ImportResult | ConfirmResult | RecommendResult }
@@ -120,6 +133,12 @@ export interface WorkerState {
   /** Entries used for the recommendations (imported + the user's choices). */
   matched?: MatchedEntry[];
   summary?: ImportSummary;
+  /** Step 8b (D2): the fold-in of `matched` (cleared by import and confirm), and the
+   * explanations already computed for it (they depend on the history only; null = none). */
+  user?: UserProfile;
+  /** JSON of the tuning the fold-in was made with. */
+  userTuning?: string;
+  explained?: Map<number, Explanation | null>;
 }
 
 export function filmCard(engine: Engine, item: number): FilmCard {
@@ -172,6 +191,7 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     state.imported = matched;
     state.matched = matched;
     state.summary = summary;
+    clearUser(state);
     const unrecognized = matched
       .map((m, index) => ({ m, index }))
       .filter(({ m }) => !RECOMMENDATION_STATUSES.includes(m.result.status))
@@ -191,29 +211,40 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
   }
   if (req.type === 'confirm') {
     state.matched = applyChoices(state.imported, req.choices);
+    clearUser(state);
     const s = summarize(
       { entries: [], warnings: state.summary.warnings, filesRead: state.summary.filesRead },
       state.matched,
     );
     return { counts: s.counts, nHistoryFilms: s.nHistoryFilms } satisfies ConfirmResult;
   }
-  const res = recommend(engine, state.matched, { n: req.n, caps: req.caps, tuning: req.tuning });
+  // step 8b (D2): the fold-in is kept between requests (same history, same tuning)
+  // (by value: postMessage hands the worker a fresh copy of `tuning` each time)
+  const tuningKey = JSON.stringify(req.tuning ?? null);
+  if (!state.user || state.userTuning !== tuningKey) {
+    state.user = userProfile(engine, state.matched, req.tuning);
+    state.userTuning = tuningKey;
+    state.explained = new Map();
+  }
+  const filter = req.filters ? compileFilters(req.filters, engine.catalog) : undefined;
+  const res = recommendFrom(engine, state.user, {
+    n: req.n,
+    caps: req.caps,
+    tuning: req.tuning,
+    filter,
+  });
   const distinct = [...new Set(res.positions.flatMap((p) => p.items))];
   const series = seriesOf(distinct, res.history, engine.catalog);
   const t0 = performance.now();
-  // step 8: an estimated film is never cited (its vector, close to the mean direction, is
-  // « close » to everything); it stays in the profile
-  const why = explain(
-    engine.model.vectors,
-    engine.model.dims,
-    res.history.filter((h) => !isEstimated(engine.catalog, h.item)),
-    // step 8 (R6e): no « parce que t'as aimé » on an estimated film's card (generic citations)
-    distinct.filter(
-      (item) =>
-        !series.has(item) && (req.tuning?.estimatedExplain || !isEstimated(engine.catalog, item)),
-    ),
-    { maxCited: CANDIDATES },
-  );
+  // step 8b (D2): explanations for the films of the caps shown only
+  const shown = req.explainCaps
+    ? [
+        ...new Set(
+          res.positions.filter((p) => req.explainCaps!.includes(p.cap)).flatMap((p) => p.items),
+        ),
+      ]
+    : distinct;
+  const why = explainCached(state, engine, res.history, shown, series, req.tuning);
   const explainMs = performance.now() - t0;
   return {
     nHistory: res.history.length,
@@ -244,6 +275,47 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
       }),
     })),
   } satisfies RecommendResult;
+}
+
+function clearUser(state: WorkerState) {
+  state.user = undefined;
+  state.userTuning = undefined;
+  state.explained = undefined;
+}
+
+/** « parce que t'as aimé » of `items`, computed once per film for the current history. */
+function explainCached(
+  state: WorkerState,
+  engine: Engine,
+  history: readonly UserFilm[],
+  items: readonly number[],
+  series: ReadonlyMap<number, string>,
+  tuning: Tuning | undefined,
+): Map<number, Explanation> {
+  const cache = (state.explained ??= new Map());
+  // step 8: an estimated film is never cited (its vector, close to the mean direction, is
+  // « close » to everything); it stays in the profile; step 8 (R6e): no « parce que t'as aimé »
+  // on an estimated film's card (generic citations)
+  const targets = items.filter(
+    (item) => !series.has(item) && (tuning?.estimatedExplain || !isEstimated(engine.catalog, item)),
+  );
+  const todo = targets.filter((i) => !cache.has(i));
+  if (todo.length) {
+    const got = explain(
+      engine.model.vectors,
+      engine.model.dims,
+      history.filter((h) => !isEstimated(engine.catalog, h.item)),
+      todo,
+      { maxCited: CANDIDATES },
+    );
+    for (const i of todo) cache.set(i, got.get(i) ?? null);
+  }
+  const out = new Map<number, Explanation>();
+  for (const i of targets) {
+    const w = cache.get(i);
+    if (w) out.set(i, w);
+  }
+  return out;
 }
 
 /** One request -> one response; errors become `{ ok: false, error }` (in French, for the UI). */

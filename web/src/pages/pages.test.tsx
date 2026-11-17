@@ -164,7 +164,8 @@ describe('App (fake worker)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'voir mes films' }));
     await screen.findByRole('list', { name: 'films recommandés' });
     expect(client.confirm).toHaveBeenCalledWith({ 3: 1 });
-    expect(client.recommend).toHaveBeenCalledWith({ n: 48 });
+    // step 8b (D2): explanations for the three categories' caps only
+    expect(client.recommend).toHaveBeenCalledWith({ n: 48, explainCaps: [null, 2000, 500] });
     expect(client.recommend).toHaveBeenCalledTimes(1);
 
     await userEvent.click(screen.getByRole('button', { name: '← changer de fichier' }));

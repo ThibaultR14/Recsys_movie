@@ -104,13 +104,15 @@ export function qualityPool(
   return { items, scores: adj };
 }
 
-/** First `n` ranked films under each cap, and the relative score of each position. */
+/** First `n` ranked films under each cap, and the relative score of each position. `base`: the
+ * base of the relative scores when `ranked` is filtered (step 8b, D2: the unfiltered one). */
 export function topByPosition(
   ranked: Int32Array,
   scores: Float64Array,
   popularity: Uint32Array,
   caps: readonly (number | null)[],
   n: number,
+  base?: number,
 ): PositionResult[] {
   const firstUnder = (cap: number | null, count: number): number[] => {
     const items: number[] = [];
@@ -125,7 +127,7 @@ export function topByPosition(
     const top = items.slice(0, RELATIVE_TOP);
     return top.length ? top.reduce((a, i) => a + scores[i]!, 0) / top.length : 0;
   };
-  const base = meanTop(firstUnder(null, RELATIVE_TOP));
+  const b = base ?? meanTop(firstUnder(null, RELATIVE_TOP));
   return caps.map((cap) => {
     const items = firstUnder(cap, Math.max(n, RELATIVE_TOP));
     const shown = items.slice(0, n);
@@ -133,9 +135,9 @@ export function topByPosition(
       cap,
       items: shown,
       scores: shown.map((i) => scores[i]!),
-      relativeScore: base > 0 ? meanTop(items) / base : 0,
-      relativeScores: shown.map((i) => (base > 0 ? scores[i]! / base : 0)),
-      base,
+      relativeScore: b > 0 ? meanTop(items) / b : 0,
+      relativeScores: shown.map((i) => (b > 0 ? scores[i]! / b : 0)),
+      base: b,
     };
   });
 }

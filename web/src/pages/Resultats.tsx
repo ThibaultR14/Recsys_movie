@@ -4,14 +4,16 @@ import { FilmGrid } from '../components/FilmGrid';
 import { HandNote } from '../components/HandNote';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Slider } from '../components/Slider';
-import { hasFarRow, isDocumentary } from '../components/cardRules';
+import { hasFarRow } from '../components/cardRules';
 import { capLabel } from '../components/sliderText';
 import type { RecommendResult } from '../reco/workerCore';
+import { activeCount } from '../reco/filters';
 import { availableCategories, categoryAt } from './categories';
 import {
   FAR_FROM_TASTE,
   FAR_ROWS_NOTE,
   NOTHING_HERE,
+  NOTHING_PASSES,
   profileNote,
   titlePhrase,
 } from './resultsText';
@@ -28,6 +30,8 @@ interface ResultatsProps {
   stampEstimated?: boolean;
   /** Dev only (`?crans=8`, step 8b D1): the 8-notch slider instead of the three categories. */
   allNotches?: boolean;
+  /** A recomputation with new filters is running (step 8b, D2): the grid stays, aria-busy. */
+  busy?: boolean;
 }
 
 /** Screen 3: recommendations, the three categories (step 8b, D1) and the annotations. */
@@ -38,6 +42,7 @@ export function Resultats({
   onViewChange,
   stampEstimated,
   allNotches,
+  busy,
 }: ResultatsProps) {
   const caps = useMemo(() => reco.positions.map((p) => p.cap), [reco]);
   const categories = useMemo(() => availableCategories(caps), [caps]);
@@ -48,14 +53,12 @@ export function Resultats({
     setOwn(next);
     onViewChange?.(next);
   };
-  const { index, visible, noDocs } = view;
+  const { index, visible, filters } = view;
   const docsId = useId();
 
   const position = reco.positions[index] ?? reco.positions[0]!;
-  const films = useMemo(
-    () => (noDocs ? position.films.filter((f) => !isDocumentary(f.genres)) : position.films),
-    [position, noDocs],
-  );
+  // step 8b (D2): the filters are applied by the worker, the lists arrive filtered
+  const films = position.films;
   const shown = films.slice(0, visible);
   const series = useMemo(
     () => new Map(shown.flatMap((f) => (f.seriesOf ? [[f.item, f.seriesOf] as const] : []))),
@@ -112,11 +115,13 @@ export function Resultats({
             <input
               id={docsId}
               type="checkbox"
-              checked={noDocs}
-              onChange={(e) => setView({ noDocs: e.target.checked })}
+              checked={filters.docs}
+              onChange={(e) =>
+                setView({ filters: { ...filters, docs: e.target.checked }, visible: PAGE })
+              }
               className="size-5 accent-pen"
             />
-            sans les documentaires
+            les documentaires
           </label>
         </div>
       </div>
@@ -125,22 +130,26 @@ export function Resultats({
         {live}
       </p>
 
-      {farRows && (
-        <HandNote as="p" rotate={-1.5} size={22}>
-          {FAR_ROWS_NOTE}
-        </HandNote>
-      )}
-      {shown.length > 0 ? (
-        <FilmGrid
-          films={shown}
-          seriesOf={series}
-          explain={!far}
-          profileDirectors={reco.profileDirectors}
-          stampEstimated={stampEstimated}
-        />
-      ) : (
-        <p className="m-0 text-[16px]">{NOTHING_HERE}</p>
-      )}
+      <div className="flex flex-col gap-14" aria-busy={busy ? 'true' : 'false'}>
+        {farRows && (
+          <HandNote as="p" rotate={-1.5} size={22}>
+            {FAR_ROWS_NOTE}
+          </HandNote>
+        )}
+        {shown.length > 0 ? (
+          <FilmGrid
+            films={shown}
+            seriesOf={series}
+            explain={!far}
+            profileDirectors={reco.profileDirectors}
+            stampEstimated={stampEstimated}
+          />
+        ) : (
+          <p className="m-0 text-[16px]">
+            {activeCount(filters) > 0 ? NOTHING_PASSES : NOTHING_HERE}
+          </p>
+        )}
+      </div>
 
       <p className="m-0 text-[14px] text-muted">
         les films récents sont placés d'après leur contenu : on les connaît moins bien.
