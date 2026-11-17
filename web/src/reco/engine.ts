@@ -505,6 +505,42 @@ export function userProfile(
   return { history, foldInFilms, scores, excluded, ranked, base };
 }
 
+/**
+ * « des films de… » (step 8b, D4, Q5): the not-seen films of a person, sorted by
+ * score' = score / s_max + γ q (+ the classics bonus of the trained films), as the pools of the
+ * grid; no cap, no calibration, no cap of the estimated films; the usual exclusions and the
+ * filters. s_max = the best score of the unfiltered candidates (the ∞ list).
+ */
+export function personFilms(
+  engine: Engine,
+  user: UserProfile,
+  films: readonly number[],
+  options: { n?: number; tuning?: Tuning; filter?: CompiledFilter } = {},
+): { items: number[]; scores: number[] } {
+  const { model } = engine;
+  const { tuning, filter } = options;
+  const q = itemQuality(engine, tuning);
+  const meta = model.meta.quality;
+  const gamma = tuning?.quality === false ? 0 : (tuning?.gamma ?? meta?.gamma ?? 0);
+  const scale = meta?.scale ?? 1;
+  const classics = classicsBonus(engine, tuning);
+  const top = user.ranked.length ? user.scores[user.ranked[0]!]! : 0;
+  const d = top > 0 ? top : 1;
+  const out = films
+    .filter((i) => model.recommendable[i] && !user.excluded.has(i) && (!filter || filter.passes(i)))
+    .map((i) => {
+      const s = user.scores[i]!;
+      const qi = q && q.length === model.nItems ? q[i]! / scale : 0;
+      let a = s / d + gamma * qi;
+      if (classics && i < classics.maxItem)
+        a += classics.gamma * Math.max(0, qi - classics.threshold);
+      return { i, a, s };
+    })
+    .sort((x, y) => y.a - x.a || x.i - y.i)
+    .slice(0, options.n ?? 48);
+  return { items: out.map((x) => x.i), scores: out.map((x) => x.s) };
+}
+
 /** Minimum number of fold-in films with a chosen genre for the calibration to follow it (D2);
  * below it, λ = 0. */
 export const MIN_GENRE_FOLDIN = 10;

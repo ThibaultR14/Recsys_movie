@@ -15,6 +15,8 @@ export interface ResultsView {
   filters: Filters;
   /** The « affiner » panel is open (kept while a page is open, like the rest). */
   refineOpen: boolean;
+  /** « des films de… » (step 8b, D4): the person shown instead of the recommendations. */
+  person: { index: number; name: string } | null;
 }
 
 export function initialView(reco: RecommendResult): ResultsView {
@@ -24,5 +26,6 @@ export function initialView(reco: RecommendResult): ResultsView {
     visible: PAGE,
     filters: NO_FILTERS,
     refineOpen: false,
+    person: null,
   };
 }

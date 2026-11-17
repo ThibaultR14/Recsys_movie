@@ -9,8 +9,10 @@
  */
 import type { Choices, ExportInput, Tuning } from './engine';
 import type { Filters } from './filters';
+import type { PersonSuggestion } from './people';
 import type {
   ConfirmResult,
+  PersonResult,
   ImportResult,
   InitResult,
   RecoRequest,
@@ -82,5 +84,20 @@ export class RecoClient {
     } = {},
   ): Promise<RecommendResult> {
     return this.send({ type: 'recommend', ...options });
+  }
+
+  /** « des films de… » (step 8b, D4): up to 8 people whose name starts with the query's words. */
+  people(query: string): Promise<PersonSuggestion[]> {
+    return this.send({ type: 'people', query });
+  }
+
+  /** The not-seen films of a person, sorted by score' (step 8b, D4). */
+  person(options: {
+    person: number;
+    n?: number;
+    tuning?: Tuning;
+    filters?: Filters;
+  }): Promise<PersonResult> {
+    return this.send({ type: 'person', ...options });
   }
 }

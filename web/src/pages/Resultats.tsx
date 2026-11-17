@@ -6,8 +6,11 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { Slider } from '../components/Slider';
 import { hasFarRow } from '../components/cardRules';
 import { capLabel } from '../components/sliderText';
-import type { RecommendResult } from '../reco/workerCore';
+import type { PersonResult, RecommendResult } from '../reco/workerCore';
+import { PersonSearch } from '../components/PersonSearch';
 import { RefinePanel } from '../components/RefinePanel';
+import { PEOPLE } from '../content/people';
+import type { PersonSuggestion } from '../reco/people';
 import { activeCount, type RefineOptions } from '../reco/filters';
 import { availableCategories, categoryAt } from './categories';
 import {
@@ -35,6 +38,9 @@ interface ResultatsProps {
   busy?: boolean;
   /** What « affiner » can offer (worker init, step 8b D3). */
   refine?: RefineOptions;
+  /** « des films de… » (step 8b, D4): suggestions, and the films of `view.person` once known. */
+  searchPeople?: (query: string) => Promise<PersonSuggestion[]>;
+  personFilms?: PersonResult;
 }
 
 /** Screen 3: recommendations, the three categories (step 8b, D1) and the annotations. */
@@ -47,6 +53,8 @@ export function Resultats({
   allNotches,
   busy,
   refine,
+  searchPeople,
+  personFilms,
 }: ResultatsProps) {
   const caps = useMemo(() => reco.positions.map((p) => p.cap), [reco]);
   const categories = useMemo(() => availableCategories(caps), [caps]);
@@ -57,11 +65,17 @@ export function Resultats({
     setOwn(next);
     onViewChange?.(next);
   };
-  const { index, visible, filters } = view;
+  const { index, visible, filters, person } = view;
 
   const position = reco.positions[index] ?? reco.positions[0]!;
+  // step 8b (D4): a person's films replace the grid (no cap, no « loin de tes goûts »)
+  const personGrid = person
+    ? personFilms?.person === person.index
+      ? personFilms.films
+      : []
+    : undefined;
   // step 8b (D2): the filters are applied by the worker, the lists arrive filtered
-  const films = position.films;
+  const films = personGrid ?? position.films;
   const shown = films.slice(0, visible);
   const series = useMemo(
     () => new Map(shown.flatMap((f) => (f.seriesOf ? [[f.item, f.seriesOf] as const] : []))),
@@ -71,19 +85,23 @@ export function Resultats({
   // « loin de tes goûts » (step 6b, Q4 revised): when at least half of a displayed row of 8 is
   // below the threshold, one note above the grid and the explanations stay; otherwise the
   // position-level rule of step 5 (note under the slider, explanations hidden).
-  const farRows = hasFarRow(
-    shown.map((f) => f.relativeScore ?? 1),
-    FAR_FROM_TASTE,
-  );
-  const far = !farRows && position.relativeScore < FAR_FROM_TASTE;
+  const farRows =
+    !person &&
+    hasFarRow(
+      shown.map((f) => f.relativeScore ?? 1),
+      FAR_FROM_TASTE,
+    );
+  const far = !person && !farRows && position.relativeScore < FAR_FROM_TASTE;
   const category = categoryAt(caps, index);
   const nFilters = activeCount(filters);
   const what = category
     ? `${category.label}${nFilters ? `, ${nFilters === 1 ? '1 filtre' : `${nFilters} filtres`}` : ''}`
     : '';
-  const live = category
-    ? `${what} : ${shown.length} films`
-    : `${shown.length} films${position.cap === null ? '' : `, ${capLabel(position.cap)}`}`;
+  const live = person
+    ? `${PEOPLE.title(person.name)} : ${shown.length} films`
+    : category
+      ? `${what} : ${shown.length} films`
+      : `${shown.length} films${position.cap === null ? '' : `, ${capLabel(position.cap)}`}`;
 
   return (
     <div className="flex flex-col gap-14 pt-6">
@@ -107,7 +125,7 @@ export function Resultats({
             <CategoryPicker
               categories={categories}
               index={index}
-              onChange={(i) => setView({ index: i })}
+              onChange={(i) => setView({ index: i, person: null })}
             />
           )}
           {far && (
@@ -122,6 +140,12 @@ export function Resultats({
             onOpenChange={(open) => setView({ refineOpen: open })}
             onChange={(f) => setView({ filters: f, visible: PAGE })}
           />
+          {searchPeople && (
+            <PersonSearch
+              search={searchPeople}
+              onPick={(p) => setView({ person: { index: p.person, name: p.name }, visible: PAGE })}
+            />
+          )}
         </div>
       </div>
 
@@ -130,6 +154,20 @@ export function Resultats({
       </p>
 
       <div className="flex flex-col gap-14" aria-busy={busy ? 'true' : 'false'}>
+        {person && (
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <h2 className="m-0 text-[clamp(22px,2.6vw,28px)] leading-[1.35] font-normal">
+              {PEOPLE.title(person.name)}
+            </h2>
+            <button
+              type="button"
+              className="min-h-11 cursor-pointer border-0 bg-transparent px-0 text-[15px] text-ink underline hover:text-pen focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pen"
+              onClick={() => setView({ person: null, visible: PAGE })}
+            >
+              ← {PEOPLE.back}
+            </button>
+          </div>
+        )}
         {farRows && (
           <HandNote as="p" rotate={-1.5} size={22}>
             {FAR_ROWS_NOTE}
@@ -144,7 +182,9 @@ export function Resultats({
             stampEstimated={stampEstimated}
           />
         ) : (
-          <p className="m-0 text-[16px]">{nFilters > 0 ? NOTHING_PASSES : NOTHING_HERE}</p>
+          <p className="m-0 text-[16px]">
+            {nFilters > 0 ? NOTHING_PASSES : person ? PEOPLE.allSeen : NOTHING_HERE}
+          </p>
         )}
       </div>
 

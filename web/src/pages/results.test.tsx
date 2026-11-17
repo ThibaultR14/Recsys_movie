@@ -288,6 +288,7 @@ describe('Resultats', () => {
           visible: 8,
           filters: { ...NO_FILTERS, genres: ['Horror'] },
           refineOpen: false,
+          person: null,
         }}
       />,
     );
@@ -408,6 +409,7 @@ describe('« affiner » (step 8b, D3)', () => {
       visible: 8,
       filters: NO_FILTERS,
       refineOpen: false,
+      person: null,
     });
     return (
       <Resultats
@@ -564,5 +566,7 @@ function fakeApi(): RecoApi {
     }),
     confirm: async () => ({ counts: {} as never, nHistoryFilms: 3 }),
     recommend: async () => reco(),
+    people: async () => [],
+    person: async ({ person }) => ({ person, name: 'x', films: [] }),
   };
 }

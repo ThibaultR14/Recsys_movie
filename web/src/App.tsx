@@ -2,7 +2,7 @@
 // brings back the home screen. The model loads in the Web Worker as soon as the page opens.
 // Pages (« comment ça marche », « à propos », « contact ») open from the URL anchor, over the
 // current screen, which is kept (step 6b, D2).
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Layout } from './components/Layout';
 import { DevBanner } from './dev/DevBanner';
 import { parseDevTuning } from './dev/devTuning';
@@ -20,10 +20,13 @@ import { groupUnrecognized } from './pages/analysis';
 import { MESSAGES, readUpload, type UploadResult } from './pages/readUpload';
 import { RecoClient } from './reco/client';
 import type { Choices, ImportSummary } from './reco/engine';
-import type { InitResult, RecommendResult, Unrecognized } from './reco/workerCore';
+import type { InitResult, PersonResult, RecommendResult, Unrecognized } from './reco/workerCore';
 
 /** What the interface needs from the worker (a RecoClient, or a fake one in tests). */
-export type RecoApi = Pick<RecoClient, 'init' | 'importExport' | 'confirm' | 'recommend'>;
+export type RecoApi = Pick<
+  RecoClient,
+  'init' | 'importExport' | 'confirm' | 'recommend' | 'people' | 'person'
+>;
 
 /** Number of films computed per slider position (8 cards, « encore des films » up to 48). */
 export const N_RECOMMENDED = 48;
@@ -50,6 +53,8 @@ type Screen =
       view: ResultsView;
       /** A recomputation with new filters is running (step 8b, D2). */
       busy?: boolean;
+      /** « des films de… » (step 8b, D4): the films of `view.person`. */
+      personFilms?: PersonResult;
     };
 
 function currentHash(): string {
@@ -91,6 +96,8 @@ export function App({ client: injected }: { client?: RecoApi }) {
   const [refineOptions, setRefineOptions] = useState<InitResult['refine']>();
   // step 8b (D2): only the last recomputation counts (an older answer is ignored)
   const refineId = useRef(0);
+  const personId = useRef(0);
+  const searchPeople = useCallback((q: string) => client.people(q), [client]);
   const page = pageOfHash(hash);
 
   useEffect(() => {
@@ -208,15 +215,36 @@ export function App({ client: injected }: { client?: RecoApi }) {
     }
   };
 
+  // step 8b (D4): the films of a person, with the filters; only the last request counts
+  const showPerson = async (person: number, filters: Filters) => {
+    const id = ++personId.current;
+    try {
+      const personFilms = await client.person({
+        person,
+        n: N_RECOMMENDED,
+        tuning: DEV_TUNING,
+        filters,
+      });
+      if (id !== personId.current) return;
+      setScreen((s) => (s.name === 'resultats' ? { ...s, personFilms } : s));
+    } catch (err) {
+      if (id === personId.current) setError(`oups : ${(err as Error).message}`);
+    }
+  };
+
   const onViewChange = (view: ResultsView) => {
     if (screen.name !== 'resultats') return;
     const changed = !sameFilters(view.filters, screen.view.filters);
+    const newPerson = view.person?.index !== screen.view.person?.index;
     setScreen({
       ...screen,
       view: changed ? { ...view, visible: PAGE } : view,
       busy: changed || screen.busy,
+      ...(view.person ? {} : { personFilms: undefined }),
     });
     if (changed) void refine(view.filters);
+    if (view.person && (changed || newPerson)) void showPerson(view.person.index, view.filters);
+    if (!view.person) personId.current++; // a pending answer for a left person is ignored
   };
 
   const backHome = () => {
@@ -256,6 +284,8 @@ export function App({ client: injected }: { client?: RecoApi }) {
           onViewChange={onViewChange}
           busy={screen.busy}
           refine={refineOptions}
+          searchPeople={searchPeople}
+          personFilms={screen.personFilms}
           stampEstimated={DEV_TUNING?.estimatedStamp}
           allNotches={DEV_TUNING?.allNotches}
         />

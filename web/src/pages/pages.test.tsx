@@ -271,6 +271,8 @@ function inProcessClient(): RecoApi {
     importExport: (input) => call({ type: 'import', input }),
     confirm: (choices) => call({ type: 'confirm', choices }),
     recommend: (o = {}) => call({ type: 'recommend', ...o }),
+    people: (query) => call({ type: 'people', query }),
+    person: (o) => call({ type: 'person', ...o }),
   };
 }
 
@@ -302,6 +304,35 @@ describe.skipIf(!ready)('App on the real files, example export', () => {
     await userEvent.click(screen.getByRole('button', { name: 'voir mes films' }));
     const grid = await screen.findByRole('list', { name: 'films recommandés' }, { timeout: 10000 });
     expect(within(grid).getAllByRole('listitem')).toHaveLength(8);
+
+    // « des films de… » (step 8b, D4): a combobox; arrows, Enter; the person's grid
+    const box = screen.getByRole('combobox', { name: 'des films de…' });
+    expect(box).toHaveAttribute('placeholder', 'un réalisateur, une actrice…');
+    expect(box).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.type(box, 'kubri');
+    const list = await screen.findByRole('listbox');
+    expect(box).toHaveAttribute('aria-expanded', 'true');
+    const first = within(list).getAllByRole('option')[0]!;
+    expect(first).toHaveTextContent(/^Stanley Kubrickréalise.* · \d+ films$/);
+    expect(box).toHaveAttribute('aria-activedescendant', first.id);
+    await userEvent.keyboard('{Escape}');
+    expect(box).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.keyboard('{ArrowDown}{ArrowUp}{Enter}');
+    const title = await screen.findByRole(
+      'heading',
+      { level: 2, name: "les films de Stanley Kubrick que t'as pas vus" },
+      { timeout: 10000 },
+    );
+    expect(title).toBeInTheDocument();
+    const cards = within(screen.getByRole('list', { name: 'films recommandés' })).getAllByRole(
+      'listitem',
+    );
+    expect(cards.length).toBeGreaterThan(0);
+    expect(cards.length).toBeLessThanOrEqual(8);
+    for (const c of cards) expect(c).toHaveTextContent('Stanley Kubrick');
+    await userEvent.click(screen.getByRole('button', { name: '← revenir à tes recos' }));
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /^les moins connus/ })).toBeChecked();
   }, 30000);
 
   it('IMDb example CSV dropped -> title fallback to verify, unticked; series apart -> results', async () => {

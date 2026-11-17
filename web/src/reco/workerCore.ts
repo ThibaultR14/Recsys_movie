@@ -12,6 +12,7 @@ import {
   applyChoices,
   importExport,
   loadEngine,
+  personFilms,
   recommendFrom,
   summarize,
   userProfile,
@@ -23,6 +24,7 @@ import {
   type UserProfile,
 } from './engine';
 import type { FetchFn } from './modelFiles';
+import { buildPeopleIndex, searchPeople, type PeopleIndex, type PersonSuggestion } from './people';
 
 export type RecoRequest =
   | { id: number; type: 'init' }
@@ -38,10 +40,31 @@ export type RecoRequest =
       filters?: Filters;
       /** Step 8b (D2): caps whose films get « parce que t'as aimé » (those shown); all if absent. */
       explainCaps?: (number | null)[];
+    }
+  /** Step 8b (D4): suggestions of « des films de… » (no history needed). */
+  | { id: number; type: 'people'; query: string }
+  /** Step 8b (D4): the not-seen films of a person (index into catalog.json `people`). */
+  | {
+      id: number;
+      type: 'person';
+      person: number;
+      n?: number;
+      tuning?: Tuning;
+      filters?: Filters;
     };
 
 export type RecoResponse =
-  | { id: number; ok: true; result: InitResult | ImportResult | ConfirmResult | RecommendResult }
+  | {
+      id: number;
+      ok: true;
+      result:
+        | InitResult
+        | ImportResult
+        | ConfirmResult
+        | RecommendResult
+        | PersonSuggestion[]
+        | PersonResult;
+    }
   | { id: number; ok: false; error: string };
 
 export interface InitResult {
@@ -128,6 +151,13 @@ export interface RecommendResult {
   }[];
 }
 
+/** « des films de <nom> que t'as pas vus » (step 8b, D4). */
+export interface PersonResult {
+  person: number;
+  name: string;
+  films: RecommendedFilm[];
+}
+
 export interface WorkerState {
   engine?: Engine;
   /** Entries as matched at import (choices are always applied to these). */
@@ -141,6 +171,8 @@ export interface WorkerState {
   /** JSON of the tuning the fold-in was made with. */
   userTuning?: string;
   explained?: Map<number, Explanation | null>;
+  /** Step 8b (D4): built on the first search. */
+  people?: PeopleIndex;
 }
 
 export function filmCard(engine: Engine, item: number): FilmCard {
@@ -213,6 +245,10 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
       }));
     return { summary, unrecognized } satisfies ImportResult;
   }
+  if (req.type === 'people') {
+    state.people ??= buildPeopleIndex(engine.catalog);
+    return searchPeople(state.people, req.query);
+  }
   if (!state.matched || !state.imported || !state.summary) {
     throw new Error('aucun historique importé');
   }
@@ -234,6 +270,26 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     state.explained = new Map();
   }
   const filter = req.filters ? compileFilters(req.filters, engine.catalog) : undefined;
+  if (req.type === 'person') {
+    state.people ??= buildPeopleIndex(engine.catalog);
+    const { items, scores } = personFilms(
+      engine,
+      state.user,
+      state.people.films[req.person] ?? [],
+      {
+        n: req.n,
+        tuning: req.tuning,
+        filter,
+      },
+    );
+    const series = seriesOf(items, state.user.history, engine.catalog);
+    const why = explainCached(state, engine, state.user.history, items, series, req.tuning);
+    return {
+      person: req.person,
+      name: state.people.names[req.person] ?? '',
+      films: items.map((item, k) => card(engine, item, scores[k]!, undefined, series, why)),
+    } satisfies PersonResult;
+  }
   const res = recommendFrom(engine, state.user, {
     n: req.n,
     caps: req.caps,
@@ -262,26 +318,34 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
     positions: res.positions.map((p) => ({
       cap: p.cap,
       relativeScore: p.relativeScore,
-      films: p.items.map((item, k) => {
-        const film: RecommendedFilm = {
-          ...filmCard(engine, item),
-          score: p.scores[k]!,
-          relativeScore: p.relativeScores[k]!,
-        };
-        const s = series.get(item);
-        if (s) film.seriesOf = s;
-        const w = why.get(item);
-        if (w && !s) {
-          film.because = {
-            kind: w.kind,
-            items: w.items,
-            titles: w.items.map((i) => engine.catalog.title[i] ?? ''),
-          };
-        }
-        return film;
-      }),
+      films: p.items.map((item, k) =>
+        card(engine, item, p.scores[k]!, p.relativeScores[k]!, series, why),
+      ),
     })),
   } satisfies RecommendResult;
+}
+
+function card(
+  engine: Engine,
+  item: number,
+  score: number,
+  relativeScore: number | undefined,
+  series: ReadonlyMap<number, string>,
+  why: ReadonlyMap<number, Explanation>,
+): RecommendedFilm {
+  const film: RecommendedFilm = { ...filmCard(engine, item), score };
+  if (relativeScore !== undefined) film.relativeScore = relativeScore;
+  const s = series.get(item);
+  if (s) film.seriesOf = s;
+  const w = why.get(item);
+  if (w && !s) {
+    film.because = {
+      kind: w.kind,
+      items: w.items,
+      titles: w.items.map((i) => engine.catalog.title[i] ?? ''),
+    };
+  }
+  return film;
 }
 
 function clearUser(state: WorkerState) {
