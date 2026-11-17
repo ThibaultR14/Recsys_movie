@@ -1,7 +1,8 @@
 # Étape 8b — UX de la page des résultats
 
-> Version 0.1 (17 novembre 2026) : **spec à valider par Thibault**, rien n'est codé. Décisions de départ données par Thibault le 17 novembre 2026 (D1-D7), reprises telles quelles ; D8 et D9 sont proposées par Claude Code (à valider) ; les points qui sortent des décisions ou qui demandent un choix sont dans la section 7.
-> Étape insérée après l'étape 8 (films récents) et **avant les volontaires de l'étape 7**. L'étape 8 reste à l'arrêt visuel de R6e (test une seule fois et vrai téléphone à faire à sa clôture) : l'étape 8b ne touche ni au modèle ni à l'évaluation hors ligne, sauf si D7 change la portée du bonus des classiques (section 7, Q1).
+> Version 0.2 (17 novembre 2026) : **validée par Thibault**, avec ses réponses à la section 7 (tranché) : D7 tranchée en U0 puis test unique de clôture de l'étape 8 avant U1 (Q1) ; noms des acteurs par `/person/{id}`, sans relancer la collecte (Q2) ; table `people` par identifiant TMDB, `director_ids` (D4, D5) ; IMAX hors du filtre (Q3) ; seul un genre change la cible de la calibration (Q4) ; grille d'une personne triée par `score'`, sans « loin de tes goûts » ni plafond des films estimés (Q5) ; v3 refusée (Q6) ; seuil de D7 (Q7) ; D8 et D9 validées, quatre textes de Claude Web posés (D9).
+> Version 0.1 (17 novembre 2026) : spec à valider. Décisions de départ données par Thibault le 17 novembre 2026 (D1-D7) ; D8 et D9 proposées par Claude Code.
+> Étape insérée après l'étape 8 (films récents) et **avant les volontaires de l'étape 7**. L'étape 8 reste à l'arrêt visuel de R6e. **Ordre (Q1)** : U0 → décision de Thibault sur le bonus des classiques → **test unique de clôture de l'étape 8** avec le réglage retenu (clôture complète de l'étape 8 : section 5, documents, `contexte/`) → U1. Rien de l'étape 8b ne change les entrées de ce test : en U0, **aucune régénération** de `catalog.json`, `embeddings.bin`, `popularity.bin` ni `model-meta.json` (sauf le bonus, si Thibault le décide).
 > Les **textes de l'interface** nouveaux viennent de Claude Web : le code prévoit des emplacements (D9).
 
 ---
@@ -10,8 +11,8 @@
 
 - Relis ce document au début de chaque sous-étape. Les décisions de la section 3 ne changent pas sans accord.
 - Une sous-étape à la fois (U0 → U7), en suivant « Quand s'arrêter » de `CLAUDE.md`. **Arrêts obligatoires** :
-  - fin de **U0** (mesures : bonus des classiques, durée, acteurs, temps d'un recalcul filtré) ;
-  - en **U0**, **avant tout appel TMDB** (noms des acteurs, voir 2.3) ;
+  - fin de **U0** (mesures : bonus des classiques, durée, acteurs, temps d'un recalcul filtré), puis clôture de l'étape 8 avant U1 (Q1) ;
+  - **avant les ~10 000 appels TMDB** des noms d'acteurs (feu vert de Thibault sur les chiffres de taille de U0, Q2) ;
   - en **U2**, si un recalcul filtré dépasse 100 ms en médiane (repli de D2) ;
   - en **U4**, si les acteurs dépassent le budget de taille (D4) ;
   - fin de **U6** (essai à l'écran, textes de Claude Web) ;
@@ -54,7 +55,7 @@
 Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 
 - les fiches de l'étape 8 (`recent_films.py`, `slim_full`) gardent **`runtime`** et **`original_language`** : D5 ne demande aucun appel TMDB pour la durée et la langue (couverture exacte en U0) ;
-- **`cast` ne garde que les identifiants TMDB des 10 premiers acteurs, sans leurs noms** (`slim_full` : `"cast": [p.get("id") for p in cast]`). Les **noms** des acteurs de D4 ne sont donc **pas** dans le cache : il faut un appel TMDB, ce qui demande un arrêt (CLAUDE.md : « arrête-toi avant tout appel TMDB » pour la durée ; même règle appliquée aux acteurs). Options en section 7, Q2.
+- **`cast` ne garde que les identifiants TMDB des 10 premiers acteurs, sans leurs noms** (`slim_full` : `"cast": [p.get("id") for p in cast]`). Les **noms** des acteurs de D4 ne sont donc **pas** dans le cache : il faut un appel TMDB par acteur (Q2, option a). Les **réalisateurs**, eux, y sont en `{id, name}` : on a leur identifiant TMDB.
 - Première mesure (lecture du cache, 17 novembre 2026 ; détail par statut en U0) :
   - fiches en cache : **26 330 / 26 377** films de `catalog.json` ; `runtime` > 0 : **26 305** (99,7 %) ;
   - acteurs présents dans **≥ 3 films** parmi leurs 5 premiers rôles : **10 018** acteurs, **82 506** paires film-acteur ;
@@ -83,7 +84,7 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 - **Départ sur « les moins connus »** (cran 2 000, inchangé par rapport à l'étape 5).
 - Le **moteur calcule toujours les 8 crans** (`recommend({ n: 48 })`, inchangé) ; l'interface n'en montre que trois. Table des catégories dans `web/src/pages/categories.ts` (nom, sous-libellé, cran, morceau du nom de fichier de D6), jamais de cran en dur ailleurs ; si un cran de la table est absent de `model-meta.json`, la catégorie est masquée (test).
 - **Interrupteur dev `?crans=8`** : remet le curseur à 8 crans (`Slider.tsx` gardé), `npm run dev` seulement, lu dans `devTuning.ts` (absent du build, vérifié dans `dist/` comme les autres).
-- **Inchangés** (ils dépendent du cran affiché et des rangées de 8) : `titlePhrase` (∞ → « voilà des classiques qui devraient te plaire. », 2 000 → « voilà un mélange de classiques et de découvertes. », 500 → « voilà huit films que t'as sûrement jamais vus. »), les tags, le tampon « ✱ pépite », « loin de tes goûts » (les deux règles).
+- **Inchangés** (ils dépendent du cran affiché et des rangées de 8) : `titlePhrase` (∞ → « voilà des valeurs sûres qui devraient te plaire. » depuis la v0.2, D9 ; 2 000 → « voilà un mélange de classiques et de découvertes. », 500 → « voilà huit films que t'as sûrement jamais vus. »), les tags, le tampon « ✱ pépite », « loin de tes goûts » (les deux règles).
 - Le texte `aria-live` dit le **nom de la catégorie** : « les moins connus : 8 films » (avec filtres : « les moins connus, 2 filtres : 8 films »).
 - **Modifie** é5 D5 (curseur natif à 8 crans) pour l'interface de production ; noté dans `contexte/decisions.md` (ancienne règle marquée ✗ avec la raison : 8 crans peu lisibles, les crans voisins se ressemblent).
 
@@ -96,14 +97,14 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 - Pendant le calcul : la **grille précédente reste visible**, avec `aria-busy="true"` sur la zone des résultats ; pas de spinner plein écran ; les puces restent utilisables.
 - **Score relatif** (« loin de tes goûts ») : la base reste la moyenne des 20 premiers films **à ∞ sans filtre** (le goût de l'utilisateur ne change pas parce qu'il filtre). Conséquence assumée : une liste très filtrée peut s'afficher « loin de tes goûts » ; c'est honnête.
 - **Critère** : **médiane ≤ 100 ms par recalcul** (`reco-bench`, nouveau cas « recalcul filtré », sur l'export A et sur l'export de 3 000 films, filtres types : un genre, une époque, genre + langue), à vérifier sur un vrai téléphone. **Si le critère échoue : arrêt**, et proposition du repli : garder **150 films calibrés par cran** (vivier élargi en conséquence) et filtrer **dans la page**, sans recalcul.
-- **Calibration quand un genre est filtré** : la cible `p` devient la part des genres parmi les films **du fold-in** qui ont au moins un des genres choisis (même pondération par le signal qu'aujourd'hui) ; **λ = 0** si le fold-in en contient **moins de 10**. Le filtre **prime toujours** : la calibration ne choisit que parmi les films qui passent le filtre. Les filtres époque, durée, langue et documentaires **ne changent pas la cible** (proposition, Q4).
+- **Calibration quand un genre est filtré** : la cible `p` devient la part des genres parmi les films **du fold-in** qui ont au moins un des genres choisis (même pondération par le signal qu'aujourd'hui) ; **λ = 0** si le fold-in en contient **moins de 10**. Le filtre **prime toujours** : la calibration ne choisit que parmi les films qui passent le filtre. Les filtres époque, durée, langue et documentaires **ne changent pas la cible** (profil de tout l'historique, Q4 ; à revoir à l'essai, section 6).
 - **Pas de parité Python exigée** pour les filtres (aucune évaluation hors ligne) : tests Vitest (prédicats, cible de calibration filtrée, seuil de 10, liste sans filtre identique à `recommend`, 48 films par cran quand il y en a assez).
 
 ### D3. Panneau « affiner »
 
 - Bouton **« affiner »** sous les catégories, avec le nombre de filtres actifs : « affiner (2) ». Il déplie un panneau **sous les catégories** (disclosure : `<button aria-expanded aria-controls>`, pas de fenêtre modale, pas de piège du focus).
 - Chaque section est un **groupe de puces à bascule** (`<button aria-pressed>`, groupe nommé par son titre) ; dans une section, les choix s'additionnent (**OU**) ; d'une section à l'autre, ils se cumulent (**ET**) :
-  - **« genres »** : genres MovieLens du catalogue, libellés français en minuscules (table dans `web/src/content/`), **sauf « documentaire »** (voir « on montre aussi ») et sauf « IMAX » (Q3). Libellés proposés : action, aventure, animation, jeunesse, comédie, policier, drame, fantastique, film noir, horreur, comédie musicale, mystère, romance, science-fiction, thriller, guerre, western ;
+  - **« genres »** : genres MovieLens du catalogue, libellés français en minuscules (table dans `web/src/content/`), **sauf « documentaire »** (voir « on montre aussi ») et sauf « IMAX » (format de projection, pas un genre ; il reste dans les données et la calibration, inchangées, Q3). Libellés proposés : action, aventure, animation, jeunesse, comédie, policier, drame, fantastique, film noir, horreur, comédie musicale, mystère, romance, science-fiction, thriller, guerre, western ;
   - **« époque »** : « avant 1960 », « années 60 », « années 70 », « années 80 », « années 90 », « années 2000 », « années 2010 », « années 2020 » (année de `catalog.json` ; années 2020 = 2020 et après ; un film sans année ne passe aucun filtre d'époque) ;
   - **« durée »** : « moins d'1h40 » (< 100 min), « 1h40 à 2h15 » (100 à 135 min), « plus de 2h15 » (> 135 min) ; un film sans durée connue ne passe aucun filtre de durée ;
   - **« langue »** : langue d'origine TMDB, noms par `Intl.DisplayNames('fr', { type: 'language' })` en minuscules ; seulement les langues qui ont **au moins 30 films recommandables** (compté dans le site, à partir du catalogue), triées par nombre de films ; les **8 premières** visibles, puis « autres langues » (disclosure) qui déplie la suite. Codes TMDB hors norme : `xx` (sans langue) jamais proposé ; `cn` (cantonais chez TMDB) et tout code que `Intl.DisplayNames` ne connaît pas passent par une petite table de secours (ou sont omis), testée ;
@@ -117,20 +118,22 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 
 - Un champ `<input>` avec `<label>` « des films de… », placeholder « un réalisateur, une actrice… », et des **suggestions accessibles** (motif combobox ARIA 1.2 : `role="combobox"`, `aria-expanded`, `aria-controls` vers un `role="listbox"`, `aria-activedescendant`, flèches haut et bas, Entrée choisit, Échap ferme), sur les **noms du catalogue** (réalisateurs et acteurs).
   - Correspondance : sans accents ni casse, début de mot (« kuro » → Akira Kurosawa), 8 suggestions au plus, triées par nombre de films du catalogue ; chaque suggestion dit le rôle (« réalisateur », « acteur ») et le nombre de films ; aucun appel réseau, aucun flou automatique.
-  - Homonymes : les noms sont regroupés par nom affiché (pas d'identifiant de personne embarqué pour les réalisateurs aujourd'hui) ; risque accepté, compté en U0.
-- Le choix d'un nom affiche, **à la place de la grille**, ses films que l'utilisateur **n'a pas vus**, **triés par score** (score du modèle, exclusions habituelles : vus, non recommandables, ambigus, flou, versions), **sans plafond de catégorie**, au plus **48**, 8 par 8 comme ailleurs, avec le titre « les films de <nom> que t'as pas vus » et un bouton **« revenir à tes recos »** (la catégorie et les filtres d'avant sont retrouvés). Calcul dans le worker (les scores y sont), message `person`.
-- Les **filtres d'affiner s'appliquent aussi**. Pas de calibration (la liste est celle d'une personne) ; tampon, tags et « parce que t'as aimé » s'appliquent comme sur la grille ; « loin de tes goûts » n'est pas affiché (proposition, Q5).
-- Aucun film non vu : « t'as déjà vu tous ses films qu'on connaît. » (texte à confirmer par Claude Web).
-- **Réalisateurs** : déjà dans `catalog.json`.
-- **Acteurs** : les **5 premiers acteurs** des fiches TMDB de l'étape 8, seulement ceux présents dans **au moins 3 films du catalogue** (films estimés compris). **Mesure d'abord le coût** : les acteurs sont gardés si `catalog.json` prend **au plus +250 Ko gzip** et que `web/public/data/` reste **≤ 4,0 Mo gzip** au total. Sinon : **arrêt** avec les chiffres. ⚠️ Les noms ne sont pas dans le cache (2.3) : arrêt avant l'appel TMDB (Q2).
+  - **Personnes par identifiant TMDB** (pas par nom affiché) : une table `people` commune aux réalisateurs et aux acteurs ; une même personne réalisatrice et actrice = **une seule entrée** (ses films des deux rôles), deux homonymes = **deux entrées**. En cas d'homonymes, la suggestion affiche en plus les **années de ses films** (« 1950-1965 ») pour les distinguer. Nombre de noms affichés qui correspondent à plus d'un identifiant : compté en U0.
+- Le choix d'une personne affiche, **à la place de la grille**, ses films que l'utilisateur **n'a pas vus**, **triés par `score'`** (score / s_max + γ·q + bonus des classiques, comme la grille : à goût égal, ses films les mieux reçus passent avant ; exclusions habituelles : vus, non recommandables, ambigus, flou, versions), **sans plafond de catégorie**, au plus **48**, 8 par 8 comme ailleurs, avec le titre « les films de <nom> que t'as pas vus » et un bouton **« revenir à tes recos »** (la catégorie et les filtres d'avant sont retrouvés). Calcul dans le worker (les scores y sont), message `person`.
+- Les **filtres d'affiner s'appliquent aussi**. Pas de calibration (la liste est celle d'une personne) ; **pas de « loin de tes goûts »** (choix explicite de l'utilisateur) ; **pas de plafond des films estimés** (le film récent d'un réalisateur qu'on cherche a toute sa place) ; les autres règles des films estimés restent (**pas de « ✱ pépite »**, **pas de « parce que t'as aimé »** sur leur carte) ; tampon, tags et « parce que t'as aimé » s'appliquent sinon comme sur la grille (Q5).
+- Aucun film non vu : « t'as déjà vu tous ses films qu'on connaît. » (texte de Claude Web).
+- **Réalisateurs** : noms déjà dans `catalog.json` ; leurs identifiants TMDB sont dans le cache (`directors` `{id, name}` des fiches de l'étape 8).
+- **Acteurs** : les **5 premiers acteurs** des fiches TMDB de l'étape 8, seulement ceux présents dans **au moins 3 films du catalogue** (films estimés compris). **Mesure d'abord le coût** : les acteurs sont gardés si `catalog.json` prend **au plus +250 Ko gzip** et que `web/public/data/` reste **≤ 4,0 Mo gzip** au total. Sinon : **arrêt** avec les chiffres.
+- **Noms des acteurs (Q2, option a)** : un appel **`/person/{id}`** par acteur gardé (~10 000 appels), mis en cache dans `pipeline/data/cache/tmdb/person/`, qui ne garde **que `{id, name}`** (ni biographie, ni date ou lieu de naissance, rien d'autre) ; mêmes règles de cache que les autres (ignoré par git). **Pas de collecte forcée des fiches** : elle réécrirait le cache qui sert à placer les films estimés (votes, mots-clés, distribution ont bougé chez TMDB) et changerait les vecteurs de l'étape 8. La taille se mesure d'abord en U0 avec des **noms factices de longueur réaliste** ; les appels ne partent qu'**après le feu vert de Thibault**.
+- `slim_full` garde désormais `{id, name}` pour le cast (comme pour les réalisateurs), **sans relancer la collecte** : pour le rafraîchissement mensuel (étape 7, section 6). Les lecteurs du cache (`recent_films.py table`, `estimate`) acceptent les deux formes (identifiant seul ou `{id, name}`), test `pytest`.
 
 ### D5. Données ajoutées à `catalog.json` (v4)
 
 - `site_catalog.py` écrit, à partir du cache TMDB (fiches de l'étape 8), **sans aucun appel réseau** :
   - **langue d'origine** : table `languages` (codes ISO 639-1 tels que TMDB les donne) + `language` (un indice par film, `null` si inconnue) ;
   - **durée** : `runtime` (minutes, entier, `null` si inconnue ou 0) ; **mesurer d'abord la couverture** (2.3) ; si `runtime` manquait dans le cache, arrêt avant tout appel TMDB (il y est) ;
-  - **acteurs** (D4) : table `people` (noms) + `cast` (par film, indices des acteurs gardés, ordre des rôles) ; les réalisateurs restent en noms (`directors`), inchangés.
-- `catalog-verify` vérifie les nouvelles colonnes (longueurs, indices valides, aucune colonne `imdbds_`) ; tests `pytest` ; type `CatalogFile` et lecture côté web (v3 refusée avec un message clair, ou lue sans les filtres : proposé « refusée », comme les autres changements de version).
+  - **personnes** (D4) : table `people` = `{ id, name }` par **identifiant TMDB** (réalisateurs et acteurs gardés, une entrée par personne) ; `director_ids` (par film, indices dans `people`, en parallèle de `directors`) et `cast` (par film, indices des acteurs gardés, ordre des rôles). La colonne **`directors` (noms) reste telle quelle** pour le code existant (profil, tag « encore un… »).
+- `catalog-verify` vérifie les nouvelles colonnes (longueurs, indices valides, `director_ids` cohérent avec `directors`, aucune colonne `imdbds_`) ; tests `pytest` ; type `CatalogFile` et lecture côté web : **v3 refusée** avec le message habituel (Q6).
 - Tout ce qui est ajouté vient de **TMDB** (licence : aucune donnée des datasets IMDb).
 - **Aucun appel réseau nouveau depuis le site.**
 - Régénérer `web/public/data/` avec les commandes habituelles : `export.py catalog --out web`, `export.py verify --out web`, puis `npm test`. Le modèle, `embeddings.bin`, `popularity.bin` et `foldin_cases.json` ne changent pas.
@@ -151,9 +154,9 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
   - **score médian des 8 premiers** (score relatif, comme R6e) à ∞, 2 000 et 500, avec et sans `?classiques=0` (`tuning-report.ts`) ;
   - **recouvrement des 10 premiers à ∞** entre A, B et l'exemple synthétique, avec et sans le bonus (nombre de films communs par paire).
 - **Chiffres seulement**, aucun titre dans le dépôt.
-- Si le bonus fait **nettement baisser** les scores à 2 000 ou 500 (proposé : médiane des 8 premiers en baisse de plus de 10 %, ou un film de plus sous le seuil « loin de tes goûts » dans la première rangée), **proposer de le réserver aux crans ∞ à 10 000, et s'arrêter**.
+- Si le bonus fait **nettement baisser** les scores à 2 000 ou 500 (Q7 : **médiane des 8 premiers en baisse de plus de 10 %, ou un film de plus sous 0,04 dans la première rangée**, à 2 000 ou à 500), **proposer de le réserver aux crans ∞ à 10 000, et s'arrêter**. Dans tous les cas, **arrêt** en fin de U0 : Thibault décide, puis test unique de l'étape 8 avec le réglage retenu (Q1).
 
-### D8. État de l'écran des résultats (proposée)
+### D8. État de l'écran des résultats (validée)
 
 - `ResultsView` devient `{ index, visible, filters, person, refineOpen }` : `index` = cran affiché (une des trois catégories, ou un des 8 crans avec `?crans=8`), `filters` = `{ genres, decades, durations, languages, docs }` (ensembles de clés, `docs: true` par défaut), `person` = nom choisi ou `null`. Gardé par `App` quand une page s'ouvre ; rien n'est stocké (ni URL, ni stockage du navigateur).
 - Ordre du moteur avec filtres : fold-in (gardé) → scores (gardés) → exclusions (+ films qui ne passent pas les filtres) → vivier par cran (γ·q, bonus des classiques) → calibration (cible filtrée si un genre est choisi) → plafond des films estimés → 48 films par cran → explications, séries.
@@ -162,8 +165,13 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 
 - Les textes nouveaux passent par `web/src/content/` (`pending()` jusqu'à ce que Claude Web les rédige) :
   - « comment ça marche » : la section `#curseur` devient **les catégories** (trois catégories, un plafond chacune, « moins de 2 000 notes ») ; nouvelle section **« affiner »** (filtres, recalcul, calibration qui suit le genre choisi) ; une phrase sur **« des films de… »** et une sur le **téléchargement** (fichier fabriqué chez toi, rien n'est envoyé) ;
-  - les textes qui parlent de « cran » ou de « curseur » à l'écran des résultats : « plus rien à ce cran-là : essaie un peu plus à gauche. » (sans filtre ; proposé : « plus rien ici : essaie « les valeurs sûres ». »), `FAR_ROWS_NOTE` « (à ce cran, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites) » (proposé : « (ici, on s'éloigne… ») ;
   - « on garde rien » : une phrase sur le CSV (fabriqué dans ton navigateur) si Claude Web le juge utile.
+  Ces textes-là arrivent à l'arrêt de U6.
+- **Textes déjà rédigés par Claude Web** (17 novembre 2026), posés tels quels en U1 (U4 pour la recherche) :
+  - sans filtre, plus aucun film : « plus rien ici : essaie « les valeurs sûres ». » (remplace « plus rien à ce cran-là : essaie un peu plus à gauche. ») ;
+  - `FAR_ROWS_NOTE` : « (ici, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites) » ;
+  - recherche sans film non vu : « t'as déjà vu tous ses films qu'on connaît. » ;
+  - `titlePhrase` à ∞ (et ≥ 10 000) : « voilà des valeurs sûres qui devraient te plaire. » (cohérent avec le nom de la catégorie ; à ∞ il n'y a pas que des classiques) ; **modifie** é5 D5 ; tests de `titlePhrase` mis à jour.
 - Les textes donnés par Thibault dans cette spec (libellés, sous-libellés, messages) sont posés tels quels.
 
 ---
@@ -174,9 +182,10 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 
 1. **D7** : scores médians des 8 premiers (∞, 2 000, 500) avec et sans le bonus, sur B (ou A) ; recouvrement des 10 premiers à ∞ entre A, B et l'exemple, avec et sans le bonus. Si le bonus fait nettement baisser 2 000 ou 500 : proposition « bonus de ∞ à 10 000 seulement ».
 2. **Durée et langue** : couverture de `runtime` et de `original_language` dans le cache (films entraînés, films estimés, recommandables) ; répartition dans les 3 tranches de durée et les 8 époques ; langues avec ≥ 30 films recommandables, et codes que `Intl.DisplayNames('fr')` ne sait pas nommer.
-3. **Acteurs** : nombre d'acteurs gardés (5 premiers rôles, ≥ 3 films), nombre de paires film-acteur, homonymes de noms (réalisateurs et acteurs) ; **taille** de `catalog.json` v4 avec et sans acteurs (gzip niveau 9, même sérialisation que `site_catalog.py`) et total de `web/public/data/`. Les noms manquent dans le cache : **arrêt avant l'appel TMDB** (Q2) ; la taille se mesure d'abord avec des noms factices de longueur réaliste si Thibault préfère trancher avant l'appel.
-4. **Temps d'un recalcul filtré prototypé** (script de mesure, hors interface) : `reco-bench` avec fold-in gardé, sur l'export A et l'export de 3 000 films ; filtres : un genre, une époque, genre + langue, sans documentaires ; médiane de 21.
-- Résultats en section 5 ; commit, push, **arrêt**.
+3. **Acteurs** : nombre d'acteurs gardés (5 premiers rôles, ≥ 3 films), nombre de paires film-acteur, personnes par identifiant (réalisateurs et acteurs, une personne des deux rôles comptée une fois), **noms affichés qui correspondent à plus d'un identifiant** ; **taille** de `catalog.json` v4 avec et sans acteurs (gzip niveau 9, même sérialisation que `site_catalog.py`), avec des **noms factices de longueur réaliste** pour les acteurs (longueurs tirées de celles des réalisateurs), et total de `web/public/data/`. **Arrêt avant les ~10 000 appels** (feu vert de Thibault).
+4. **Temps d'un recalcul filtré prototypé** (script de mesure, hors interface) : moteur avec fold-in gardé, sur l'export A et l'export de 3 000 films ; filtres : un genre, une époque, genre + langue, sans documentaires ; médiane de 21.
+- **Rien n'est régénéré** en U0 (`catalog.json`, `embeddings.bin`, `popularity.bin`, `model-meta.json` intacts : entrées du test de l'étape 8, Q1) ; les mesures de taille se font sur une copie en mémoire.
+- Résultats en section 5 ; commit, push, **arrêt**. Ensuite : décision sur le bonus, **test unique et clôture de l'étape 8**, puis U1.
 
 ### U1 — Catégories (D1)
 
@@ -197,7 +206,7 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 
 ### U4 — Recherche « des films de… » (D4, D5 acteurs) — **arrêt** si le budget de taille est dépassé
 
-- Acteurs dans `catalog.json` v4 (après la décision de Q2), index des noms côté web, `PersonSearch` (combobox), message `person`, grille de la personne, « revenir à tes recos ».
+- Appels `/person/{id}` (après le feu vert de U0), cache `person/` (`{id, name}` seulement), `slim_full` avec `{id, name}` pour le cast (sans relancer la collecte, lecteurs compatibles avec les deux formes) ; `people`, `director_ids`, `cast` dans `catalog.json` v4, index des noms côté web (homonymes : années des films), `PersonSearch` (combobox), message `person`, grille de la personne, « revenir à tes recos ».
 - Vitest + RTL : combobox au clavier (flèches, Entrée, Échap), sans accents ni casse, début de mot, 8 suggestions, films vus exclus, filtres appliqués, au plus 48, retour aux recos avec catégorie et filtres.
 - Taille de `catalog.json` et total de `web/public/data/` en section 5.
 
@@ -245,7 +254,7 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 
 ## 6. À reporter
 
-- **Rafraîchissement mensuel** (GitHub Actions, étape 7) : il doit aussi rafraîchir la durée, la langue et les acteurs (et garder les noms des acteurs dans le cache, si Q2 retient un changement de `slim_full`).
+- **Rafraîchissement mensuel** (GitHub Actions, étape 7) : il doit aussi rafraîchir la durée, la langue et les acteurs ; `slim_full` garde désormais `{id, name}` pour le cast (Q2), donc les fiches rafraîchies porteront les noms et le cache `person/` deviendra inutile pour elles.
 - **Filtre par pays** (idée de la feuille de route) : `origin_country` est dans le cache ; pas au MVP de 8b.
 - **Filtres dans l'URL** (lien partageable « mes pépites d'horreur des années 70 ») : rien n'est stocké aujourd'hui, l'URL ne contient pas l'historique ; à rediscuter.
 - **Calibration selon l'époque ou la langue choisie** (Q4) : si l'essai montre des listes déséquilibrées.
@@ -255,16 +264,14 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 
 ---
 
-## 7. Questions pour la validation
+## 7. Questions pour la validation — tranché (Thibault, 17 novembre 2026)
 
-1. **Q1 — D7 et le test de l'étape 8** : si U0 propose de réserver le bonus des classiques aux crans ∞ à 10 000, la décision change `model-meta.json` et donc ce que mesure le test unique de clôture de l'étape 8 (pas encore fait). Proposition : trancher Q1 en U0, puis faire le test de l'étape 8 avec le réglage retenu.
-2. **Q2 — Noms des acteurs** (le cache n'a que les identifiants, 2.3). Options :
-   - **(a)** un appel `/person/{id}` par acteur gardé (seulement ceux de ≥ 3 films : **~10 000 appels**, 2.3), mis en cache dans `data/cache/tmdb/person/` ; le moins d'appels ;
-   - **(b)** garder `{id, name}` des acteurs dans `slim_full` et relancer `recent_films.py collect` en forçant les fiches (~26 000 appels, ~20 min, comme l'étape 8) ; plus simple pour le rafraîchissement mensuel ;
-   - **(c)** pas d'acteurs au MVP de 8b (réalisateurs seulement).
-   Recommandation : **(b)**, parce que le rafraîchissement mensuel (étape 7) devra de toute façon garder les noms, et qu'une seule source évite les décalages ; (a) si Thibault veut le moins d'appels possible maintenant.
-3. **Q3 — « IMAX »** n'est pas un genre (format de projection) : le retirer du filtre des genres (proposé) ?
-4. **Q4 — Cible de la calibration** pour les filtres époque, durée, langue : inchangée (proposé), ou filtrée comme pour un genre (part des genres parmi les films de l'historique de cette époque ou de cette langue, λ = 0 sous 10) ?
-5. **Q5 — Recherche « des films de… »** : pas de « loin de tes goûts » sur la grille d'une personne (proposé : c'est un choix explicite de l'utilisateur, la note serait du bruit) ; tri par score du modèle brut (proposé) ou par `score'` (avec γ·q et le bonus des classiques, comme la grille) ?
-6. **Q6 — Version de `catalog.json`** : refuser une v3 côté web (proposé, comme les changements précédents) plutôt que la lire sans filtres de durée et de langue.
-7. **Q7 — Seuil « nettement » de D7** : baisse de plus de 10 % de la médiane des 8 premiers, ou un film de plus sous 0,04 dans la première rangée (proposé) ?
+1. **Q1 — D7 et le test de l'étape 8** : D7 se tranche en U0 (arrêt avec les chiffres). Ordre : U0 → décision de Thibault sur le bonus → test unique de clôture de l'étape 8 avec le réglage retenu (clôture complète de l'étape 8 : section 5, documents, `contexte/`) → U1. En U0, aucune régénération de `catalog.json`, `embeddings.bin`, `popularity.bin` ni `model-meta.json`, sauf le bonus si Thibault le décide. → en-tête, U0, D7.
+2. **Q2 — Noms des acteurs** : **option (a)**, pas (b) : une collecte forcée réécrirait le cache qui sert à placer les films estimés (votes, mots-clés, distribution ont bougé chez TMDB) et changerait les vecteurs de l'étape 8 avant son test. Un appel `/person/{id}` par acteur gardé (~10 000), cache `data/cache/tmdb/person/` réduit à `{id, name}` ; `slim_full` garde `{id, name}` pour le cast sans relancer la collecte (rafraîchissement mensuel, section 6) ; taille mesurée d'abord avec des noms factices, appels après le feu vert. **Homonymes** : table `people` par identifiant TMDB (réalisateurs et acteurs), `director_ids` en parallèle de `directors` (inchangée) ; années des films dans la suggestion en cas d'homonymes ; compte en U0. → D4, D5, U0, U4.
+3. **Q3 — « IMAX »** : hors du filtre des genres (il reste dans les données et la calibration). → D3.
+4. **Q4 — Cible de la calibration** : seul un genre choisi la change ; époque, durée, langue et documentaires gardent la cible de tout l'historique ; à revoir à l'essai (section 6). → D2.
+5. **Q5 — Recherche « des films de… »** : pas de « loin de tes goûts » ; tri par **`score'`** (γ·q et bonus des classiques) ; pas de plafond des films estimés ; ni « ✱ pépite » ni « parce que t'as aimé » sur un film estimé. → D4.
+6. **Q6 — Version de `catalog.json`** : v3 refusée côté web, message habituel. → D5.
+7. **Q7 — Seuil de D7** : baisse de plus de 10 % de la médiane des 8 premiers, ou un film de plus sous 0,04 dans la première rangée, à 2 000 ou à 500. → D7.
+
+D8 et D9 validées ; quatre textes de Claude Web posés (D9), les autres à l'arrêt de U6.
