@@ -1,6 +1,6 @@
 # Design system — direction « C · Fanzine »
 
-> Version 0.2 (8 novembre 2026 : thème sombre, étape 6b). Version 0.1 : 6 novembre 2026. Référence visuelle : `maquette-C-fanzine.html` (ouvrir dans un navigateur).
+> Version 0.3 (17 novembre 2026 : catégories, panneau « affiner », recherche, téléchargement, étape 8b). Version 0.2 (8 novembre 2026 : thème sombre, étape 6b). Version 0.1 : 6 novembre 2026. Référence visuelle : `maquette-C-fanzine.html` (ouvrir dans un navigateur).
 > Nom de travail du site : **Pépite** (temporaire).
 
 ---
@@ -154,11 +154,25 @@ Mentions obligatoires (ne pas reformuler) :
 ### Grille de résultats
 - `grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))`, espacement 56 px vertical × 36 px horizontal (large, pour laisser respirer les rotations).
 
-### Curseur connu ↔ pépite
-- `<input type="range">` natif, `accent-color` stylo bleu, hauteur de zone tactile 44 px.
-- Libellé au-dessus en gras : « plutôt connu ou plutôt pépite ? ».
-- Deux étiquettes sous le curseur : « les classiques » à gauche, « les trucs que personne connaît » à droite.
-- Les résultats se mettent à jour **en direct** pendant le glissement.
+### Catégories connu ↔ pépite (étape 8b, remplace le curseur)
+- Trois boutons radio dans un `<fieldset>` ; `<legend>` en gras : « plutôt connu ou plutôt pépite ? ».
+- Chaque bouton est le `<label>` d'un vrai `<input type="radio">` visuellement masqué : fond surface, bordure 2 px trait (encre au survol), coins 3 px, ≥ 44 px ; nom en 16 px (« les valeurs sûres », « les moins connus », « les pépites »), sous-libellé en encre pâle 13 px (« tout », « moins de 2 000 notes », « moins de 500 notes »).
+- Choix courant : bordure encre, nom en gras **souligné au stylo bleu** (trait ondulé). Focus : anneau stylo bleu. Flèches du clavier natives.
+- Les trois tiennent sur une ligne dès que la place le permet, sinon ils passent à la ligne (360 px).
+- L'ancien curseur (`<input type="range">`, 8 crans) ne reste qu'en mode dev (`?crans=8`).
+
+### Panneau « affiner » (étape 8b)
+- Bouton secondaire « affiner » / « affiner (2) » (bordure encre 2 px, 44 px, gras 15 px) qui déplie le panneau en dessous, **sans fenêtre modale** ; le panneau est marqué par un filet vertical de 2 px (trait) à gauche.
+- Sections : titre en gras 15 px (« genres », « époque », « durée », « langue », « on montre aussi »), puis des **puces à bascule** : coins 3 px, bordure 2 px trait sur fond surface ; enfoncée = **encre pleine, texte papier** (s'inverse avec le thème) ; ≥ 44 px.
+- Filtres actifs sous les catégories : puces « × horreur » en **bordure pointillée** encre, et un lien souligné « tout effacer ».
+
+### Recherche « des films de… » (étape 8b)
+- Champ de 44 px, bordure encre 2 px, coins 3 px, placeholder en encre pâle ; libellé en gras au-dessus.
+- Suggestions dans une liste sous le champ (surface, bordure encre, ombre « photo ») : nom en 16 px, puis « réalise · 12 films » en encre pâle 13 px ; suggestion active = encre pleine, texte papier.
+- Grille d'une personne : titre de section « les films de <nom> que t'as pas vus » et lien souligné « ← revenir à tes recos ».
+
+### Télécharger la liste (étape 8b)
+- Bouton secondaire « télécharger la liste (csv) » sous la grille, phrase d'aide en encre pâle 14 px dessous : « compatible avec l'import de listes de Letterboxd. ».
 
 ### Boutons
 - Bouton principal : fond blanc, bordure 2 px encre, coins 3 px, texte gras 16 px, hauteur 48 px.

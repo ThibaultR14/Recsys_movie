@@ -20,6 +20,9 @@ export function CommentCaMarche() {
       <PageSection id="curseur" title={T.curseur.titre}>
         <Paragraphs items={T.curseur.paragraphes} />
       </PageSection>
+      <PageSection id="affiner" title={T.affiner.titre}>
+        <Paragraphs items={T.affiner.paragraphes} />
+      </PageSection>
       <PageSection id="recents" title={T.recents.titre}>
         <Paragraphs items={T.recents.paragraphes} />
       </PageSection>

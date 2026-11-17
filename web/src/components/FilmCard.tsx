@@ -87,8 +87,12 @@ export function FilmCard({ film, tag, seriesOf, because }: FilmCardProps) {
         />
       )}
       <span className="flex flex-col gap-0.5">
-        <span className="text-[16px] leading-tight font-bold">{film.title}</span>
-        <span className="text-[13px] text-muted">{byline(film.directors, film.year)}</span>
+        <span className="text-[16px] leading-tight font-bold" data-testid="card-title">
+          {film.title}
+        </span>
+        <span className="text-[13px] text-muted" data-testid="byline">
+          {byline(film.directors, film.year)}
+        </span>
         {film.publicRating && <PublicRating {...film.publicRating} />}
         {film.estimated && <EstimatedRating mean10={film.tmdbRating?.mean10 ?? null} />}
         {isDocumentary(film.genres) && (

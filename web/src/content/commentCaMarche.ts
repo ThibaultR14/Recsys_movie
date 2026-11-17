@@ -1,5 +1,7 @@
 // « comment ça marche », detailed (D2). One entry per paragraph or list item. Texts: Claude Web
 // (R7). `{en:…}` marks English words (rendered with lang="en", see RichText).
+import { pending } from './pending';
+
 export const COMMENT_CA_MARCHE = {
   titre: 'comment ça marche.',
   modele: {
@@ -29,19 +31,32 @@ export const COMMENT_CA_MARCHE = {
     paragraphes: [
       "laissé tout seul, le modèle a tendance à s'enfermer dans un genre quand on descend vers les films peu connus. chez certains, ce sont les films d'animation qui finissent par prendre toute la liste.",
       "alors on rééquilibre : on regarde quelle part de tes films a chaque genre, et on fait en sorte que ta liste la respecte à peu près. si un film sur dix que t'as vus est un film d'animation, t'en auras à peu près un sur dix, pas neuf.",
-      "à gauche du curseur, on rééquilibre à peine : la liste ne dérive presque pas. à partir de 5 000 notes, on rééquilibre fort, parce que c'est là qu'elle dérive.",
+      // step 8b (D9): the slider became three categories; text to rewrite by Claude Web
+      pending('ccm.equilibre.categories'),
       "les genres viennent de MovieLens. l'idée vient d'une méthode de recherche, la calibration.",
     ],
   },
+  // step 8b (D9): « les catégories » (the cumulative cap stays); title and cap paragraph to rewrite
   curseur: {
-    titre: 'le curseur',
+    titre: pending('ccm.categories.titre'),
     paragraphes: [
       "sans rien faire, un modèle de reco propose surtout les films que tout le monde a vus : ils sont proches de beaucoup de gens. c'est ce qu'on appelle le biais de popularité.",
-      "le curseur pose un plafond. à chaque cran, on ne garde que les films vus moins d'un certain nombre de fois (20 000, 10 000… jusqu'à 200), toujours classés selon tes goûts. tout à gauche, pas de plafond.",
+      pending('ccm.categories.plafond'),
       'pour savoir combien de gens ont vu un film, on combine les notes MovieLens et les votes TMDB, parce que MovieLens sous-compte les films récents.',
       // step 8 (R3d): from 2019 on, rank of the TMDB votes within the release year
       "pour les films sortis depuis 2019, MovieLens compte trop peu de monde. alors on regarde leur rang dans leur année sur tmdb, et on leur donne la popularité d'un film du même rang dans une année normale (de 2010 à 2018). un succès de 2024 compte comme un succès de 2015 : il ne passe pas pour une pépite.",
       "le tampon « ✱ pépite » signale le film le moins connu d'une rangée, quand il l'est nettement plus que les autres.",
+    ],
+  },
+  // step 8b (D9): « affiner » (filters, recomputation, calibration that follows a chosen genre),
+  // « des films de… » and the CSV download. Texts: Claude Web (U6).
+  affiner: {
+    titre: pending('ccm.affiner.titre'),
+    paragraphes: [
+      pending('ccm.affiner.filtres'),
+      pending('ccm.affiner.calibration'),
+      pending('ccm.affiner.recherche'),
+      pending('ccm.affiner.telechargement'),
     ],
   },
   // step 8: recent films (TMDB films missing from MovieLens, vector estimated from their
@@ -86,6 +101,8 @@ export const COMMENT_CA_MARCHE = {
       "une seule exception : si tu passes en thème clair, ton navigateur s'en souvient. rien d'autre",
       "les affiches viennent de tmdb : leurs serveurs voient passer les affiches affichées, rien d'autre",
       'le formulaire de contact ouvre ta messagerie : ton message part de chez toi, pas de chez nous',
+      // step 8b (D9): optional, if Claude Web finds it useful (the CSV is made in the browser)
+      pending('ccm.onGardeRien.csv'),
     ],
   },
   limites: {

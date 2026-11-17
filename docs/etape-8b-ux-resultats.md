@@ -1,5 +1,6 @@
 # Étape 8b — UX de la page des résultats
 
+> **⏸ Arrêt visuel U6 (17 novembre 2026)** : U1 à U6 faits (section 5) ; attendus : essai à l'écran et sur un vrai téléphone, textes de Claude Web (8 emplacements `pending()`, liste en U6), import d'un CSV dans Letterboxd. Ensuite U7 (clôture).
 > Version 0.3 (17 novembre 2026, décisions de Thibault et de Claude Web à l'arrêt de U0) : bonus des classiques **gardé à tous les crans** (D7) ; étape 8 close (commit `e7d4384`, test évalué une fois avec ce réglage) ; acteurs **5 rôles, ≥ 3 films**, `directors` **plus écrit** dans `catalog.json` v4 (reconstruit par le site), seule règle de taille : `web/public/data/` ≤ 4,0 Mo gzip (D4, D5) ; feu vert pour les appels `/person/{id}` ; explications **seulement pour les crans affichés**, avec un cache dans le worker (D2).
 > Version 0.2 (17 novembre 2026) : **validée par Thibault**, avec ses réponses à la section 7 (tranché) : D7 tranchée en U0 puis test unique de clôture de l'étape 8 avant U1 (Q1) ; noms des acteurs par `/person/{id}`, sans relancer la collecte (Q2) ; table `people` par identifiant TMDB, `director_ids` (D4, D5) ; IMAX hors du filtre (Q3) ; seul un genre change la cible de la calibration (Q4) ; grille d'une personne triée par `score'`, sans « loin de tes goûts » ni plafond des films estimés (Q5) ; v3 refusée (Q6) ; seuil de D7 (Q7) ; D8 et D9 validées, quatre textes de Claude Web posés (D9).
 > Version 0.1 (17 novembre 2026) : spec à valider. Décisions de départ données par Thibault le 17 novembre 2026 (D1-D7) ; D8 et D9 proposées par Claude Code.
@@ -380,6 +381,46 @@ Les données de U3 (durée, langue) et de U4 (personnes) sont faites en une seul
 - **Grille d'une personne** (`personFilms`, message `person`) : ses films pas vus, mêmes exclusions que la grille, triés par **`score'`** (score / s_max + γ·q + bonus des classiques, s_max = meilleur score à ∞), **sans plafond de catégorie, sans calibration, sans plafond des films estimés**, au plus 48, 8 par 8. Les filtres d'« affiner » s'appliquent. Pas de « loin de tes goûts » ; un film estimé n'a ni tampon ni « parce que t'as aimé » (règles de la grille) ; explications par le cache du worker. Titre « les films de <nom> que t'as pas vus », bouton « ← revenir à tes recos » (catégorie et filtres retrouvés) ; choisir une catégorie revient aussi aux recos. Aucun film non vu : « t'as déjà vu tous ses films qu'on connaît. ».
 - **Combobox** (`PersonSearch`, motif ARIA 1.2) : `role="combobox"`, `aria-expanded`, `aria-controls` vers un `role="listbox"`, `aria-activedescendant`, flèches haut et bas, Entrée choisit, Échap ferme (puis vide le champ). Le clic sur une suggestion se fait au `mousedown`, pour que le champ garde le focus. Seule la dernière requête compte, côté suggestions comme côté grille.
 - Tests : Vitest **330** (index et suggestions sur une fixture synthétique : rôles, années, homonymes, accents, début de mot, 8 au plus ; vrais fichiers : films pas vus, au plus 48, filtres, acteurs cherchables ; parcours de bout en bout sur l'exemple : combobox au clavier, grille de la personne, retour aux recos). Les noms cités sont ceux du catalogue (Stanley Kubrick, Tom Hanks), jamais ceux d'un export réel. `lint` sans avertissement (aides pures de « affiner » déplacées dans `refineChips.ts`).
+
+### U5 — Téléchargement (17 novembre 2026)
+
+- `web/src/pages/download.ts` : `listCsv` (UTF-8 sans BOM, virgule sans espace, guillemets RFC 4180 seulement quand il le faut, guillemet doublé, fin de ligne CRLF, colonnes `tmdbID,imdbID,Title,Year`, identifiant ou année vide si inconnu), `csvFileName` (date **locale**), `personPart` / `slug` (« Agnès Varda » → `films-de-agnes-varda`), `saveText` (`Blob` + `URL.createObjectURL` + lien `download`, URL libérée ensuite : **aucune requête**).
+- Bouton « télécharger la liste (csv) » sous la grille, phrase d'aide « compatible avec l'import de listes de Letterboxd. » (le nom n'est que là). Contenu : les **48 films** de la catégorie et des filtres en cours, ou de la grille d'une personne, **dans l'ordre affiché**, même quand 8 cartes seulement sont à l'écran. `FilmCard.imdbId` (catalogue, MovieLens `links.csv` ou TMDB) ajouté pour le CSV.
+- Tests : contenu **exact** d'un CSV synthétique (virgule et guillemets dans un titre, retour à la ligne, `imdbID` et année vides, pas de BOM) ; noms de fichier (trois catégories, accents, apostrophe, espaces doublés) ; bouton : nom `pepite-moins-connus-AAAA-MM-JJ.csv`, 49 lignes (en-tête + 48), ordre affiché.
+
+### U6 — Tests, textes, essai à l'écran (17 novembre 2026) — ⏸ arrêt visuel
+
+**Playwright** (`web/e2e/resultats-8b.spec.ts`, nouveau ; **15/15** avec les journeys existants) :
+- parcours « affiner » : genre + époque → recalcul (`aria-busy` revenu à `false`), « affiner (2) », annonce « les moins connus, 2 filtres : 8 films », puces « × », années des cartes bien dans l'époque choisie, filtres gardés d'une catégorie à l'autre, « tout effacer » ;
+- **téléchargement** : fichier `pepite-moins-connus-AAAA-MM-JJ.csv` relu sur le disque (pas de BOM, en-tête, **49 lignes**, premier titre = première carte), puis `pepite-films-de-stanley-kubrick-….csv` depuis la grille d'une personne ;
+- **recherche** : combobox (`aria-expanded`), Entrée → grille « les films de Stanley Kubrick que t'as pas vus », retour aux recos ;
+- **aucune requête hors du site** sauf les affiches TMDB (recalcul, recherche, téléchargement compris), **rien de stocké** ; **axe : 0 violation grave dans les deux thèmes**, panneau ouvert et suggestions ouvertes ;
+- **téléphone 360 px** : panneau ouvert, « autres langues » dépliées, suggestions ouvertes : pas de défilement horizontal, toutes les zones ≥ 44 px (un radio ou une case compte par son `<label>`), axe dans les deux thèmes ;
+- temps : changement de catégorie **médiane 33 ms** (max 55) ; modèle prêt 1 531 ms dans ce passage (bruit de la machine, voir U3) ; analyse 18 ms.
+- `FilmCard` : `data-testid` `card-title` et `byline` (aucun changement visible).
+
+**Textes** : emplacements `pending()` posés pour Claude Web (le test des textes en attente est **non bloquant** jusqu'à U7, `BLOCKING = false`) :
+
+| emplacement | quoi |
+|---|---|
+| `ccm.categories.titre` | titre de la section `#curseur` (« le curseur » → les catégories) |
+| `ccm.categories.plafond` | le paragraphe du plafond : trois catégories, un plafond cumulatif chacune (tout, moins de 2 000, moins de 500 notes) |
+| `ccm.equilibre.categories` | « à gauche du curseur, on rééquilibre à peine… » à redire avec les catégories (λ 0,1 à ∞, 0,9 à 2 000 et 500) |
+| `ccm.affiner.titre` + `ccm.affiner.filtres` | nouvelle section `#affiner` : les filtres (genre, époque, durée, langue, documentaires ; OU dans une section, ET entre sections), le recalcul |
+| `ccm.affiner.calibration` | quand un genre est choisi, l'équilibre des genres suit ce genre dans ton historique (rien sous 10 films) |
+| `ccm.affiner.recherche` | « des films de… » : réalisateurs et acteurs (5 premiers rôles, ≥ 3 films), films pas vus, classés pour toi |
+| `ccm.affiner.telechargement` | le CSV, fabriqué dans ton navigateur, rien n'est envoyé ; import de listes de Letterboxd |
+| `ccm.onGardeRien.csv` | facultatif : une ligne sur le CSV dans « on garde rien » (à supprimer si inutile) |
+
+À relire aussi : la ligne « le curseur : les travaux sur le biais de popularité… » de `#inspirations`, et le rôle des suggestions sans genre (« réalise », « joue », U4).
+
+**À juger à l'écran** (`cd web && npm run dev`, déposer l'export ; rien n'est stocké) :
+1. les trois catégories : libellés, sous-libellés, choix courant souligné, sur téléphone ;
+2. le panneau « affiner » : ordre des sections, puces enfoncées (encre pleine), puces « × » en pointillés, « autres langues » ;
+3. la recherche : suggestions (« réalise · 12 films », années des homonymes), grille d'une personne, retour ;
+4. le téléchargement : import du CSV dans une liste Letterboxd (nombre de films reconnus seulement, critère de la spec) ;
+5. **vrai téléphone** : temps d'un recalcul filtré (critère ≤ 100 ms, D2) et « modèle prêt » (comparaison avec R6e, U3) ;
+6. pour comparer avec l'ancien curseur : `http://localhost:5173/?crans=8`.
 
 **Noms des acteurs** (D4, appels lancés pendant U1) : `pipeline/people.py fetch`. **10 018** acteurs gardés, **10 018** appels `/person/{id}` en 501 s, aucun nouvel essai, **aucun nom manquant** ; cache `data/cache/tmdb/person/` réduit à `{id, name}`. Avant les appels, `people.py stats` a vérifié que les noms des réalisateurs reconstruits depuis `people` + `director_ids` sont **identiques à ceux de la v3 pour chaque film** (11 noms sans identifiant sur leur film ont leur propre entrée). Taille réelle et homonymes chez les acteurs : en U4.
 

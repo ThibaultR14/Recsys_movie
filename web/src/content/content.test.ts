@@ -8,8 +8,9 @@ import * as nav from './nav';
 import { isPending, pending } from './pending';
 import * as theme from './theme';
 
-/** No placeholder may remain (step 8: the texts on the recent films were given at R6e). */
-const BLOCKING = true;
+/** Step 8b (D9): placeholders for the texts of « les catégories », « affiner », the search and the
+ * CSV, given by Claude Web at the U6 stop; blocking again at the closure (U7). */
+const BLOCKING = false;
 
 function strings(value: unknown): string[] {
   if (typeof value === 'string') return [value];
