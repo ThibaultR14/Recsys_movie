@@ -3,6 +3,8 @@ docs/etape-8-films-recents.md). Validation split only; the test is evaluated onc
 
     uv run python recent_eval.py retrain    # ALS config A on the training users, base films removed
     uv run python recent_eval.py run [--only "NAME;NAME"] [--tag T]   # scenarios -> results JSON
+    uv run python recent_eval.py run --split test --only "…"   # closing (R7), ONCE: the retained
+                                                                # config and its references
 
 Protocol:
 - base = the 463 catalogue films released in 2022-2023 (year column). They lose their vector:
@@ -560,18 +562,19 @@ def print_details(results: list[dict]) -> None:
         )
 
 
-def cmd_run(only: list[str] | None, tag: str, pop_rule: str = "rank") -> int:
+def cmd_run(only: list[str] | None, tag: str, pop_rule: str = "rank", split: str = "val") -> int:
     data = load_data(pop_rule)
     print(f"popularité des crans : {pop_rule}", flush=True)
     catalog = data.catalog
-    es = ev.load_eval_set("val", catalog)
+    es = ev.load_eval_set(split, catalog)
+    print(f"découpage : {split}", flush=True)
     Y_true = sw.load_factors(sw.CONFIGS["A"], catalog)  # noqa: N806
     Y_re = np.load(RETRAINED)  # noqa: N806
     print(f"base : {int(data.base.sum())} films ; préparation du placement…", flush=True)
     placer = Placer(data, Y_re)
     results = []
     OUT.mkdir(parents=True, exist_ok=True)
-    path = OUT / f"coldstart_val{tag}.json"
+    path = OUT / f"coldstart_{split}{tag}.json"
     for v in variants():
         if only and v.name not in only:
             continue
@@ -604,11 +607,16 @@ def main() -> int:
     r.add_argument("--only", default="")
     r.add_argument("--tag", default="")
     r.add_argument("--pop", choices=("rank", "old"), default="rank")
+    r.add_argument("--split", choices=("val", "test"), default="val")
     args = p.parse_args()
     if args.cmd == "retrain":
         return cmd_retrain()
     only = [s.strip() for s in args.only.split(";") if s.strip()] or None
-    return cmd_run(only, args.tag, args.pop)
+    if args.split == "test" and not only:
+        raise SystemExit(
+            "--split test : donner --only (la configuration retenue et ses références)"
+        )
+    return cmd_run(only, args.tag, args.pop, args.split)
 
 
 if __name__ == "__main__":

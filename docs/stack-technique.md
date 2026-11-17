@@ -272,7 +272,7 @@ projet/
 │   └── test-data/            # ignoré par git, jamais servi : cas de test du fold-in, titres du catalogue, exports réels, rapports
 ├── shared/fixtures/          # cas de normalisation des titres partagés Python / TypeScript (versionnés)
 ├── .github/workflows/        # mise à jour mensuelle TMDB (à venir)
-├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md à etape-6c-qualite.md, maquette, figures/
+├── docs/                     # projet-reco-films.md, stack-technique.md, design-system.md, etat-de-l-art.md, etape-2-modele.md à etape-8-films-recents.md, etape-8-analyse-reglages.md, maquette, figures/
 └── CLAUDE.md                 # instructions pour Claude Code
 ```
 
@@ -344,6 +344,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 6. ✅ **Adaptateur IMDb** (fait, `docs/etape-6-imdb.md`) : CSV des notes détecté par l'en-tête, rapprochement par `imdb_id` (+ alias), repli par titre seulement proposé dans « à vérifier », séries/épisodes/jeux comptés à part (`Title Type` traduit : liste de non-films en anglais et en français, tout type inconnu = film) ; watchlist refusée avec un message ; sur un export fabriqué de Thibault, 35 films trouvés par id ; 3 000 lignes en 22 ms. Mesure sur un vrai historique IMDb reportée à l'étape 7.
 6b. ✅ **Retouches de l'interface** (`docs/etape-6b-retouches.md`), **close le 8 novembre 2026** (essai sur un vrai téléphone non confirmé, à refaire au début de l'étape 7). Fait : thème sombre par défaut (clair au choix, seule clé `localStorage` `pepite-theme`), pages « comment ça marche », « à propos » (« je ») et « contact » par ancre, contact par `mailto:` sans service tiers, aide des exports en carrousel (7 schémas SVG), note du public MovieLens sur les cartes (`catalog.json` v2, +55 Ko gzip), « (parce que t'as aimé X et Y) » (cosinus, percentile ≥ 0,7, 2 cartes au plus par film cité et par rangée de 8 ; 3,5 ms sur un export réel, 38 ms pour 3 000 films), textes de Claude Web ; axe 0 dans les deux thèmes, réseau inchangé.
 6c. ✅ **Qualité des résultats** (`docs/etape-6c-qualite.md`, close le 12 novembre 2026) : autres versions jamais recommandées (`version_of`), films mal notés hors du fold-in (+8,2 % de NDCG@20 à ∞), calibration des genres (λ 0,1 / 0,9 par cran) ; pénalité de proximité aux films mal notés écartée (option a). Test : NDCG@20 à ∞ 0,1601 (étape 2 : 0,1521) ; aux crans bas, −28 % par rapport à D2 seul, écart de calibration −84 à −87 % ; export de Thibault : animation 19-31 % à tous les crans (avant : 69-100 % aux crans bas).
+8 (avant la mise en ligne). ✅ **Films récents** (`docs/etape-8-films-recents.md`, close le 17 novembre 2026 ; réglages : `docs/etape-8-analyse-reglages.md`) : 3 358 films TMDB récents (sortis depuis 2022, absents de MovieLens) placés dans l'espace ALS d'après leur contenu (norme × 0,8), 559 recommandables (≥ 500 votes) ; popularité par rang dans l'année depuis 2019 ; terme de qualité γ = 0,1 et bonus des classiques ; films estimés 1 au plus par rangée de 8, sans tampon ni « parce que t'as aimé » ; λ 0,7 à 5 000. **Test (une seule fois)** : Recall@20 des films 2022-2023 bien notés **0,136** (124 % de la vraie direction recalée, popularité 0,023) ; films du catalogue, NDCG@20 à ∞ 97,5 % ; films estimés 7,7 / 5,6 % du top 20 à 2 000 / 500 ; réglages du site : −1,0 % à ∞, +8,3 % à 5 000 ; exports : 97-99 % des films récents retrouvés reconnus.
 7. Mise en ligne, tests avec 10-20 cinéphiles.
 8. Ensuite seulement : fiche film, dispo en France, liste faite main, scraping (explications avancées à l'étape 6b).
 
@@ -361,7 +362,7 @@ Relancer `build_catalog.py` réécrit `catalog.parquet` sans les colonnes TMDB :
 | Données IMDb | **Hors ligne uniquement** (jointures, vérif des imdbId, contrôles qualité), jamais embarquées ; colonnes préfixées `imdbds_` |
 | Corrections du catalogue | Fusions de doublons, filtre de type, `manual_overrides.csv` versionné ; films en mismatch TMDB gardés pour l'entraînement mais `recommendable = false` |
 | `item_idx` | Figé à l'entraînement ; l'export lit l'ordre sauvegardé avec les vecteurs, ne le recalcule jamais |
-| Films récents | Après 2023 : **trou accepté au MVP**, modèle de contenu en v2. 2019-2023 : popularité corrigée par TMDB pour le curseur |
+| Films récents | **Étape 8** : films TMDB absents de MovieLens placés d'après leur contenu (ridge sur les vecteurs ALS, norme × 0,8), recommandables à ≥ 500 votes, 1 au plus par rangée de 8 ; popularité par rang dans l'année depuis 2019 ; q tiré de la note TMDB (droite des films 2019-2023) ; les films non placés restent « trop récents » |
 | Framework | **React** + Vite + TypeScript |
 | Correspondance des titres | Normalisation v2 identique Python / TypeScript ; titre + année ±1 (TMDB ou ML), variantes ; **flou (Fuse.js) jamais utilisé automatiquement** (séries rattachées à des films), seulement proposé dans l'écran « films non reconnus » |
 | Export Letterboxd | Lu dans le navigateur ; `ratings.csv`, `watched.csv`, `diary.csv` seulement ; journal rattaché par (titre, année) |

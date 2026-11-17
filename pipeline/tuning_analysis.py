@@ -98,6 +98,18 @@ def variants(q_thr: dict[int, float]) -> list[dict]:
                     "caps": CLASSIC_CAPS,
                 }
             )
+    # step 8, R6e: the site as adopted (classics c99, gamma_c 0.5) and the settings of R6d
+    # (λ 0.9 at 5 000, no classics), for the closing test (R7, once)
+    out.append(
+        {
+            "name": "site (R6e)",
+            "gamma": GAMMA,
+            "lam": prod,
+            "classics": (0.5, q_thr[99]),
+            "caps": ALL_CAPS,
+        }
+    )
+    out.append({"name": "R6d", "gamma": GAMMA, "lam": prod | {5_000: 0.9}, "caps": ALL_CAPS})
     return out
 
 
@@ -119,10 +131,10 @@ def lists_for(scores, batch, cand, bonus, P, G, lam):  # noqa: N803
     return cal.calibrate_batch(pools, pool_scores, P, G, lam, cal.N_LIST, "share")
 
 
-def cmd_sweep(tag: str, users: int = 0) -> dict:
+def cmd_sweep(tag: str, users: int = 0, split: str = "val", only: list[str] | None = None) -> dict:
     catalog = ev.load_catalog()
     counts = ev.train_counts(catalog)
-    eval_set = ev.load_eval_set("val", catalog)
+    eval_set = ev.load_eval_set(split, catalog)
     model = sw.adapter("A", catalog)
     G, names = cal.genre_matrix(mode="share")  # noqa: N806
     anim = names.index("Animation")
@@ -132,6 +144,8 @@ def cmd_sweep(tag: str, users: int = 0) -> dict:
     q_thr = {p: float(np.percentile(rec_q, p)) for p in PERCENTILES}
     above = {p: int((rec_q > q_thr[p]).sum()) for p in PERCENTILES}
     vs = variants(q_thr)
+    if only:  # "actuel" is always kept: the deltas are against it
+        vs = [v for v in vs if v["name"] in only or v["name"] == "actuel"]
     bonuses = {}
     for v in vs:
         b = v["gamma"] * q
@@ -199,7 +213,7 @@ def cmd_sweep(tag: str, users: int = 0) -> dict:
             d = [x - y for x, y in zip(a[j], b[j], strict=True) if x is not None and y is not None]
             r[f"delta_{name}"] = m.mean_ci(d)
     out = {
-        "split": "val",
+        "split": split,
         "gamma": GAMMA,
         "shrink": K,
         "C": c,
@@ -209,7 +223,7 @@ def cmd_sweep(tag: str, users: int = 0) -> dict:
         "rows": rows,
     }
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    path = OUT_DIR / f"tuning_val{tag}.json"
+    path = OUT_DIR / f"tuning_{split}{tag}.json"
     path.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print_rows(out)
     print("->", path)
@@ -412,10 +426,15 @@ def main() -> int:
     s = sub.add_parser("sweep")
     s.add_argument("--tag", default="")
     s.add_argument("--users", type=int, default=0, help="first N users only (quick check)")
+    s.add_argument("--split", choices=("val", "test"), default="val")
+    s.add_argument("--only", default="", help='variants "NAME;NAME" (actuel always kept)')
     sub.add_parser("tmdb-age")
     args = p.parse_args()
     if args.cmd == "sweep":
-        cmd_sweep(args.tag, args.users)
+        only = [x.strip() for x in args.only.split(";") if x.strip()] or None
+        if args.split == "test" and not only:
+            raise SystemExit("--split test : donner --only (évaluation unique de la clôture)")
+        cmd_sweep(args.tag, args.users, args.split, only)
     else:
         cmd_tmdb_age()
     return 0

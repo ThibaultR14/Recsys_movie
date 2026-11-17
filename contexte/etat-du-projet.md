@@ -1,6 +1,6 @@
 # État du projet
 
-> Mis à jour le 12 novembre 2026 : étape 6c close, **tags des cartes (Q6) faits et validés à l'écran** (une couleur par tag). Prochaine étape : étape 7 (mise en ligne après la réponse de GroupLens). Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
+> Mis à jour le 17 novembre 2026 : **étape 8 (films récents) close** (test évalué une fois, tous les critères tenus). Avant : étape 6c close, tags des cartes validés à l'écran. Prochaine étape : étape 7 (mise en ligne après la réponse de GroupLens). Point d'entrée pour Claude Web et toute nouvelle session : lire ce fichier, puis `decisions.md` et `feuille-de-route.md` (même dossier), puis les documents de référence selon le sujet.
 > Dépôt : https://github.com/ThibaultR14/Recsys_movie
 
 ## Le projet en 5 lignes
@@ -11,7 +11,7 @@
 - **Tout se passe dans le navigateur** : site 100 % statique, sans serveur, sans compte ni stockage (seul le choix du thème clair est retenu). Les films et les notes de l'utilisateur ne quittent jamais sa machine.
 - Projet étudiant (M2, ECE Paris), **non commercial** : MovieLens, TMDB et les datasets IMDb l'imposent.
 
-## Où on en est : étapes 1 à 6c faites
+## Où on en est : étapes 1 à 6c et 8 faites
 
 | Étape | Résultat | Chiffres clés | Détail |
 |---|---|---|---|
@@ -25,9 +25,9 @@
 | 6b. Retouches de l'interface | thème sombre par défaut ; pages « comment ça marche », « à propos » (« je »), « contact » (`mailto:`) ; aide des exports en carrousel ; note du public et « parce que t'as aimé X et Y » sur les cartes ; textes de Claude Web | explications en 3,5 ms (export réel) et 38 ms (3 000 films), 2 cartes au plus par film cité et par rangée ; `catalog.json` +55 Ko gzip ; axe 0 dans les deux thèmes ; « loin de tes goûts » par rangée ; close le 8 novembre 2026 (essai sur vrai téléphone à refaire en début d'étape 7) | `docs/etape-6b-retouches.md` |
 | 6c. Qualité des résultats (close le 12 novembre 2026) | versions (`version_of`), films mal notés hors du fold-in (percentile < 0,3), calibration des genres (« part de films », λ 0,1 de ∞ à 10 000 et 0,9 de 5 000 à 200) ; pénalité de proximité aux films mal notés écartée (option a, code de référence non branché) | **test (une seule fois)** : NDCG@20 à ∞ **0,1601** (étape 2 : 0,1521, +5,3 %) ; crans 2 000 / 500 : −28 % par rapport à D2 seul, écart de calibration −84 à −87 % ; export de Thibault : animation 19-31 % à tous les crans (avant : 69-100 % aux crans bas) ; « comment ça marche » : films mal notés et « l'équilibre des genres » ; essai sur un vrai téléphone à faire (suivi) | `docs/etape-6c-qualite.md` |
 
-Étape 8 (films récents, en cours) : 3 358 films TMDB récents placés d'après leur contenu (559 recommandables), popularité par rang dans l'année depuis 2019, terme de qualité γ = 0,1 ; **R6e (14 novembre 2026)** : films estimés au plus 1 par rangée de 8, sans tampon ni « parce que t'as aimé », q sur la droite des films 2019-2023, λ 0,7 à 5 000, bonus des classiques (centile 99, γc 0,5) ; textes de « comment ça marche » posés ; arrêt visuel (`docs/etape-8-films-recents.md`, `docs/etape-8-analyse-reglages.md`).
+**Étape 8 (films récents), close le 17 novembre 2026** (`docs/etape-8-films-recents.md`, réglages : `docs/etape-8-analyse-reglages.md`) : 3 358 films TMDB récents (sortis depuis 2022, absents de MovieLens) placés dans l'espace ALS d'après leur contenu (norme × 0,8), 559 recommandables (≥ 500 votes) ; popularité par rang dans l'année depuis 2019 ; terme de qualité γ = 0,1 et bonus des classiques ; films estimés 1 au plus par rangée de 8, sans tampon ni « parce que t'as aimé » ; λ 0,7 à 5 000. **Test (une seule fois)** : Recall@20 des films 2022-2023 bien notés **0,136** (124 % de la vraie direction recalée, popularité 0,023) ; films du catalogue, NDCG@20 à ∞ 97,5 % ; films estimés 7,7 / 5,6 % du top 20 à 2 000 / 500 ; réglages du site : −1,0 % à ∞, +8,3 % à 5 000 ; exports : 97-99 % des films récents retrouvés reconnus. Essai sur un vrai téléphone non confirmé.
 
-Données embarquées par le site (`web/public/data/`) : **~3 Mo gzip** au total. Elles se composent des vecteurs int8, de la popularité, du catalogue et de l'index des titres.
+Données embarquées par le site (`web/public/data/`) : **3,63 Mo gzip** au total (films estimés compris). Elles se composent des vecteurs int8, de la popularité, du catalogue et de l'index des titres.
 
 ## Reprise de l'étape 6c (pour une nouvelle session)
 

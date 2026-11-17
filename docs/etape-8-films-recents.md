@@ -1,6 +1,7 @@
 # Étape 8 — Films récents
 
-> **⏸ Arrêt visuel (R6e, 14 novembre 2026)** : les 4 recommandations de `docs/etape-8-analyse-reglages.md` adoptées par Thibault et appliquées (v0.7) ; textes de « comment ça marche » posés ; URL de comparaison en section 5, R6e.
+> **✅ Étape close le 17 novembre 2026 (R7)** : validée à l'écran par Thibault ; test évalué une seule fois, tous les critères tenus (section 5, R7) ; essai sur un vrai téléphone non confirmé (début de l'étape 7).
+> Arrêt visuel (R6e, 14 novembre 2026) : les 4 recommandations de `docs/etape-8-analyse-reglages.md` adoptées par Thibault et appliquées (v0.7) ; textes de « comment ça marche » posés ; URL de comparaison en section 5, R6e.
 > Version 0.7 (14 novembre 2026, décisions de Thibault après R6d) : films estimés **au plus 1 par rangée de 8**, **jamais de « ✱ pépite »**, **pas de « parce que t'as aimé »** sur leur carte (D7) ; q des films estimés sur la **droite des films 2019-2023** (D4) ; λ = **0,7 à 5 000** (0,9 de 2 000 à 200, 0,1 de ∞ à 10 000) ; **bonus des classiques** (centile 99, γc = 0,5, films entraînés seulement ; jugement de produit) (D4).
 > Arrêt visuel « pas encore OK » (R6d, 14 novembre 2026) : analyse des réglages dans `docs/etape-8-analyse-reglages.md`.
 > Retour à l'arrêt visuel (R6, 13 novembre 2026) : terme de qualité branché (γ = 0,1, K = 50, q TMDB pour les films estimés), films estimés jamais cités dans « parce que t'as aimé » (section 5, R6c) ; restent l'essai à l'écran et les textes de « comment ça marche ».
@@ -701,6 +702,56 @@ Décisions de Thibault sur la synthèse de `docs/etape-8-analyse-reglages.md` : 
 4. Pour aller plus loin : `?classiques=1` (γc = 1), `?lambda=0.7` (λ 0,7 jusqu'à 200, à recaler avec les volontaires), `?recents=0` (aucun film estimé recommandé).
 
 **À juger à l'œil** : le cran 5 000 (A et B, voir l'écart ci-dessus) ; les classiques qui entrent à ∞ (*12 Angry Men* 1ᵉʳ ou 2ᵉ) ; la place des films estimés (1 par rangée) ; les textes de « comment ça marche ».
+
+---
+
+### R7 — Clôture (17 novembre 2026) — ✅ étape close
+
+Thibault a validé à l'écran (« c'est bon, on peut faire la clôture »).
+
+**Test, évalué une seule fois** (rien n'a été réglé après : toutes les valeurs viennent de la validation) :
+
+1. **Faux départ à froid (D5, critère de clôture)** : `recent_eval.py run --split test`, configuration retenue « contenu, norme popularité × 0,8 » et ses références, utilisateurs de test dont le held-out contient un film 2022-2023 du catalogue (`coldstart_test_r7.json`, ignoré).
+
+| variante | Recall@20 base (films bien notés) | ± IC | rang centile | NDCG@20 ∞ / 2 000 / 500 | part des films de la base dans le top 20 ∞ / 2 000 / 500 |
+|---|---|---|---|---|---|
+| vrai vecteur | 0,0010 | 0,0014 | 0,797 | 0,1646 / 0,0247 / 0,0064 | 0,0 / 0,0 / 0,0 % |
+| vraie direction, norme recalée | 0,1098 | 0,0271 | 0,862 | 0,1644 / 0,0249 / 0,0064 | 0,7 / 2,1 / 2,8 % |
+| popularité | 0,0225 | 0,0094 | 0,959 | 0,1632 / 0,0243 / 0,0063 | 0,5 / 2,2 / 1,7 % |
+| popularité, norme recalée | 0,0461 | 0,0159 | 0,956 | 0,1612 / 0,0247 / 0,0062 | 1,2 / 0,3 / 2,2 % |
+| **contenu, norme × 0,8 (retenu)** | **0,1358** | 0,0272 | 0,890 | **0,1605** / 0,0243 / 0,0063 | **2,7 / 7,7 / 5,6 %** |
+
+| critère (D5 v0.3, critères de réussite) | test | |
+|---|---|---|
+| Recall@20 ≥ 70 % de la vraie direction recalée | 0,1358 / 0,1098 = **124 %** | ✅ |
+| meilleur que la popularité, hors IC (différence appariée) | **+0,1133 ± 0,0270** | ✅ |
+| films estimés ≤ 20 % du top 20 aux crans 2 000 et 500 | **7,7 % et 5,6 %** | ✅ |
+| films du catalogue : NDCG@20 à ∞ ≥ 97 % de l'actuel (vrai vecteur) | 0,1605 / 0,1646 = **97,5 %** (validation : 97,7 %) | ✅ |
+
+Tranche < 500 votes : Recall@20 nul pour toutes les variantes, y compris le vrai vecteur (rang centile 0,45 pour le contenu) ; ces films restent non recommandables et comptent dans le profil (v0.3, inchangé).
+
+2. **Réglages du site, pour information** (« γ compris ») : `tuning_analysis.py sweep --split test`, protocole de `quality_term.py` (10 000 utilisateurs de test, sans film estimé). « site (R6e) » = γ 0,1, λ 0,7 à 5 000, bonus des classiques ; « R6d » = mêmes réglages avec λ 0,9 à 5 000 et sans bonus.
+
+| NDCG@20, films bien notés | ∞ | 20 000 | 10 000 | 5 000 | 2 000 | 1 000 | 500 | 200 |
+|---|---|---|---|---|---|---|---|---|
+| R6d | 0,1602 | 0,1080 | 0,0736 | 0,0363 | 0,0190 | 0,0103 | 0,0054 | 0,0024 |
+| **site (R6e)** | **0,1586** | 0,1071 | 0,0734 | **0,0393** | 0,0187 | 0,0103 | 0,0054 | 0,0024 |
+| écart | −1,0 % | −0,8 % | −0,3 % | **+8,3 %** | −1,6 % | 0 % | 0 % | 0 % |
+
+Le test confirme la validation : le bonus des classiques coûte 1 % à ∞ (validation −1,0 %, critère −2 %) et λ = 0,7 rend 8 % au cran 5 000 (validation : +11,7 % pour λ seul). Pour mémoire, test de l'étape 6c à ∞ : 0,1601 (sans γ ni bonus).
+
+**Autres critères de réussite**
+
+| critère | résultat | |
+|---|---|---|
+| exports : ≥ 90 % des « trop récents » retrouvés reconnus | A : 29 / 30 (97 %) ; B : 112 / 113 (99 %) | ✅ |
+| moteur : `foldin_cases.json` régénéré hors du dépôt, rejoué | 216 / 216 listes calibrées identiques, vecteurs à 0 près | ✅ |
+| temps | `recommend` 3 000 films 114,1 ms (avant l'étape : 113,7 ms en R5) ; changement de cran 34 ms (médiane) | ✅ |
+| taille | `web/public/data/` 3,63 Mo gzip (≤ 3,8) | ✅ |
+| licences | rien d'IMDb dans `web/public/data/` (`assert_web_safe`) ; mentions TMDB inchangées | ✅ |
+| textes | `BLOCKING = true`, aucun texte en attente | ✅ |
+
+**Non confirmé à la clôture** : l'essai sur un vrai téléphone (comme aux étapes 6b et 6c), à faire par Thibault au début de l'étape 7.
 
 ---
 
