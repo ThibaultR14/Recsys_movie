@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CategoryPicker } from '../components/CategoryPicker';
 import { FilmGrid } from '../components/FilmGrid';
 import { HandNote } from '../components/HandNote';
@@ -7,7 +7,8 @@ import { Slider } from '../components/Slider';
 import { hasFarRow } from '../components/cardRules';
 import { capLabel } from '../components/sliderText';
 import type { RecommendResult } from '../reco/workerCore';
-import { activeCount } from '../reco/filters';
+import { RefinePanel } from '../components/RefinePanel';
+import { activeCount, type RefineOptions } from '../reco/filters';
 import { availableCategories, categoryAt } from './categories';
 import {
   FAR_FROM_TASTE,
@@ -32,6 +33,8 @@ interface ResultatsProps {
   allNotches?: boolean;
   /** A recomputation with new filters is running (step 8b, D2): the grid stays, aria-busy. */
   busy?: boolean;
+  /** What « affiner » can offer (worker init, step 8b D3). */
+  refine?: RefineOptions;
 }
 
 /** Screen 3: recommendations, the three categories (step 8b, D1) and the annotations. */
@@ -43,6 +46,7 @@ export function Resultats({
   stampEstimated,
   allNotches,
   busy,
+  refine,
 }: ResultatsProps) {
   const caps = useMemo(() => reco.positions.map((p) => p.cap), [reco]);
   const categories = useMemo(() => availableCategories(caps), [caps]);
@@ -54,7 +58,6 @@ export function Resultats({
     onViewChange?.(next);
   };
   const { index, visible, filters } = view;
-  const docsId = useId();
 
   const position = reco.positions[index] ?? reco.positions[0]!;
   // step 8b (D2): the filters are applied by the worker, the lists arrive filtered
@@ -74,8 +77,12 @@ export function Resultats({
   );
   const far = !farRows && position.relativeScore < FAR_FROM_TASTE;
   const category = categoryAt(caps, index);
+  const nFilters = activeCount(filters);
+  const what = category
+    ? `${category.label}${nFilters ? `, ${nFilters === 1 ? '1 filtre' : `${nFilters} filtres`}` : ''}`
+    : '';
   const live = category
-    ? `${category.label} : ${shown.length} films`
+    ? `${what} : ${shown.length} films`
     : `${shown.length} films${position.cap === null ? '' : `, ${capLabel(position.cap)}`}`;
 
   return (
@@ -108,21 +115,13 @@ export function Resultats({
               (là, on s'éloigne pas mal de tes goûts habituels)
             </HandNote>
           )}
-          <label
-            htmlFor={docsId}
-            className="flex min-h-11 w-fit cursor-pointer items-center gap-3 text-[15px]"
-          >
-            <input
-              id={docsId}
-              type="checkbox"
-              checked={filters.docs}
-              onChange={(e) =>
-                setView({ filters: { ...filters, docs: e.target.checked }, visible: PAGE })
-              }
-              className="size-5 accent-pen"
-            />
-            les documentaires
-          </label>
+          <RefinePanel
+            filters={filters}
+            options={refine}
+            open={view.refineOpen}
+            onOpenChange={(open) => setView({ refineOpen: open })}
+            onChange={(f) => setView({ filters: f, visible: PAGE })}
+          />
         </div>
       </div>
 
@@ -145,9 +144,7 @@ export function Resultats({
             stampEstimated={stampEstimated}
           />
         ) : (
-          <p className="m-0 text-[16px]">
-            {activeCount(filters) > 0 ? NOTHING_PASSES : NOTHING_HERE}
-          </p>
+          <p className="m-0 text-[16px]">{nFilters > 0 ? NOTHING_PASSES : NOTHING_HERE}</p>
         )}
       </div>
 

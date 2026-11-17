@@ -13,9 +13,16 @@ export interface ResultsView {
   visible: number;
   /** « affiner » (step 8b, D3): changing them recomputes the lists in the worker (D2). */
   filters: Filters;
+  /** The « affiner » panel is open (kept while a page is open, like the rest). */
+  refineOpen: boolean;
 }
 
 export function initialView(reco: RecommendResult): ResultsView {
   const caps = reco.positions.map((p) => p.cap);
-  return { index: Math.max(0, caps.indexOf(START_CAP)), visible: PAGE, filters: NO_FILTERS };
+  return {
+    index: Math.max(0, caps.indexOf(START_CAP)),
+    visible: PAGE,
+    filters: NO_FILTERS,
+    refineOpen: false,
+  };
 }

@@ -142,6 +142,7 @@ const FILTERED: [string, Partial<Filters>][] = [
   ['horreur', { genres: ['Horror'] }],
   ['années 70', { decades: ['1970'] }],
   ['drame + années 2000', { genres: ['Drama'], decades: ['2000'] }],
+  ['drame + français', { genres: ['Drama'], languages: ['fr'] }],
   ['sans documentaires', { docs: false }],
 ];
 

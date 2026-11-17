@@ -88,13 +88,15 @@ export function App({ client: injected }: { client?: RecoApi }) {
   const [status, setStatus] = useState<string>();
   const [error, setError] = useState<string>();
   const [hash, setHash] = useState(currentHash);
+  const [refineOptions, setRefineOptions] = useState<InitResult['refine']>();
   // step 8b (D2): only the last recomputation counts (an older answer is ignored)
   const refineId = useRef(0);
   const page = pageOfHash(hash);
 
   useEffect(() => {
     initOnce(client).then(
-      () => {
+      (init) => {
+        setRefineOptions(init.refine);
         mark('pepite:model-ready');
         setReady(true);
       },
@@ -253,6 +255,7 @@ export function App({ client: injected }: { client?: RecoApi }) {
           view={screen.view}
           onViewChange={onViewChange}
           busy={screen.busy}
+          refine={refineOptions}
           stampEstimated={DEV_TUNING?.estimatedStamp}
           allNotches={DEV_TUNING?.allNotches}
         />

@@ -90,6 +90,7 @@ function fakeClient(
       nItems: 23019,
       positions: POSITIONS,
       timings: {} as InitResult['timings'],
+      refine: { genres: [], languages: [] },
     })),
     importExport: vi.fn(async (): Promise<ImportResult> => ({
       summary: summary(),
@@ -187,7 +188,12 @@ describe('App (fake worker)', () => {
     expect(await screen.findByText('on prépare nos fiches…')).toBeInTheDocument();
     expect(client.importExport).not.toHaveBeenCalled();
     await act(async () =>
-      finish({ nItems: 1, positions: POSITIONS, timings: {} as InitResult['timings'] }),
+      finish({
+        nItems: 1,
+        positions: POSITIONS,
+        timings: {} as InitResult['timings'],
+        refine: { genres: [], languages: [] },
+      }),
     );
     await screen.findByText(/on a lu tes 10 films/);
   });

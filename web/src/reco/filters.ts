@@ -27,6 +27,33 @@ export const NO_FILTERS: Filters = {
 };
 
 export const DOCUMENTARY = 'Documentary';
+/** A projection format, not a genre (Q3): kept in the data and the calibration, not filterable. */
+export const NOT_FILTERABLE = [DOCUMENTARY, 'IMAX'];
+/** A language is offered when it has at least this many recommendable films (D3). */
+export const MIN_LANGUAGE_FILMS = 30;
+
+/** What « affiner » can offer for this catalogue (computed once, by the worker). */
+export interface RefineOptions {
+  /** MovieLens genre names, without NOT_FILTERABLE. */
+  genres: string[];
+  /** Languages with >= MIN_LANGUAGE_FILMS recommendable films, most films first. */
+  languages: { code: string; films: number }[];
+}
+
+export function refineOptions(
+  c: Pick<CatalogFile, 'genre_names'> & Partial<Pick<CatalogFile, 'language' | 'languages'>>,
+  recommendable: Uint8Array,
+): RefineOptions {
+  const counts = new Map<number, number>();
+  c.language?.forEach((l, i) => {
+    if (l != null && recommendable[i]) counts.set(l, (counts.get(l) ?? 0) + 1);
+  });
+  const languages = [...counts]
+    .filter(([l, k]) => k >= MIN_LANGUAGE_FILMS && c.languages?.[l] && c.languages[l] !== 'xx')
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .map(([l, k]) => ({ code: c.languages![l]!, films: k }));
+  return { genres: c.genre_names.filter((g) => !NOT_FILTERABLE.includes(g)), languages };
+}
 
 /** « époque »: the year of catalog.json; « années 2020 » = 2020 and after. */
 export const DECADES: readonly { key: string; label: string; from: number; to: number }[] = [

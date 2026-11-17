@@ -12,7 +12,15 @@ import {
   userProfile,
   type Engine,
 } from './engine';
-import { activeCount, compileFilters, NO_FILTERS, sameFilters, type Filters } from './filters';
+import { languageName } from '../content/refine';
+import {
+  activeCount,
+  compileFilters,
+  NO_FILTERS,
+  refineOptions,
+  sameFilters,
+  type Filters,
+} from './filters';
 
 const catalog = {
   genre_names: ['Comedy', 'Documentary', 'Horror'],
@@ -27,6 +35,20 @@ const passing = (f: Partial<Filters>) => {
   const c = compileFilters({ ...NO_FILTERS, ...f }, catalog);
   return c ? [0, 1, 2, 3, 4, 5].filter(c.passes) : 'none';
 };
+
+describe('refineOptions', () => {
+  it('counts recommendable films per language; never « xx »', () => {
+    const o = refineOptions(
+      {
+        genre_names: ['Comedy', 'Documentary', 'IMAX'],
+        languages: ['en', 'xx', 'fr'],
+        language: [...Array(40).fill(0), ...Array(40).fill(1), ...Array(29).fill(2)],
+      },
+      new Uint8Array(109).fill(1),
+    );
+    expect(o).toEqual({ genres: ['Comedy'], languages: [{ code: 'en', films: 40 }] });
+  });
+});
 
 describe('compileFilters', () => {
   it('no active filter -> undefined (the unfiltered lists)', () => {
@@ -94,6 +116,21 @@ describe.skipIf(!ready)('filtered recomputation (real files)', () => {
     });
     return { matched, user: userProfile(engine, matched) };
   };
+
+  it('options of « affiner »: no documentary nor IMAX; languages >= 30 films, all named', async () => {
+    await setup();
+    const o = refineOptions(engine.catalog, engine.model.recommendable);
+    expect(o.genres).not.toContain('Documentary');
+    expect(o.genres).not.toContain('IMAX');
+    expect(o.genres).toHaveLength(engine.catalog.genre_names.length - 2);
+    expect(o.languages[0]!.code).toBe('en');
+    expect(o.languages.every((l) => l.films >= 30)).toBe(true);
+    expect(o.languages.map((l) => l.films)).toEqual(
+      [...o.languages.map((l) => l.films)].sort((a, b) => b - a),
+    );
+    expect(o.languages.map((l) => languageName(l.code)).filter((x) => !x)).toEqual([]);
+    expect(languageName('cn')).toBe('cantonais');
+  });
 
   it('without a filter: identical to recommend (same lists, same scores)', async () => {
     const { matched, user } = await setup();

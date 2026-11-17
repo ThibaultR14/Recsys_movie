@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App, type RecoApi } from '../App';
@@ -20,6 +21,13 @@ import type { ResultsView } from './resultsView';
 import { NO_FILTERS, type Filters } from '../reco/filters';
 
 const POSITIONS = [null, 20000, 10000, 5000, 2000, 1000, 500, 200];
+const REFINE_OPTIONS = {
+  genres: ['Comedy', 'Horror', 'Drama'],
+  languages: Array.from({ length: 10 }, (_, k) => ({
+    code: ['en', 'fr', 'ja', 'ru', 'es', 'it', 'de', 'hi', 'ko', 'cn'][k]!,
+    films: 1000 - k,
+  })),
+};
 
 function films(cap: number | null, n = 48): RecommendedFilm[] {
   return Array.from({ length: n }, (_, i) => ({
@@ -259,6 +267,7 @@ describe('Resultats', () => {
   it('« les documentaires »: ticked by default; unticking asks for new lists (step 8b, D2-D3)', async () => {
     const views: ResultsView[] = [];
     render(<Resultats nEntries={66} reco={reco()} onViewChange={(v) => views.push(v)} />);
+    await userEvent.click(screen.getByRole('button', { name: 'affiner' }));
     const box = screen.getByRole('checkbox', { name: 'les documentaires' });
     expect(box).toBeChecked();
     // the page never filters by itself: the worker sends filtered lists
@@ -274,7 +283,12 @@ describe('Resultats', () => {
       <Resultats
         nEntries={66}
         reco={r}
-        view={{ index: 4, visible: 8, filters: { ...NO_FILTERS, genres: ['Horror'] } }}
+        view={{
+          index: 4,
+          visible: 8,
+          filters: { ...NO_FILTERS, genres: ['Horror'] },
+          refineOpen: false,
+        }}
       />,
     );
     expect(screen.getByText(NOTHING_PASSES)).toBeInTheDocument();
@@ -364,6 +378,9 @@ describe('pages (step 6b, D2)', () => {
     );
     await userEvent.click(await screen.findByRole('button', { name: 'voir mes films' }));
     await userEvent.click(await screen.findByRole('radio', { name: /^les pépites/ }));
+    // a filter (step 8b, D3): kept while a page is open, like the category
+    await userEvent.click(screen.getByRole('button', { name: 'affiner' }));
+    await userEvent.click(screen.getByRole('button', { name: 'horreur' }));
     for (const [name, title] of [
       ['à propos', 'à propos.'],
       ['comment ça marche', 'comment ça marche.'],
@@ -376,6 +393,113 @@ describe('pages (step 6b, D2)', () => {
     await userEvent.click(screen.getByRole('link', { name: '← retour' }));
     await act(async () => window.dispatchEvent(new HashChangeEvent('hashchange')));
     expect(screen.getByRole('radio', { name: /^les pépites/ })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'affiner (1)' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'horreur' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('« affiner » (step 8b, D3)', () => {
+  function Controlled({ onView }: { onView?: (v: ResultsView) => void }) {
+    const [view, setView] = useState<ResultsView>({
+      index: 4,
+      visible: 8,
+      filters: NO_FILTERS,
+      refineOpen: false,
+    });
+    return (
+      <Resultats
+        nEntries={66}
+        reco={reco()}
+        refine={REFINE_OPTIONS}
+        view={view}
+        onViewChange={(v) => {
+          setView(v);
+          onView?.(v);
+        }}
+      />
+    );
+  }
+
+  it('a disclosure, not a modal: aria-expanded, the panel under the categories', async () => {
+    render(<Controlled />);
+    const button = screen.getByRole('button', { name: 'affiner' });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('group', { name: 'genres' })).not.toBeInTheDocument();
+    await userEvent.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById(button.getAttribute('aria-controls')!)).toBeVisible();
+    for (const name of ['genres', 'époque', 'durée', 'langue', 'on montre aussi']) {
+      expect(screen.getByRole('group', { name })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('toggle chips (aria-pressed), the count on the button, « × » chips and « tout effacer »', async () => {
+    const views: ResultsView[] = [];
+    render(<Controlled onView={(v) => views.push(v)} />);
+    await userEvent.click(screen.getByRole('button', { name: 'affiner' }));
+    const genres = screen.getByRole('group', { name: 'genres' });
+    // French labels, sorted; no documentary nor IMAX
+    expect(
+      within(genres)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['comédie', 'drame', 'horreur']);
+    const horror = within(genres).getByRole('button', { name: 'horreur' });
+    await userEvent.click(horror);
+    expect(horror).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(
+      within(screen.getByRole('group', { name: 'époque' })).getByRole('button', {
+        name: 'années 70',
+      }),
+    );
+    expect(views.at(-1)!.filters).toEqual({
+      ...NO_FILTERS,
+      genres: ['Horror'],
+      decades: ['1970'],
+    });
+    expect(screen.getByRole('button', { name: 'affiner (2)' })).toBeInTheDocument();
+    expect(screen.getByText('les moins connus, 2 filtres : 8 films')).toBeInTheDocument();
+    // « × horreur » removes the filter
+    await userEvent.click(screen.getByRole('button', { name: 'retirer le filtre horreur' }));
+    expect(views.at(-1)!.filters.genres).toEqual([]);
+    expect(screen.getByRole('button', { name: 'affiner (1)' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'les documentaires' }));
+    expect(
+      screen.getByRole('button', { name: 'retirer le filtre sans les documentaires' }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'tout effacer' }));
+    expect(views.at(-1)!.filters).toEqual(NO_FILTERS);
+    expect(screen.getByRole('button', { name: 'affiner' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'tout effacer' })).not.toBeInTheDocument();
+  });
+
+  it('languages: 8 shown, then « autres langues »; French names, cantonais from the fallback', async () => {
+    render(<Controlled />);
+    await userEvent.click(screen.getByRole('button', { name: 'affiner' }));
+    const lang = screen.getByRole('group', { name: 'langue' });
+    const chips = () =>
+      within(lang)
+        .getAllByRole('button')
+        .filter((b) => b.hasAttribute('aria-pressed'))
+        .map((b) => b.textContent);
+    expect(chips()).toEqual([
+      'anglais',
+      'français',
+      'japonais',
+      'russe',
+      'espagnol',
+      'italien',
+      'allemand',
+      'hindi',
+    ]);
+    const more = within(lang).getByRole('button', { name: 'autres langues' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(more);
+    expect(chips().slice(8)).toEqual(['coréen', 'cantonais']);
   });
 });
 
@@ -401,6 +525,7 @@ describe('filtered recomputation through App (step 8b, D2)', () => {
     const zone = () =>
       screen.getByRole('list', { name: 'films recommandés' }).closest('[aria-busy]')!;
     expect(zone()).toHaveAttribute('aria-busy', 'false');
+    await userEvent.click(screen.getByRole('button', { name: 'affiner' }));
     const box = screen.getByRole('checkbox', { name: 'les documentaires' });
     await userEvent.click(box); // docs off -> request 1
     expect(zone()).toHaveAttribute('aria-busy', 'true');
@@ -421,7 +546,12 @@ describe('filtered recomputation through App (step 8b, D2)', () => {
 
 function fakeApi(): RecoApi {
   return {
-    init: async () => ({ nItems: 1, positions: POSITIONS, timings: {} as never }),
+    init: async () => ({
+      nItems: 1,
+      positions: POSITIONS,
+      timings: {} as never,
+      refine: REFINE_OPTIONS,
+    }),
     importExport: async () => ({
       summary: {
         nEntries: 3,

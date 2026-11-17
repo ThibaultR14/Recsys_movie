@@ -7,7 +7,7 @@ import { RECOMMENDATION_STATUSES, type MatchedEntry, type UserFilm } from '../ma
 import type { MatchStatus } from '../matching/match';
 import { profileDirectors, seriesOf } from './annotations';
 import { CANDIDATES, explain, type Explanation } from './explain';
-import { compileFilters, type Filters } from './filters';
+import { compileFilters, refineOptions, type Filters, type RefineOptions } from './filters';
 import {
   applyChoices,
   importExport,
@@ -48,6 +48,8 @@ export interface InitResult {
   nItems: number;
   positions: (number | null)[];
   timings: Engine['timings'];
+  /** Step 8b (D3): genres and languages « affiner » can offer. */
+  refine: RefineOptions;
 }
 
 export interface FilmCard {
@@ -182,7 +184,12 @@ async function run(state: WorkerState, req: RecoRequest, fetchFn: FetchFn) {
   if (req.type === 'init') {
     state.engine ??= await loadEngine(fetchFn);
     const e = state.engine;
-    return { nItems: e.model.nItems, positions: e.model.meta.slider.positions, timings: e.timings };
+    return {
+      nItems: e.model.nItems,
+      positions: e.model.meta.slider.positions,
+      timings: e.timings,
+      refine: refineOptions(e.catalog, e.model.recommendable),
+    };
   }
   const engine = state.engine;
   if (!engine) throw new Error('modèle pas encore chargé');
