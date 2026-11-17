@@ -327,6 +327,17 @@ Fold-in gardé. Le prototype enchaîne les étapes du moteur : exclusions + filt
    Toutes ces options demandent de **ne plus écrire `directors` dans le fichier** (le site le reconstruit, le code existant ne change pas) : c'est un écart à « la colonne `directors` reste telle quelle », d'où la question. Les appels `/person` attendent le feu vert, une fois l'option choisie.
 3. **Explications** : passer, dans le recalcul **et** dans la recommandation de départ, aux explications des 3 crans des catégories avec un cache par film dans le worker (proposé). C'est le seul moyen mesuré de tenir les 100 ms sur 3 000 films sans le repli de D2.
 
+### U1 — Catégories (17 novembre 2026)
+
+- `web/src/pages/categories.ts` : seule table des trois catégories (nom, sous-libellé, cran, morceau du nom de fichier). Une catégorie dont le cran manque dans `model-meta.json` est masquée (test).
+- `CategoryPicker` : `<fieldset>` + `<legend>` « plutôt connu ou plutôt pépite ? », trois `<input type="radio">` visuellement masqués et le `<label>` comme bouton (≥ 44 px, retour à la ligne sur téléphone). Choix courant : bordure encre et nom souligné au stylo bleu, anneau de focus `has-[:focus-visible]`. Départ sur « les moins connus ».
+- Région `aria-live` : « les pépites : 8 films ». `titlePhrase`, les tags, le tampon et « loin de tes goûts » ne changent pas ; le moteur calcule toujours les 8 crans.
+- `?crans=8` (`devTuning.ts`, `Tuning.allNotches`, bandeau « curseur à 8 crans ») : l'ancien curseur (`Slider.tsx`, gardé), en dev seulement.
+- Textes de Claude Web posés : `titlePhrase` à ∞ et ≥ 10 000 « voilà des valeurs sûres qui devraient te plaire. » ; `FAR_ROWS_NOTE` « (ici, on s'éloigne… » ; `NOTHING_HERE` « plus rien ici : essaie « les valeurs sûres ». ».
+- Tests : Vitest **304** (dont groupe de trois radios, sous-libellés, liste par catégorie, annonce, catégorie masquée, « plus rien ici », `?crans=8`). Les tests des règles qui demandent un cran quelconque (« loin de tes goûts », tampon par cran…) passent par le curseur à 8 crans (`allNotches`). Playwright **13/13** : catégories aux **flèches du clavier natives**, une première carte différente par catégorie, la catégorie gardée à l'ouverture d'une page, tags « au plus 2 par rangée » sur les trois catégories, mise en page et axe dans les deux thèmes ; **changement de catégorie : médiane 33 ms** (max 37) ; modèle prêt 740 ms, analyse 11 ms. `typecheck`, `lint`, `format:check` verts.
+
+**Noms des acteurs** (D4, appels lancés pendant U1) : `pipeline/people.py fetch`. **10 018** acteurs gardés, **10 018** appels `/person/{id}` en 501 s, aucun nouvel essai, **aucun nom manquant** ; cache `data/cache/tmdb/person/` réduit à `{id, name}`. Avant les appels, `people.py stats` a vérifié que les noms des réalisateurs reconstruits depuis `people` + `director_ids` sont **identiques à ceux de la v3 pour chaque film** (11 noms sans identifiant sur leur film ont leur propre entrée). Taille réelle et homonymes chez les acteurs : en U4.
+
 **Réponses de Thibault et de Claude Web (17 novembre 2026, v0.3)**
 
 1. Bonus des classiques gardé à tous les crans ; `model-meta.json` inchangé. Test unique et clôture de l'étape 8 : déjà faits avec ce réglage (commit `e7d4384` du 17 novembre 2026, tous les critères tenus) ; rien n'a été relancé (le test ne s'évalue qu'une fois).

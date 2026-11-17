@@ -62,6 +62,12 @@ describe('parseDevTuning', () => {
     expect(describeTuning(parseDevTuning('?avant=1')!)).toContain('sans bonus des classiques');
   });
 
+  it('?crans=8: the 8-notch slider (step 8b, D1)', () => {
+    expect(parseDevTuning('?crans=8')).toEqual({ allNotches: true });
+    expect(parseDevTuning('?crans=3')).toBeUndefined();
+    expect(describeTuning({ allNotches: true })).toBe('curseur à 8 crans');
+  });
+
   it('describes the switches for the banner', () => {
     expect(describeTuning({ calibration: false, lambda: 0.5 })).toBe(
       'sans calibration · λ 0,5 (≤ 5 000)',

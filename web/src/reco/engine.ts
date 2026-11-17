@@ -319,6 +319,9 @@ export interface Tuning {
    * card of an estimated film again (production: never). */
   estimatedExplain?: boolean;
   estimatedStamp?: boolean;
+  /** Display (step 8b, D1), dev `?crans=8`: the 8-notch slider instead of the three categories;
+   * the explanations then cover the 8 notches (D2). */
+  allNotches?: boolean;
 }
 
 /**

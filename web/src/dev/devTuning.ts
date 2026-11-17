@@ -12,6 +12,8 @@
  *                             DEFAULT_PERCENTILE (or ?centile=98); ?classiques_estimes=1: estimated
  *                             films get it too; ?classiques=0: no bonus (before R6e)
  *
+ *   ?crans=8                  the 8-notch slider instead of the three categories (step 8b, D1)
+ *
  * Back to the settings before R6e (step 8, one switch each, to compare):
  *   ?lambda=0.9               λ = 0,9 at 5 000 again
  *   ?plafond_estimes=0        no cap of the estimated films per row
@@ -63,6 +65,7 @@ export function parseDevTuning(search: string): Tuning | undefined {
   if (before || q.get('tampon_estimes') === '1') t.estimatedStamp = true;
   if (before || q.get('explication_estimes') === '1') t.estimatedExplain = true;
   if (before || q.get('q_estimes') === 'catalogue') t.estimatedQuality = 'catalog';
+  if (q.get('crans') === '8') t.allNotches = true;
   return Object.keys(t).length ? t : undefined;
 }
 
@@ -89,5 +92,6 @@ export function describeTuning(t: Tuning): string {
   if (t.estimatedStamp) parts.push('tampon permis sur les estimés');
   if (t.estimatedExplain) parts.push('« parce que t’as aimé » sur les estimés');
   if (t.estimatedQuality === 'catalog') parts.push('q des estimés : droite du catalogue');
+  if (t.allNotches) parts.push('curseur à 8 crans');
   return parts.join(' · ');
 }

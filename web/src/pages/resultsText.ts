@@ -5,7 +5,10 @@ export const FAR_FROM_TASTE = 0.04;
 
 /** Above the grid when at least half of a row of 8 is below FAR_FROM_TASTE (step 6b, Q4 revised). */
 export const FAR_ROWS_NOTE =
-  "(à ce cran, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites)";
+  "(ici, on s'éloigne un peu de tes goûts : c'est le prix des vraies pépites)";
+
+/** No film left, without any filter (step 8b, D9; Claude Web). */
+export const NOTHING_HERE = 'plus rien ici : essaie « les valeurs sûres ».';
 
 const UNITS = [
   'zéro',
@@ -52,9 +55,10 @@ export function numberWord(n: number): string {
   return `${tens}-${numberWord(u)}`;
 }
 
-/** Second sentence of the title, from the slider cap (D5, adjusted 8 November 2026). */
+/** Second sentence of the title, from the cap shown (D5, adjusted 8 November 2026; step 8b D9:
+ * « valeurs sûres », the name of the category, at ∞ and >= 10 000). */
 export function titlePhrase(cap: number | null, nShown: number): string {
-  if (cap === null || cap >= 10000) return 'voilà des classiques qui devraient te plaire.';
+  if (cap === null || cap >= 10000) return 'voilà des valeurs sûres qui devraient te plaire.';
   if (cap >= 2000) return 'voilà un mélange de classiques et de découvertes.';
   if (nShown === 1) return "voilà un film que t'as sûrement jamais vu.";
   return `voilà ${numberWord(nShown)} films que t'as sûrement jamais vus.`;

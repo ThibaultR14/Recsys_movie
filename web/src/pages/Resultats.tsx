@@ -1,4 +1,5 @@
 import { useId, useMemo, useState } from 'react';
+import { CategoryPicker } from '../components/CategoryPicker';
 import { FilmGrid } from '../components/FilmGrid';
 import { HandNote } from '../components/HandNote';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -6,7 +7,14 @@ import { Slider } from '../components/Slider';
 import { hasFarRow, isDocumentary } from '../components/cardRules';
 import { capLabel } from '../components/sliderText';
 import type { RecommendResult } from '../reco/workerCore';
-import { FAR_FROM_TASTE, FAR_ROWS_NOTE, profileNote, titlePhrase } from './resultsText';
+import { availableCategories, categoryAt } from './categories';
+import {
+  FAR_FROM_TASTE,
+  FAR_ROWS_NOTE,
+  NOTHING_HERE,
+  profileNote,
+  titlePhrase,
+} from './resultsText';
 import { PAGE, initialView, type ResultsView } from './resultsView';
 
 interface ResultatsProps {
@@ -18,17 +26,21 @@ interface ResultatsProps {
   onViewChange?: (view: ResultsView) => void;
   /** Dev only (`?tampon_estimes=1`, step 8 R6e): « ✱ pépite » allowed on estimated films. */
   stampEstimated?: boolean;
+  /** Dev only (`?crans=8`, step 8b D1): the 8-notch slider instead of the three categories. */
+  allNotches?: boolean;
 }
 
-/** Screen 3: recommendations, the slider and the annotations (mockup C, D5). */
+/** Screen 3: recommendations, the three categories (step 8b, D1) and the annotations. */
 export function Resultats({
   nEntries,
   reco,
   view: controlled,
   onViewChange,
   stampEstimated,
+  allNotches,
 }: ResultatsProps) {
   const caps = useMemo(() => reco.positions.map((p) => p.cap), [reco]);
+  const categories = useMemo(() => availableCategories(caps), [caps]);
   const [own, setOwn] = useState(() => initialView(reco));
   const view = controlled ?? own;
   const setView = (patch: Partial<ResultsView>) => {
@@ -58,6 +70,10 @@ export function Resultats({
     FAR_FROM_TASTE,
   );
   const far = !farRows && position.relativeScore < FAR_FROM_TASTE;
+  const category = categoryAt(caps, index);
+  const live = category
+    ? `${category.label} : ${shown.length} films`
+    : `${shown.length} films${position.cap === null ? '' : `, ${capLabel(position.cap)}`}`;
 
   return (
     <div className="flex flex-col gap-14 pt-6">
@@ -75,7 +91,15 @@ export function Resultats({
           )}
         </div>
         <div className="flex flex-col gap-3">
-          <Slider positions={caps} index={index} onChange={(i) => setView({ index: i })} />
+          {allNotches || !category ? (
+            <Slider positions={caps} index={index} onChange={(i) => setView({ index: i })} />
+          ) : (
+            <CategoryPicker
+              categories={categories}
+              index={index}
+              onChange={(i) => setView({ index: i })}
+            />
+          )}
           {far && (
             <HandNote as="p" rotate={-2} size={22}>
               (là, on s'éloigne pas mal de tes goûts habituels)
@@ -98,7 +122,7 @@ export function Resultats({
       </div>
 
       <p className="sr-only" aria-live="polite">
-        {`${shown.length} films${position.cap === null ? '' : `, ${capLabel(position.cap)}`}`}
+        {live}
       </p>
 
       {farRows && (
@@ -115,7 +139,7 @@ export function Resultats({
           stampEstimated={stampEstimated}
         />
       ) : (
-        <p className="m-0 text-[16px]">plus rien à ce cran-là : essaie un peu plus à gauche.</p>
+        <p className="m-0 text-[16px]">{NOTHING_HERE}</p>
       )}
 
       <p className="m-0 text-[14px] text-muted">

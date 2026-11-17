@@ -1,7 +1,9 @@
 import type { RecommendResult } from '../reco/workerCore';
 
-/** Starting notch (mid-right, like the mockup at 70 %). */
-export const START_CAP = 2000;
+import { START_CATEGORY_CAP } from './categories';
+
+/** Starting notch: « les moins connus » (step 8b, D1; the 2 000 notch of step 5). */
+export const START_CAP = START_CATEGORY_CAP;
 export const PAGE = 8;
 
 /** What the user changed on the results screen; kept by App while a page is open (step 6b, D2). */

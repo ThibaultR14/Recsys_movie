@@ -7,7 +7,8 @@ import { APropos } from './APropos';
 import { CommentCaMarche } from './CommentCaMarche';
 import { isSectionHash, pageOfHash } from './pages';
 import { Resultats } from './Resultats';
-import { FAR_ROWS_NOTE, numberWord, profileNote, titlePhrase } from './resultsText';
+import { CATEGORIES, availableCategories } from './categories';
+import { FAR_ROWS_NOTE, NOTHING_HERE, numberWord, profileNote, titlePhrase } from './resultsText';
 
 const POSITIONS = [null, 20000, 10000, 5000, 2000, 1000, 500, 200];
 
@@ -51,6 +52,7 @@ const h1 = () => screen.getByRole('heading', { level: 1 });
 const cards = () =>
   within(screen.getByRole('list', { name: 'films recommandés' })).getAllByRole('listitem');
 const slider = () => screen.getByRole('slider', { name: 'plutôt connu ou plutôt pépite ?' });
+const radio = (label: string) => screen.getByRole('radio', { name: new RegExp(`^${label}`) });
 const moveTo = (cap: number | null) =>
   fireEvent.change(slider(), { target: { value: String(POSITIONS.indexOf(cap)) } });
 
@@ -78,7 +80,7 @@ describe('results texts', () => {
 
   it('title sentence by notch (∞, 20 000, 10 000 / 5 000, 2 000 / 1 000, 500, 200)', () => {
     for (const cap of [null, 20000, 10000]) {
-      expect(titlePhrase(cap, 8)).toBe('voilà des classiques qui devraient te plaire.');
+      expect(titlePhrase(cap, 8)).toBe('voilà des valeurs sûres qui devraient te plaire.');
     }
     for (const cap of [5000, 2000]) {
       expect(titlePhrase(cap, 8)).toBe('voilà un mélange de classiques et de découvertes.');
@@ -100,9 +102,10 @@ describe('results texts', () => {
 });
 
 describe('Resultats', () => {
-  it('starts at 2 000 with 8 cards, profile note, mixed sentence', () => {
+  it('starts on « les moins connus » (2 000) with 8 cards, profile note, mixed sentence', () => {
     render(<Resultats nEntries={66} reco={reco()} />);
-    expect(slider()).toHaveValue('4');
+    expect(radio('les moins connus')).toBeChecked();
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
     expect(h1()).toHaveTextContent(
       'on a lu tes 66 films.voilà un mélange de classiques et de découvertes.',
     );
@@ -122,10 +125,46 @@ describe('Resultats', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('moving the slider shows another precomputed list and sentence', () => {
+  it('three categories: radio group, sub-labels, a precomputed list each (step 8b, D1)', async () => {
     render(<Resultats nEntries={66} reco={reco()} />);
+    const group = screen.getByRole('group', { name: 'plutôt connu ou plutôt pépite ?' });
+    const radios = within(group).getAllByRole('radio');
+    expect(radios).toHaveLength(3);
+    expect(group).toHaveTextContent(
+      'les valeurs sûrestoutles moins connusmoins de 2 000 notesles pépitesmoins de 500 notes',
+    );
+    expect(screen.getByText('les moins connus : 8 films')).toBeInTheDocument();
+    await userEvent.click(radio('les valeurs sûres'));
+    expect(radio('les valeurs sûres')).toBeChecked();
+    expect(h1()).toHaveTextContent('voilà des valeurs sûres qui devraient te plaire.');
+    expect(cards()[0]).toHaveTextContent('film inf #0');
+    expect(screen.getByText('les valeurs sûres : 8 films')).toBeInTheDocument();
+    await userEvent.click(radio('les pépites'));
+    expect(h1()).toHaveTextContent("voilà huit films que t'as sûrement jamais vus.");
+    expect(cards()[0]).toHaveTextContent('film 500 #0');
+    expect(screen.getByText('les pépites : 8 films')).toBeInTheDocument();
+  });
+
+  it('a category whose cap is not an engine position is hidden', () => {
+    expect(availableCategories([null, 2000]).map((c) => [c.label, c.index])).toEqual([
+      ['les valeurs sûres', 0],
+      ['les moins connus', 1],
+    ]);
+    expect(CATEGORIES.map((c) => c.cap)).toEqual([null, 2000, 500]);
+  });
+
+  it('no film left: « plus rien ici » (D9)', () => {
+    const r = reco();
+    r.positions[POSITIONS.indexOf(2000)]!.films = [];
+    render(<Resultats nEntries={66} reco={r} />);
+    expect(screen.getByText(NOTHING_HERE)).toBeInTheDocument();
+    expect(NOTHING_HERE).toBe('plus rien ici : essaie « les valeurs sûres ».');
+  });
+
+  it('moving the slider shows another precomputed list and sentence', () => {
+    render(<Resultats allNotches nEntries={66} reco={reco()} />);
     moveTo(null);
-    expect(h1()).toHaveTextContent('voilà des classiques qui devraient te plaire.');
+    expect(h1()).toHaveTextContent('voilà des valeurs sûres qui devraient te plaire.');
     expect(cards()[0]).toHaveTextContent('film inf #0');
     moveTo(500);
     expect(h1()).toHaveTextContent("voilà huit films que t'as sûrement jamais vus.");
@@ -133,7 +172,7 @@ describe('Resultats', () => {
   });
 
   it('« loin de tes goûts » below a relative score of 0.04 only', () => {
-    render(<Resultats nEntries={66} reco={reco()} />);
+    render(<Resultats allNotches nEntries={66} reco={reco()} />);
     const note = "(là, on s'éloigne pas mal de tes goûts habituels)";
     moveTo(1000); // 0.09
     expect(screen.queryByText(note)).not.toBeInTheDocument();
@@ -144,7 +183,7 @@ describe('Resultats', () => {
   });
 
   it("« parce que t'as aimé »: on the cards, not at a notch far from the user's taste (Q4)", () => {
-    render(<Resultats nEntries={66} reco={reco()} />);
+    render(<Resultats allNotches nEntries={66} reco={reco()} />);
     const why = "(parce que t'as aimé « Stalker » et « Paris, Texas »)";
     expect(cards()[2]).toHaveTextContent(why);
     moveTo(1000); // 0.09
@@ -158,7 +197,7 @@ describe('Resultats', () => {
     // at 500 (relative score 0.039): half of the first row below 0.04
     const p500 = r.positions[POSITIONS.indexOf(500)]!;
     p500.films = p500.films.map((f, i) => ({ ...f, relativeScore: i % 2 ? 0.03 : 0.05 }));
-    render(<Resultats nEntries={66} reco={r} />);
+    render(<Resultats allNotches nEntries={66} reco={r} />);
     moveTo(500);
     const note = screen.getByText(FAR_ROWS_NOTE);
     // above the grid, and the position-level note is gone
@@ -174,7 +213,7 @@ describe('Resultats', () => {
     const r = reco();
     const p500 = r.positions[POSITIONS.indexOf(500)]!;
     p500.films = p500.films.map((f, i) => ({ ...f, relativeScore: i < 3 ? 0.03 : 0.05 }));
-    render(<Resultats nEntries={66} reco={r} />);
+    render(<Resultats allNotches nEntries={66} reco={r} />);
     moveTo(500); // position 0.039 < 0.04, 3 / 8 far cards
     expect(screen.queryByText(FAR_ROWS_NOTE)).not.toBeInTheDocument();
     expect(
@@ -184,7 +223,7 @@ describe('Resultats', () => {
   });
 
   it('pépite stamp: at most one per block of 8 cards, at every notch', async () => {
-    render(<Resultats nEntries={66} reco={reco()} />);
+    render(<Resultats allNotches nEntries={66} reco={reco()} />);
     expect(screen.getAllByText('✱ pépite')).toHaveLength(1);
     expect(cards()[5]).toHaveTextContent('✱ pépite');
     for (const cap of [null, 1000, 200]) {
@@ -196,7 +235,7 @@ describe('Resultats', () => {
   });
 
   it('« encore des films » adds 8 cards up to 48, and the number in the title follows', async () => {
-    render(<Resultats nEntries={66} reco={reco()} />);
+    render(<Resultats allNotches nEntries={66} reco={reco()} />);
     moveTo(500);
     const more = screen.getByRole('button', { name: 'encore des films' });
     await userEvent.click(more);
@@ -209,7 +248,7 @@ describe('Resultats', () => {
   });
 
   it('« sans les documentaires » filters the computed list', async () => {
-    render(<Resultats nEntries={66} reco={reco()} />);
+    render(<Resultats allNotches nEntries={66} reco={reco()} />);
     expect(
       within(screen.getByRole('list', { name: 'films recommandés' })).getAllByText('documentaire'),
     ).toHaveLength(2);
@@ -220,14 +259,14 @@ describe('Resultats', () => {
   });
 
   it('same-series note on the card', () => {
-    render(<Resultats nEntries={66} reco={reco()} />);
+    render(<Resultats allNotches nEntries={66} reco={reco()} />);
     expect(
       screen.getByText("(même série que « Kill Bill: Vol. 1 », que t'as vu)"),
     ).toBeInTheDocument();
   });
 
   it('no profile note with fewer than 2 directors', () => {
-    render(<Resultats nEntries={66} reco={reco({ profileDirectors: [] })} />);
+    render(<Resultats allNotches nEntries={66} reco={reco({ profileDirectors: [] })} />);
     expect(screen.queryByText(/t'aimes bien/)).not.toBeInTheDocument();
   });
 });
@@ -292,15 +331,14 @@ describe('pages (step 6b, D2)', () => {
     expect(screen.getByRole('link', { current: 'page' })).toHaveTextContent('contact');
   });
 
-  it('pages open over the results; « ← retour » gives them back at the same notch', async () => {
+  it('pages open over the results; « ← retour » gives them back in the same category', async () => {
     render(<App client={fakeApi()} />);
     await userEvent.upload(
       screen.getByLabelText(/glisse ton fichier ici/),
       new File(['Date,Name,Year,Letterboxd URI,Rating\n'], 'ratings.csv', { type: 'text/csv' }),
     );
     await userEvent.click(await screen.findByRole('button', { name: 'voir mes films' }));
-    const slider = await screen.findByRole('slider');
-    fireEvent.change(slider, { target: { value: '6' } });
+    await userEvent.click(await screen.findByRole('radio', { name: /^les pépites/ }));
     for (const [name, title] of [
       ['à propos', 'à propos.'],
       ['comment ça marche', 'comment ça marche.'],
@@ -312,7 +350,7 @@ describe('pages (step 6b, D2)', () => {
     }
     await userEvent.click(screen.getByRole('link', { name: '← retour' }));
     await act(async () => window.dispatchEvent(new HashChangeEvent('hashchange')));
-    expect(screen.getByRole('slider')).toHaveValue('6');
+    expect(screen.getByRole('radio', { name: /^les pépites/ })).toBeChecked();
   });
 });
 

@@ -12,7 +12,7 @@ import {
   SHOTS,
 } from './helpers';
 
-test('full path: example -> analysis -> results -> slider -> more films; privacy; accessibility', async ({
+test('full path: example -> analysis -> results -> categories -> more films; privacy; accessibility', async ({
   page,
   baseURL,
 }) => {
@@ -39,9 +39,11 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   await expect(page.getByRole('heading', { level: 1 })).toContainText('on en a reconnu 64.');
   await page.getByRole('button', { name: 'voir mes films' }).click();
 
-  // results: start at 2 000, 8 cards
-  const slider = page.getByRole('slider', { name: 'plutôt connu ou plutôt pépite ?' });
-  await expect(slider).toHaveValue('4');
+  // results: start on « les moins connus » (2 000), 8 cards (step 8b, D1)
+  const radio = (label: string) => page.getByRole('radio', { name: new RegExp(`^${label}`) });
+  await expect(page.getByRole('group', { name: 'plutôt connu ou plutôt pépite ?' })).toBeVisible();
+  await expect(radio('les moins connus')).toBeChecked();
+  await expect(page.getByRole('slider')).toHaveCount(0);
   await expect(cards(page)).toHaveCount(8);
   await expect(page.getByTestId('public-rating')).toHaveCount(8);
   // « (parce que t'as aimé X et Y) » (step 6b, D6), shown as handwriting, whole for screen readers
@@ -65,27 +67,26 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   const estimated = () => page.getByTestId('estimated-rating').count();
   const estimatedCounts: Record<string, number> = { '2000': await estimated() };
 
-  // slider on 3 notches with the keyboard (native range: arrow keys)
+  // the three categories with the keyboard (one radio group: native arrow keys)
   const first = () => cards(page).first().textContent();
   const seen = new Set([await first()]);
-  await slider.focus();
-  for (const [key, value, sentence] of [
-    ['ArrowRight', '5', "voilà huit films que t'as sûrement jamais vus."],
-    ['ArrowRight', '6', "voilà huit films que t'as sûrement jamais vus."],
-    ['Home', '0', 'voilà des classiques qui devraient te plaire.'],
+  await radio('les moins connus').focus();
+  for (const [label, cap, sentence] of [
+    ['les pépites', '500', "voilà huit films que t'as sûrement jamais vus."],
+    ['les valeurs sûres', '∞', 'voilà des valeurs sûres qui devraient te plaire.'],
   ] as const) {
-    await page.keyboard.press(key);
-    await expect(slider).toHaveValue(value);
+    await page.keyboard.press('ArrowRight');
+    await expect(radio(label)).toBeChecked();
     await expect(page.getByRole('heading', { level: 1 })).toContainText(sentence);
+    await expect(page.getByText(`${label} : 8 films`)).toBeAttached();
     seen.add(await first());
-    stampCounts[{ '5': '1000', '6': '500', '0': '∞' }[value]] = await stamps();
-    estimatedCounts[{ '5': '1000', '6': '500', '0': '∞' }[value]] = await estimated();
+    stampCounts[cap] = await stamps();
+    estimatedCounts[cap] = await estimated();
   }
-  expect(seen.size).toBe(4); // a different first film at each notch
+  expect(seen.size).toBe(3); // a different first film in each category
   for (const n of Object.values(stampCounts)) expect(n).toBeLessThanOrEqual(1);
   test.info().annotations.push({ type: 'stamps', description: JSON.stringify(stampCounts) });
   console.log(JSON.stringify({ stamps: stampCounts, estimated: estimatedCounts }));
-  await expect(page.getByText(/^moins de/)).toHaveCount(0); // nothing shown at ∞
 
   // more films
   await page.getByRole('button', { name: 'encore des films' }).click();
@@ -98,8 +99,8 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   await expect(link).toHaveAttribute('target', '_blank');
   await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 
-  // pages over the results (step 6b, D2): the notch and the cards are kept
-  const notchBefore = await slider.inputValue();
+  // pages over the results (step 6b, D2): the category and the cards are kept
+  await expect(radio('les valeurs sûres')).toBeChecked();
   for (const [name, title] of [
     ['comment ça marche', 'comment ça marche.'],
     ['à propos', 'à propos.'],
@@ -123,7 +124,7 @@ test('full path: example -> analysis -> results -> slider -> more films; privacy
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('contact.');
   await page.getByRole('link', { name: '← retour' }).click();
   await expect(cards(page)).toHaveCount(16);
-  await expect(slider).toHaveValue(notchBefore);
+  await expect(radio('les valeurs sûres')).toBeChecked();
 
   // privacy: nothing outside the site but posters, nothing stored
   expect(net.blocked, 'requêtes hors du site').toEqual([]);
@@ -346,7 +347,7 @@ for (const [label, viewport] of [
   ['téléphone', { width: 375, height: 812 }],
   ['grand écran', { width: 1440, height: 900 }],
 ] as const) {
-  test(`card tags (${label}): at most 2 per row of 8 at every notch, known labels, on the poster`, async ({
+  test(`card tags (${label}): at most 2 per row of 8 in every category, known labels, on the poster`, async ({
     page,
     baseURL,
   }) => {
@@ -356,13 +357,13 @@ for (const [label, viewport] of [
     await exampleToResults(page);
     await page.getByRole('button', { name: 'encore des films' }).click();
     await expect(cards(page)).toHaveCount(16);
-    const slider = page.getByRole('slider');
-    await slider.focus();
-    await page.keyboard.press('Home');
+    const radios = page.getByRole('radio');
+    await expect(radios).toHaveCount(3);
     let total = 0;
-    for (let notch = 0; notch < 8; notch++) {
-      if (notch > 0) await page.keyboard.press('ArrowRight');
-      await expect(slider).toHaveValue(String(notch));
+    for (let notch = 0; notch < 3; notch++) {
+      // the label is the button (the radio itself is visually hidden)
+      await page.locator('label:has(input[type=radio])').nth(notch).click();
+      await expect(radios.nth(notch)).toBeChecked();
       const n = await cards(page).count();
       for (let row = 0; row * 8 < n; row++) {
         let inRow = 0;
@@ -422,8 +423,8 @@ for (const [label, viewport] of [
     expect(await left('h1'), 'titre aligné sur le logo').toBe(await left('header a'));
 
     await exampleToResults(page);
-    await page.getByRole('slider').focus();
-    await page.keyboard.press('Home'); // ∞: the notch with a stamp in the example
+    // ∞: a stamp in the example; the label is the button (the radio is visually hidden)
+    await page.locator('label', { hasText: 'les valeurs sûres' }).click();
     await expect(page.locator(PEPITE)).toHaveCount(1);
     expect(await noHScroll(), 'résultats').toBe(true);
     expect(await left('h1')).toBe(await left('header a'));
@@ -457,7 +458,7 @@ const median = (xs: number[]) => {
   return v.length % 2 ? v[m]! : (v[m - 1]! + v[m]!) / 2;
 };
 
-test('timings: model ready, analysis of the example, slider notch to display', async ({
+test('timings: model ready, analysis of the example, category to display', async ({
   page,
   baseURL,
 }) => {
@@ -479,19 +480,18 @@ test('timings: model ready, analysis of the example, slider notch to display', a
     () => performance.measure('a', 'pepite:import-start', 'pepite:import-end').duration,
   );
 
-  // slider: change event -> first card replaced and painted (two animation frames)
+  // category: click on a radio -> first card replaced and painted (two animation frames)
   const notch = await page.evaluate(async () => {
-    const input = document.querySelector<HTMLInputElement>('input[type=range]')!;
+    const inputs = [...document.querySelectorAll<HTMLInputElement>('input[type=radio]')];
     const firstCard = () => document.querySelector('[data-testid=film-card]')?.textContent;
     const out: number[] = [];
     const dom: number[] = [];
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
-    // three passes over 7 notch changes: 21 measures (the criterion is on their median)
-    for (const value of Array(3).fill(['5', '6', '7', '3', '1', '0', '4']).flat() as string[]) {
+    // three passes over 7 category changes (from « les moins connus »): 21 measures (the
+    // criterion is on their median)
+    for (const k of Array(3).fill([0, 2, 1, 0, 1, 2, 1]).flat() as number[]) {
       const before = firstCard();
       const t0 = performance.now();
-      setter.call(input, value);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
+      inputs[k]!.click();
       while (firstCard() === before) await new Promise((r) => setTimeout(r, 0));
       dom.push(performance.now() - t0);
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
