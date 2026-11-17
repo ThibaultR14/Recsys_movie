@@ -1,5 +1,6 @@
 # Étape 8b — UX de la page des résultats
 
+> **⏸ Arrêt U0 (17 novembre 2026)** : mesures en section 5. Trois décisions attendues : bonus des classiques gardé à tous les crans (seuil de Q7 non atteint), forme et seuil des acteurs (budget dépassé), explications des 3 crans affichés avec un cache (temps du recalcul sur 3 000 films).
 > Version 0.2 (17 novembre 2026) : **validée par Thibault**, avec ses réponses à la section 7 (tranché) : D7 tranchée en U0 puis test unique de clôture de l'étape 8 avant U1 (Q1) ; noms des acteurs par `/person/{id}`, sans relancer la collecte (Q2) ; table `people` par identifiant TMDB, `director_ids` (D4, D5) ; IMAX hors du filtre (Q3) ; seul un genre change la cible de la calibration (Q4) ; grille d'une personne triée par `score'`, sans « loin de tes goûts » ni plafond des films estimés (Q5) ; v3 refusée (Q6) ; seuil de D7 (Q7) ; D8 et D9 validées, quatre textes de Claude Web posés (D9).
 > Version 0.1 (17 novembre 2026) : spec à valider. Décisions de départ données par Thibault le 17 novembre 2026 (D1-D7) ; D8 et D9 proposées par Claude Code.
 > Étape insérée après l'étape 8 (films récents) et **avant les volontaires de l'étape 7**. L'étape 8 reste à l'arrêt visuel de R6e. **Ordre (Q1)** : U0 → décision de Thibault sur le bonus des classiques → **test unique de clôture de l'étape 8** avec le réglage retenu (clôture complète de l'étape 8 : section 5, documents, `contexte/`) → U1. Rien de l'étape 8b ne change les entrées de ce test : en U0, **aucune régénération** de `catalog.json`, `embeddings.bin`, `popularity.bin` ni `model-meta.json` (sauf le bonus, si Thibault le décide).
@@ -248,7 +249,81 @@ Vérifié en lisant le cache (aucun appel) le 17 novembre 2026 :
 
 ## 5. Résultats
 
-*(à remplir, sous-étape par sous-étape)*
+### U0 — Mesures (17 novembre 2026) — ⏸ arrêt : trois décisions
+
+Scripts : `pipeline/ux_diagnostics.py measure` (cache TMDB, tailles en mémoire) et `web/scripts/ux-measure.ts` (`classics`, `filters`). Comptes, scores et temps seulement. **Rien n'a été régénéré** : `web/public/data/` est inchangé (fichiers du 14 novembre), et aucun appel TMDB n'a été fait.
+
+**1. Bonus des classiques aux crans 2 000 et 500 (D7)**
+
+Score relatif médian des 8 premiers films, avec le bonus / sans le bonus (`?classiques=0`) :
+
+| export | ∞ | 2 000 | 500 | films sous 0,04 dans les 8 premiers (∞ / 2 000 / 500), avec / sans | films communs avec / sans, sur 48 (∞ / 2 000 / 500) |
+|---|---|---|---|---|---|
+| A | 1,104 / 1,115 | 0,161 / 0,161 | 0,040 / 0,040 | 0·0·4 / 0·0·4 | 44 · 48 · 48 |
+| B | 1,116 / 1,116 | 0,230 / 0,230 | 0,083 / 0,083 | 0·0·0 / 0·0·0 | 44 · 46 · 46 |
+| exemple | 1,226 / 1,226 | 0,313 / 0,313 | 0,108 / 0,108 | 0·0·0 / 0·0·0 | 44 · 48 · 48 |
+
+- Recouvrement des 10 premiers à ∞ (films communs par paire) : avec le bonus, A-B **1**, A-exemple **2**, B-exemple **0** ; sans le bonus, 0, 2, 0. Les listes à ∞ restent personnelles.
+- **Le seuil de Q7 n'est pas atteint.** À 2 000 et à 500, les médianes sont identiques, aucun film de plus ne passe sous 0,04, et 46 à 48 films sur 48 sont les mêmes. Le bonus n'agit vraiment qu'à ∞ (4 films sur 48). → **Proposition : garder le bonus à tous les crans** (aucun changement de `model-meta.json`).
+
+**2. Durée et langue (D5)**
+
+- `runtime` connu : 22 957 / 23 019 films entraînés et 3 348 / 3 358 films estimés. Parmi les **recommandables** : 22 951 / 22 968 et 559 / 559 (17 sans durée).
+- Tranches (recommandables) : moins d'1h40 **11 480** · 1h40 à 2h15 **10 498** · plus de 2h15 **1 532** · inconnue 17.
+- Époques (recommandables) : avant 1960 1 849 · 60 1 057 · 70 1 256 · 80 2 106 · 90 3 362 · 2000 5 298 · 2010 6 721 · 2020 1 878.
+- `original_language` connue : 22 966 / 22 968 recommandables entraînés et 559 / 559 estimés ; **77** codes au total, **25** langues avec ≥ 30 films recommandables (anglais 17 756 … hongrois et thaï 30). Un seul code que `Intl.DisplayNames('fr')` ne nomme pas : **`cn`** (147 films, cantonais chez TMDB), d'où la table de secours de D3.
+- Genre « IMAX » : 185 films recommandables (hors du filtre, Q3).
+- Pour la durée et la langue seules, `catalog.json` prend **+39 596 octets gzip**.
+
+**3. Personnes (D4, D5)**
+
+- Réalisateurs : **11 772** identifiants TMDB distincts. **23 noms affichés** correspondent à plusieurs identifiants (46 identifiants en tout). Les homonymes des acteurs ne se comptent qu'avec leurs vrais noms (après les appels).
+- Acteurs gardés (5 premiers rôles, ≥ 3 films) : **10 018**, dont 739 sont aussi réalisateurs, soit **21 051 personnes** et **82 506 paires** film-acteur.
+- Listes de réalisateurs du cache `full/` comparées à `catalog.json` `directors` : 465 films diffèrent (**451 par l'ordre seulement**, 11 différents, 2 inclus l'un dans l'autre, 1 sans fiche). `director_ids` sera donc tiré de la même source que `directors` (fiches `movie/` de `enrich_tmdb.py`), à vérifier en U4 par `catalog-verify`.
+
+**Taille de `catalog.json` v4** (gzip niveau 9, même sérialisation que `export.py`, noms d'acteurs **factices**, formés de prénoms et de noms de réalisateurs mélangés). Aujourd'hui : v3 **1 407 265**, total de `web/public/data/` **3 627 954** (3,63 Mo). Tous les écarts ci-dessous comprennent la durée et la langue (+39,6 Ko).
+
+| forme | acteurs | écart gzip | total `web/public/data/` | +250 Ko | ≤ 4,0 Mo |
+|---|---|---|---|---|---|
+| réalisateurs seuls, `people` avec identifiants, `directors` gardé | 0 | +238 365 | 3 866 319 | ✓ | ✓ |
+| **décision (5 rôles, ≥ 3 films)**, `people` = `[id, nom]`, `directors` gardé | 10 018 | **+527 995** | 4 155 949 | ✗ | ✗ |
+| même chose, `people` = noms seuls | 10 018 | +451 140 | 4 079 094 | ✗ | ✗ |
+| même chose, **sans doublon** (`directors` reconstruit par le site), noms seuls | 10 018 | **+272 669** | 3 900 623 | ✗ (de 23 Ko) | ✓ |
+| sans doublon, `[id, nom]` | 10 018 | +349 730 | 3 977 684 | ✗ | ✓ |
+| sans doublon, noms seuls, **5 rôles, ≥ 4 films** | 7 167 | **+230 172** | 3 858 126 | ✓ | ✓ |
+| sans doublon, noms seuls, 5 rôles, ≥ 5 films | 5 563 | +203 104 | 3 831 058 | ✓ | ✓ |
+| sans doublon, noms seuls, 3 rôles, ≥ 3 films | 6 105 | +169 686 | 3 797 640 | ✓ | ✓ |
+| sans doublon, réalisateurs seuls | 0 | +14 434 | 3 642 388 | ✓ | ✓ |
+
+- Pourquoi c'est lourd : avec `directors` gardé, chaque nom de réalisateur est écrit deux fois (dans `directors` et dans `people`). « Sans doublon » veut dire que le fichier ne garde plus que `people` + `director_ids`, et que `loadEngine` reconstruit `catalog.directors` (noms) en mémoire, si bien que le code existant (profil, tag « encore un… ») ne change pas. Les identifiants TMDB eux-mêmes ne servent pas au site : l'indice dans `people` suffit à séparer deux homonymes (Q2).
+- **La décision (5 rôles, ≥ 3 films) dépasse +250 Ko sous toutes les formes** : arrêt prévu par D4.
+
+**4. Temps d'un recalcul filtré (prototype, D2)**
+
+Fold-in gardé. Le prototype enchaîne les étapes du moteur : exclusions + filtre, viviers, γ·q et bonus, calibration (cible filtrée pour un genre), plafond des films estimés, explications. Médiane de 21, en ms (part des explications entre parenthèses) :
+
+| | sans filtre | horreur | années 70 | drame + français | sans documentaires |
+|---|---|---|---|---|---|
+| export A, comme D2 (explications des 8 crans) | 44,6 (15,0) | 24,3 (13,2) | 26,0 (10,6) | 24,5 (9,5) | 42,7 (15,1) |
+| 3 000 films, comme D2 | 175,7 (149,7) | **128,2** (109,8) | **96,9** (82,8) | **100,7** (85,0) | **171,3** (146,8) |
+| export A, variante | 32,7 (1,4) | 20,1 (7,9) | 22,0 (7,6) | 18,0 (5,5) | 31,3 (1,5) |
+| 3 000 films, variante | 54,8 (25,6) | 76,1 (61,3) | 69,5 (55,6) | 76,4 (61,1) | 44,8 (21,1) |
+
+- Le prototype sans filtre reproduit `recommend` à l'identique (8 crans). Chaque cran garde 48 films. Pour l'horreur sur l'export A, le fold-in ne compte que 9 films du genre, donc λ = 0 (seuil de 10).
+- **Comme D2, le critère échoue sur 3 000 films** (97 à 171 ms). Ce sont les **explications** qui coûtent : 83 à 150 ms. Sans elles, le recalcul prend 14 à 26 ms.
+- **Variante mesurée**, qui garde le recalcul de D2 : on n'explique que les films des **3 crans des catégories** (∞, 2 000, 500 ; les 8 avec `?crans=8`, en dev), et le worker **garde en cache** les explications déjà calculées (elles dépendent de l'historique, jamais des filtres). On obtient **18 à 33 ms sur l'export A et 45 à 76 ms sur 3 000 films** : critère atteint, sans passer au repli de D2.
+- Pour comparer, la recommandation de départ (fold-in + 8 crans + explications) prend aujourd'hui 51 à 63 ms sur l'export A et 200 ms sur 3 000 films. Avec la même variante, elle descendrait d'autant.
+
+**Décisions demandées à Thibault**
+
+1. **Bonus des classiques** : on le garde à tous les crans (proposé : le seuil de Q7 n'est pas atteint). Ensuite viennent le test unique et la clôture de l'étape 8 (Q1).
+2. **Acteurs**, la décision dépassant le budget. Options :
+   - **(a) recommandé** : sans doublon, noms seuls, **5 rôles et ≥ 4 films**, soit +230 Ko et 7 167 acteurs (~7 200 appels `/person` au lieu de ~10 000). Un acteur qui n'a que 3 films dans le catalogue, souvent déjà vus, donne une grille presque vide ;
+   - **(b)** garder la décision (5 rôles, ≥ 3 films), sans doublon, et porter le budget à **+275 Ko** : total 3,90 Mo, sous les 4,0 Mo ;
+   - **(c)** 3 rôles et ≥ 3 films, sans doublon : +170 Ko, 6 105 acteurs.
+
+   Toutes ces options demandent de **ne plus écrire `directors` dans le fichier** (le site le reconstruit, le code existant ne change pas) : c'est un écart à « la colonne `directors` reste telle quelle », d'où la question. Les appels `/person` attendent le feu vert, une fois l'option choisie.
+3. **Explications** : passer, dans le recalcul **et** dans la recommandation de départ, aux explications des 3 crans des catégories avec un cache par film dans le worker (proposé). C'est le seul moyen mesuré de tenir les 100 ms sur 3 000 films sans le repli de D2.
 
 ---
 
